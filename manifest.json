@@ -1,0 +1,12 @@
+{
+  "name": "MYDAY — Учебный органайзер",
+  "short_name": "MYDAY",
+  "description": "Персональный учебный органайзер студента",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c0a12",
+  "theme_color": "#0c0a12",
+  "lang": "ru",
+  "icons": []
+}
