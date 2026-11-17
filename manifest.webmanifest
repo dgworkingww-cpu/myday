@@ -1,0 +1,15 @@
+{
+  "name": "MYDAY — личная система планирования",
+  "short_name": "MYDAY",
+  "description": "Расписание, задачи и учёба в одном месте",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#090d0c",
+  "theme_color": "#090d0c",
+  "lang": "ru",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
