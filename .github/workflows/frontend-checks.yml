@@ -1,0 +1,107 @@
+name: MYDAY frontend checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'design-system.css'
+      - 'manifest.webmanifest'
+      - 'sw.js'
+      - 'icon.svg'
+      - 'tests/**'
+      - '.github/workflows/frontend-checks.yml'
+  push:
+    branches: [main, redesign/myday-fieldnotes-v3]
+    paths:
+      - 'index.html'
+      - 'design-system.css'
+      - 'manifest.webmanifest'
+      - 'sw.js'
+      - 'icon.svg'
+      - 'tests/**'
+      - '.github/workflows/frontend-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Run real mobile viewport smoke tests
+        run: node tests/ui-smoke.cjs
+      - name: Check JavaScript syntax
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+            .filter(([, attrs, body]) => !/\bsrc\s*=/.test(attrs) && body.trim())
+            .map(([, , body]) => body);
+          if (!scripts.length) throw new Error('No inline app script found');
+          fs.writeFileSync('/tmp/myday.js', scripts.join('\n;\n'));
+          NODE
+          node --check /tmp/myday.js
+          node --check sw.js
+          node --check backend-config.js
+      - name: Validate manifest and app shell
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const manifest = JSON.parse(fs.readFileSync('manifest.webmanifest', 'utf8'));
+          const html = fs.readFileSync('index.html', 'utf8');
+          const sw = fs.readFileSync('sw.js', 'utf8');
+          const css = fs.readFileSync('design-system.css', 'utf8');
+          if (manifest.short_name !== 'MYDAY') throw new Error('Unexpected PWA short name');
+          for (const asset of ['./design-system.css', './backend-config.js', 'manifest.webmanifest']) {
+            if (!html.includes(asset)) throw new Error('Missing app-shell reference: ' + asset);
+          }
+          if (!sw.includes("'./index.html'") || !sw.includes("'./design-system.css'")) {
+            throw new Error('Service worker shell is missing required assets');
+          }
+          let depth = 0, quote = '', escaped = false;
+          for (const ch of css) {
+            if (quote) {
+              if (escaped) { escaped = false; continue; }
+              if (ch === '\\') { escaped = true; continue; }
+              if (ch === quote) quote = '';
+              continue;
+            }
+            if (ch === '"' || ch === "'") { quote = ch; continue; }
+            if (ch === '{') depth++;
+            if (ch === '}') depth--;
+            if (depth < 0) throw new Error('CSS has an unexpected closing brace');
+          }
+          if (depth !== 0 || quote) throw new Error('CSS blocks or strings are unbalanced');
+          for (const token of ['--bg:', '--surface:', '--accent:', '--hero:', '--danger:']) {
+            if (!css.includes(token)) throw new Error('Missing design token: ' + token);
+          }
+          console.log('Manifest, app shell and design tokens validated.');
+          NODE
+      - name: Check all static HTML classes have styles
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const css = fs.readFileSync('design-system.css', 'utf8');
+          const classes = new Set();
+          for (const match of html.matchAll(/\bclass\s*=\s*["']([^"']*)["']/g)) {
+            for (const name of match[1].split(/\s+/)) {
+              if (name && name.indexOf('$') === -1) classes.add(name);
+            }
+          }
+          const selectors = new Set([...css.matchAll(/\.([a-zA-Z_][\w-]*)/g)].map(match => match[1]));
+          const missing = [...classes].filter(name => !selectors.has(name));
+          if (missing.length) throw new Error('Unstyled static classes: ' + missing.join(', '));
+          console.log('All ' + classes.size + ' static HTML classes have CSS selectors.');
+          NODE
