@@ -351,10 +351,19 @@ async function importLegacyData(){
  S=old;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
  localStorage.setItem(localStoreKey,JSON.stringify(S));localStorage.setItem('myday2:imported:'+tgUserId,'1');cloudReady=true;cloudDirty=true;
  const ok=await cloudPush();
+ cloudRemoteData=null;
  cloudStatus=ok?'Старые данные перенесены в ваш Telegram-профиль':'Данные сохранены на устройстве; синхронизация повторится позже';
  close_();render();
 }
-function skipLegacyImport(){localStorage.setItem('myday2:import-skipped:'+tgUserId,'1');cloudReady=true;cloudStatus='Личный профиль создан';save();close_();render()}
+async function skipLegacyImport(){
+ localStorage.setItem('myday2:import-skipped:'+tgUserId,'1');
+ if(cloudRemoteData&&!cloudConflict){
+  S=cloudRemoteData;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
+  localStorage.setItem(localStoreKey,JSON.stringify(S));cloudReady=true;cloudDirty=false;await setCloudBase(JSON.stringify(S),cloudRevision);
+  cloudRemoteData=null;cloudStatus='Облачный профиль загружен';close_();render();return;
+ }
+ cloudReady=true;cloudStatus='Личный профиль создан';save();close_();render();
+}
 async function initCloud(){
  const mutationAtStart=localMutationCounter;
  if(!tgInitData||!tgUserId){render();return}
@@ -364,6 +373,16 @@ async function initCloud(){
   cloudRevision=Number(result.revision)||0;
   if(localMutationCounter>mutationAtStart){cloudReady=true;cloudDirty=true;await cloudPush();render();return}
   if(result.data){
+   if(!hadLocalProfile&&legacyStore&&!localStorage.getItem('myday2:imported:'+tgUserId)&&!localStorage.getItem('myday2:import-skipped:'+tgUserId)){
+    let legacySnapshot='';try{const old=JSON.parse(legacyStore);if(old&&old.settings)legacySnapshot=JSON.stringify(old)}catch(_){}
+    const remoteSnapshotForLegacy=JSON.stringify(result.data);
+    if(legacySnapshot&&legacySnapshot!==remoteSnapshotForLegacy){
+     cloudRemoteData=result.data;cloudReady=true;
+     sheet('<h1>Найдены две версии данных</h1><p class="sub">На этом устройстве есть старое расписание и задания, а в облаке уже есть профиль. Можно перенести старые данные поверх облачного профиля или оставить облачную версию. Исходная копия останется на устройстве.</p><div class="row"><button class="btn g grow" onclick="skipLegacyImport()">Оставить облачную</button><button class="btn grow" onclick="importLegacyData()">Перенести старые</button></div>');
+     return;
+    }
+    localStorage.setItem('myday2:imported:'+tgUserId,'1');
+   }
    const remoteSnapshot=JSON.stringify(result.data),localSnapshot=JSON.stringify(S);
    let lastSyncedHash='';try{lastSyncedHash=localStorage.getItem(cloudBaseKey)||''}catch(_){}
    const localHash=await snapshotHash(localSnapshot),remoteHash=await snapshotHash(remoteSnapshot);
