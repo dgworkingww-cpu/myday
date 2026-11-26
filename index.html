@@ -274,8 +274,12 @@ function setCloudConflict(remote,revision){
  cloudRemoteData=remote;cloudRevision=Number(revision)||0;cloudConflict=true;cloudDirty=false;
  cloudStatus='Изменения отличаются от облачной версии. Локальная копия сохранена: выберите, какую версию оставить.';
 }
-function setCloudBase(snapshot,revision){
- try{localStorage.setItem(cloudBaseKey,snapshot);localStorage.setItem(cloudRevisionKey,String(revision))}catch(err){console.warn('MYDAY sync metadata:',err)}
+async function snapshotHash(snapshot){
+ const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(snapshot));
+ return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function setCloudBase(snapshot,revision){
+ try{localStorage.setItem(cloudBaseKey,await snapshotHash(snapshot));localStorage.setItem(cloudRevisionKey,String(revision))}catch(err){console.warn('MYDAY sync metadata:',err)}
 }
 async function cloudPush(){
  if(!cloudReady||!cloudConfigured||!tgInitData||cloudConflict)return false;
@@ -284,7 +288,7 @@ async function cloudPush(){
   const result=await cloudRequest('save',JSON.parse(snapshot),cloudRevision);
   if(result.conflict){setCloudConflict(result.data,result.revision);render();return false}
   cloudRevision=Number(result.revision)||cloudRevision+1;
-  setCloudBase(snapshot,cloudRevision);
+  await setCloudBase(snapshot,cloudRevision);
   if(JSON.stringify(S)===snapshot){cloudDirty=false;cloudStatus='Синхронизация включена'}
   else{cloudDirty=true;cloudStatus='Сохраняю последние изменения…'}
   updateCloudStatus();return true;
@@ -305,12 +309,13 @@ async function cloudPull(){
   if(remoteRevision<=cloudRevision)return true;
   if(result.data){
    const localSnapshot=JSON.stringify(S),remoteSnapshot=JSON.stringify(result.data);
-   let lastSynced='';try{lastSynced=localStorage.getItem(cloudBaseKey)||''}catch(_){}
-   if(localSnapshot!==lastSynced&&localSnapshot!==remoteSnapshot){
+   let lastSyncedHash='';try{lastSyncedHash=localStorage.getItem(cloudBaseKey)||''}catch(_){}
+   const localHash=await snapshotHash(localSnapshot),remoteHash=await snapshotHash(remoteSnapshot);
+   if(localHash!==lastSyncedHash&&localHash!==remoteHash){
     setCloudConflict(result.data,remoteRevision);render();return false;
    }
    S=result.data;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
-   localStorage.setItem(localStoreKey,JSON.stringify(S));cloudRevision=remoteRevision;setCloudBase(remoteSnapshot,cloudRevision);
+   localStorage.setItem(localStoreKey,JSON.stringify(S));cloudRevision=remoteRevision;await setCloudBase(remoteSnapshot,cloudRevision);
    cloudStatus='Синхронизация включена';render();
   }
   return true;
@@ -331,7 +336,7 @@ function acceptCloudRemote(){
  if(!cloudConflict||!cloudRemoteData)return;
  S=cloudRemoteData;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
  localStorage.setItem(localStoreKey,JSON.stringify(S));try{localStorage.removeItem(cloudConflictKey)}catch(_){}
- cloudConflict=false;cloudDirty=false;cloudRemoteData=null;setCloudBase(JSON.stringify(S),cloudRevision);
+ cloudConflict=false;cloudDirty=false;cloudRemoteData=null;await setCloudBase(JSON.stringify(S),cloudRevision);
  cloudStatus='Облачная версия загружена. Локальная копия скачивается отдельно через кнопку резервной копии.';
  render();
 }
@@ -356,12 +361,13 @@ async function initCloud(){
   if(localMutationCounter>mutationAtStart){cloudReady=true;cloudDirty=true;await cloudPush();render();return}
   if(result.data){
    const remoteSnapshot=JSON.stringify(result.data),localSnapshot=JSON.stringify(S);
-   let lastSynced='';try{lastSynced=localStorage.getItem(cloudBaseKey)||''}catch(_){}
+   let lastSyncedHash='';try{lastSyncedHash=localStorage.getItem(cloudBaseKey)||''}catch(_){}
+   const localHash=await snapshotHash(localSnapshot),remoteHash=await snapshotHash(remoteSnapshot);
    const knownRevision=Number(localStorage.getItem(cloudRevisionKey)||0);
-   if(hadLocalProfile&&localSnapshot!==remoteSnapshot&&localSnapshot!==lastSynced&&knownRevision!==cloudRevision){
+   if(hadLocalProfile&&localSnapshot!==remoteSnapshot&&localHash!==lastSyncedHash&&knownRevision!==cloudRevision){
     setCloudConflict(result.data,cloudRevision);cloudReady=true;render();return;
    }
-   if(hadLocalProfile&&localSnapshot!==remoteSnapshot&&localSnapshot!==lastSynced&&knownRevision===cloudRevision){
+   if(hadLocalProfile&&localSnapshot!==remoteSnapshot&&localHash!==lastSyncedHash&&knownRevision===cloudRevision){
     cloudReady=true;cloudDirty=true;await cloudPush();render();return;
    }
    S=result.data;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
@@ -375,7 +381,7 @@ async function initCloud(){
   cloudReady=true;cloudDirty=true;await cloudPush();render();
  }catch(err){cloudStatus='Ошибка подключения: '+err.message;console.error(err);render()}
 }
-function save(){try{localMutationCounter++;if(!window._bk){const previous=localStorage.getItem(localStoreKey);if(previous&&!localStorage.getItem(localStoreKey+':session-bak'))localStorage.setItem(localStoreKey+':session-bak',previous);window._bk=1}localStorage.setItem(localStoreKey,JSON.stringify(S));queueCloudSave();return true}catch(x){if(!mem){mem=true;alert('Не удалось сохранить данные (память браузера недоступна или заполнена). Сделайте экспорт в разделе «Ещё».')}return false}}
+function save(){try{localMutationCounter++;if(!window._bk){const previous=localStorage.getItem(localStoreKey);if(previous&&previous.length<350000&&!localStorage.getItem(localStoreKey+':session-bak'))localStorage.setItem(localStoreKey+':session-bak',previous);window._bk=1}localStorage.setItem(localStoreKey,JSON.stringify(S));queueCloudSave();return true}catch(x){if(!mem){mem=true;alert('Не удалось сохранить данные (память браузера недоступна или заполнена). Сделайте экспорт в разделе «Ещё».')}return false}}
 const weekStartKey=(d=new Date())=>{const x=new Date(d);x.setHours(12,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7));return ds(x)};
 const wk=(d=new Date())=>{const anchor=S.settings.weekAnchor||weekStartKey(new Date()),base=S.settings.weekAnchorType||(((isoWeek(new Date())+(S.settings.shift||0))%2)==1?'odd':'even');const a=anchor.split('-').map(Number),b=weekStartKey(d).split('-').map(Number),weeks=Math.floor((Date.UTC(b[0],b[1]-1,b[2])-Date.UTC(a[0],a[1]-1,a[2]))/604800000);return ((base=='odd'?0:1)+weeks%2+2)%2==0?'odd':'even'};
 function setWeekType(type){if(type!='odd'&&type!='even')return;S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=type;S.settings.shift=0;save();render()}
