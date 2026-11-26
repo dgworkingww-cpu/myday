@@ -4,7 +4,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Bot-token validation follows Telegram's HMAC-SHA256 scheme: key=bot token, message=WebAppData.
+// Telegram Web Apps HMAC: HMAC(key=WebAppData, message=bot token), then HMAC(data-check-string).
 const encoder = new TextEncoder();
 const MAX_BODY_BYTES = 4_200_000;
 
@@ -44,7 +44,7 @@ async function validateTelegramInitData(initData: string, botToken: string): Pro
     .map(([key, value]) => key + "=" + value)
     .join("\n");
 
-  const secretKey = new Uint8Array(await hmac(encoder.encode(botToken), "WebAppData"));
+  const secretKey = new Uint8Array(await hmac(encoder.encode("WebAppData"), botToken));
   const calculatedHash = hex(await hmac(secretKey, checkString));
   if (!safeEqual(calculatedHash, receivedHash.toLowerCase())) throw new Error("Не удалось подтвердить Telegram-пользователя");
 
