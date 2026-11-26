@@ -50,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           node <<'NODE'
-          const crypto = require('node:crypto');
+          import { createHmac } from 'node:crypto';
           const base = process.env.SUPABASE_URL.replace(/\/+$/, '');
           const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
           const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -63,8 +63,8 @@ jobs:
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([key, value]) => `${key}=${value}`)
             .join('\n');
-          const secret = crypto.createHmac('sha256', botToken).update('WebAppData').digest();
-          const hash = crypto.createHmac('sha256', secret).update(checkString).digest('hex');
+          const secret = createHmac('sha256', botToken).update('WebAppData').digest();
+          const hash = createHmac('sha256', secret).update(checkString).digest('hex');
           params.set('hash', hash);
           const initData = params.toString();
 
