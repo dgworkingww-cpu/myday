@@ -1,7 +1,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const { chromium } = require('playwright');
+const { chromium, webkit } = require('playwright');
 
 const root = process.cwd();
 const mime = { '.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'application/javascript; charset=utf-8','.json':'application/json; charset=utf-8','.webmanifest':'application/manifest+json; charset=utf-8','.svg':'image/svg+xml','.png':'image/png' };
@@ -18,7 +18,8 @@ const server = http.createServer((req,res) => {
 
 (async () => {
   await new Promise(resolve => server.listen(4173,'127.0.0.1',resolve));
-  const browser = await chromium.launch({headless:true});
+  const browserType = process.env.BROWSER === 'webkit' ? webkit : chromium;
+  const browser = await browserType.launch({headless:true});
   const context = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block',reducedMotion:'reduce'});
   const page = await context.newPage();
   const pageErrors=[],consoleErrors=[],failedRequests=[];
