@@ -260,12 +260,28 @@ async function cloudRequest(action,data){
 }
 async function cloudPush(){
  if(!cloudReady||!cloudConfigured||!tgInitData)return false;
- try{await cloudRequest('save',S);cloudDirty=false;cloudStatus='Синхронизация включена';return true}catch(err){console.warn('MYDAY cloud save:',err);cloudDirty=false;cloudStatus=err.message;return false}
+ try{await cloudRequest('save',S);cloudDirty=false;cloudStatus='Синхронизация включена';render();return true}catch(err){console.warn('MYDAY cloud save:',err);cloudDirty=true;cloudStatus='Ошибка синхронизации: '+err.message;render();return false}
 }
-function queueCloudSave(){
+function queueCloudSave(delay=900){
  if(!cloudReady||!cloudConfigured||!tgInitData)return;
  cloudDirty=true;clearTimeout(cloudSyncTimer);
- cloudSyncTimer=setTimeout(()=>{if(!cloudSyncing){cloudSyncing=true;cloudPush().finally(()=>{cloudSyncing=false;if(cloudDirty)queueCloudSave()})}},900);
+ cloudSyncTimer=setTimeout(()=>{if(!cloudSyncing){cloudSyncing=true;cloudPush().finally(()=>{cloudSyncing=false;if(cloudDirty)queueCloudSave(5000)})}},delay);
+}
+async function cloudPull(){
+ if(!cloudReady||!cloudConfigured||!tgInitData||cloudDirty||cloudSyncing)return false;
+ try{
+  const result=await cloudRequest('load');
+  if(cloudDirty||cloudSyncing)return false;
+  if(result.data){
+   const remote=JSON.stringify(result.data);
+   if(remote!==JSON.stringify(S)){
+    S=result.data;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
+    localStorage.setItem(localStoreKey,JSON.stringify(S));render();
+   }
+   cloudStatus='Синхронизация включена';
+  }
+  return true;
+ }catch(err){cloudStatus='Ошибка синхронизации: '+err.message;console.warn('MYDAY cloud load:',err);render();return false}
 }
 async function importLegacyData(){
  let old;try{old=JSON.parse(legacyStore)}catch(_){}
@@ -547,6 +563,6 @@ function hwPrompt(){S.fired[today()+'s']=Date.now()+18e5;save();notify('Заня
  <div class="row" style="margin-top:8px"><button class="btn g grow" onclick="S.fired[today()+'h']=1;save();close_()">Заданий нет</button><button class="btn g grow" onclick="S.fired[today()+'s']=Date.now()+18e5;save();close_()">Позже (30 мин)</button></div>`)}
 function hpSave(){const t=$('#ht').value.trim();if(!t)return fieldError($('#ht'),'Опишите задание');S.hw.push({id:id(),subj:$('#hp').value,title:t,desc:'',due:$('#hd').value,status:0,subs:[],photos:[]});S.fired[today()+'h']=1;save();close_();render()}
 function migrate(){if(!S.settings.weekAnchor){S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=((isoWeek(new Date())+(S.settings.shift||0))%2==1?'odd':'even')}S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};S.subjects=S.subjects||[];S.hw=S.hw||[];S.exc=S.exc||[];S.events=S.events||[];save()}
-try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}migrate();render();initCloud();tick();setInterval(tick,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){tick();render()}});
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}migrate();render();initCloud();tick();setInterval(tick,30000);setInterval(()=>{if(!document.hidden)cloudPull()},20000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){tick();render();cloudPull()}});
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('./sw.js').catch(()=>{});
 </script></body></html>
