@@ -25,16 +25,16 @@ Enter each value directly into GitHub's secret form. Never commit them, put them
 The workflow:
 1. Links the CLI to the MYDAY Supabase project.
 2. Applies `supabase/migrations/001_myday_profiles.sql`.
-3. Sets `TELEGRAM_BOT_TOKEN` as a server-side Edge Function secret. Supabase injects `SUPABASE_URL` and its server-side secret API key automatically.
-4. Deploys `myday-sync` with JWT verification enabled.
+3. Sets `TELEGRAM_BOT_TOKEN` as a server-side Edge Function secret. Supabase injects `SUPABASE_URL` and the project's server-side secret API key automatically.
+4. Deploys `myday-sync`.
 
 If the workflow fails, inspect the Actions run log. Secret values are not printed by the workflow.
 
 ## Database and security
 
-The migration creates one private row per Telegram ID in `public.myday_profiles`. RLS is enabled, and direct table grants to `anon` and `authenticated` are revoked. The Edge Function uses the service-role key only server-side, after validating Telegram WebApp `initData` with the bot token.
+The migration creates one private row per Telegram ID in `public.myday_profiles`. RLS is enabled, and direct table grants to `anon` and `authenticated` are revoked. The Edge Function reads the Supabase secret key from the injected `SUPABASE_SECRET_KEYS` (with a legacy service-role fallback) and uses it only in the `apikey` header for server-side REST calls.
 
-Do not disable Edge Function JWT verification. The frontend sends the Supabase publishable key as the gateway bearer token; the function additionally validates Telegram's signed `initData`.
+The function's platform JWT check is intentionally disabled because the frontend uses a modern `sb_publishable_...` key, which is not a JWT. The frontend sends that key only in the `apikey` header. The function itself validates Telegram WebApp `initData` with the bot-token HMAC signature before reading or writing any profile. Do not remove that Telegram signature check.
 
 ## Frontend configuration
 
@@ -43,7 +43,7 @@ Do not disable Edge Function JWT verification. The frontend sends the Supabase p
 - `supabaseAnonKey`: publishable key.
 - `edgeFunctionName`: `myday-sync`.
 
-Never put the bot token or service-role key in frontend code.
+Never put the bot token or service-role/secret key in frontend code.
 
 ## Telegram launch mode
 
@@ -52,7 +52,7 @@ Open MYDAY from the Telegram bot's Web App menu button so `Telegram.WebApp.initD
 ## Verification before publishing
 
 1. Confirm the migration succeeded and RLS is enabled.
-2. Confirm `myday-sync` is deployed and its secrets are set.
+2. Confirm `myday-sync` is deployed and the bot-token secret is set.
 3. Test load/save with one Telegram account.
 4. Test isolation with a second Telegram account.
 5. Test the same account on two devices.
