@@ -253,7 +253,7 @@ let cloudStatus=cloudConfigured?(tgInitData?'Подключение к обла�
 function cloudEndpoint(){const u=cloudCfg.supabaseUrl;return (u.endsWith('/')?u.slice(0,-1):u)+'/functions/v1/'+cloudCfg.edgeFunctionName}
 async function cloudRequest(action,data){
  if(!cloudConfigured||!tgInitData)throw new Error(!tgInitData?'Откройте приложение через Telegram':'Синхронизация не настроена');
- const r=await fetch(cloudEndpoint(),{method:'POST',headers:{'Content-Type':'application/json','apikey':cloudCfg.supabaseAnonKey,'Authorization':'Bearer '+cloudCfg.supabaseAnonKey},body:JSON.stringify({action,initData:tgInitData,data})});
+ const r=await fetch(cloudEndpoint(),{method:'POST',headers:{'Content-Type':'application/json','apikey':cloudCfg.supabaseAnonKey},body:JSON.stringify({action,initData:tgInitData,data})});
  const j=await r.json().catch(()=>({}));
  if(!r.ok||j.error)throw new Error(j.error||('Ошибка синхронизации: '+r.status));
  return j;
