@@ -19,6 +19,7 @@ on:
       - 'manifest.webmanifest'
       - 'sw.js'
       - 'icon.svg'
+      - 'tests/**'
       - '.github/workflows/frontend-checks.yml'
   workflow_dispatch:
 
