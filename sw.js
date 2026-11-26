@@ -1,4 +1,4 @@
-const CACHE = 'myday-shell-v13';
+const CACHE = 'myday-shell-v15';
 const SHELL = ['./', './index.html', './design-system.css', './backend-config.js', './manifest.webmanifest', './icon.svg', './icon-180.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
