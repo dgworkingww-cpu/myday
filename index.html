@@ -237,6 +237,18 @@ function seed(){
  sched:{odd:{},even:{}},tasks:[],inbox:[],fired:{},done:[],
  uni:{name:'',url:'',login:'',notes:'',links:'',teachers:''},subjects:[],hw:[],exc:[],events:[]};
 }
+function normalizeProfile(data){
+ const base=seed(),d=data&&typeof data==='object'&&!Array.isArray(data)?data:{};
+ return {...base,...d,
+  settings:{...base.settings,...(d.settings&&typeof d.settings==='object'?d.settings:{})},
+  uni:{...base.uni,...(d.uni&&typeof d.uni==='object'?d.uni:{})},
+  sched:{odd:d.sched&&d.sched.odd&&typeof d.sched.odd==='object'?d.sched.odd:{},even:d.sched&&d.sched.even&&typeof d.sched.even==='object'?d.sched.even:{}},
+  tasks:Array.isArray(d.tasks)?d.tasks:[],inbox:Array.isArray(d.inbox)?d.inbox:[],
+  fired:d.fired&&typeof d.fired==='object'&&!Array.isArray(d.fired)?d.fired:{},
+  done:Array.isArray(d.done)?d.done:[],subjects:Array.isArray(d.subjects)?d.subjects:[],
+  hw:Array.isArray(d.hw)?d.hw:[],exc:Array.isArray(d.exc)?d.exc:[],events:Array.isArray(d.events)?d.events:[]
+ };
+}
 const tgApp=window.Telegram&&window.Telegram.WebApp;
 try{tgApp&&tgApp.ready();tgApp&&tgApp.expand()}catch(_){}
 const tgInitData=tgApp&&tgApp.initData||'';
@@ -319,7 +331,7 @@ async function cloudPull(){
     }
     cloudRevision=remoteRevision;cloudDirty=true;await cloudPush();render();return false;
    }
-   S=result.data;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
+   S=normalizeProfile(result.data);
    localStorage.setItem(localStoreKey,JSON.stringify(S));cloudRevision=remoteRevision;await setCloudBase(remoteSnapshot,cloudRevision);
    cloudStatus='Синхронизация включена';render();
   }
@@ -341,7 +353,7 @@ async function keepLocalVersion(){
 async function acceptCloudRemote(){
  if(!cloudConflict||!cloudRemoteData)return;
  if(!cloudConflictBackupPersisted&&!cloudConflictBackupDownloaded){alert('Сначала скачайте локальную копию, затем загружайте облачную версию.');return}
- S=cloudRemoteData;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
+ S=normalizeProfile(cloudRemoteData);
  localStorage.setItem(localStoreKey,JSON.stringify(S));try{localStorage.removeItem(cloudConflictKey)}catch(_){}
  cloudConflict=false;cloudDirty=false;cloudRemoteData=null;await setCloudBase(JSON.stringify(S),cloudRevision);
  cloudStatus='Облачная версия загружена. Локальная копия скачивается отдельно через кнопку резервной копии.';
@@ -351,7 +363,7 @@ async function retryCloud(){if(!tgInitData){cloudStatus='Откройте MYDAY 
 async function importLegacyData(){
  let old;try{old=JSON.parse(legacyStore)}catch(_){}
  if(!old||!old.settings){close_();return}
- S=old;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
+ S=normalizeProfile(old);
  localStorage.setItem(localStoreKey,JSON.stringify(S));localStorage.setItem('myday2:imported:'+tgUserId,'1');cloudReady=true;cloudDirty=true;
  const ok=await cloudPush();
  if(ok){cloudRemoteData=null;cloudStatus='Старые данные перенесены в ваш Telegram-профиль'}
