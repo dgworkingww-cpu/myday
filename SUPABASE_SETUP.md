@@ -12,7 +12,7 @@ Keep the database password and all API secrets private.
 
 ## Deploy through GitHub Actions
 
-A manual workflow is included at **Actions → Deploy MYDAY Supabase backend → Run workflow**. Before running it, add these repository Actions secrets in **Settings → Secrets and variables → Actions → New repository secret**:
+A manual workflow is available at **Actions → Deploy MYDAY Supabase backend → Run workflow**. In the **Branch** dropdown, select `feature/multi-user-myday` so the workflow uses the migration and function code from the unmerged feature branch. Before running it, add these repository Actions secrets in **Settings → Secrets and variables → Actions → New repository secret**:
 
 | Secret name | Value |
 |---|---|
