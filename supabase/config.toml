@@ -1,4 +1,4 @@
 project_id = "rzgsctbvgzerqizfjhuq"
 
 [functions.myday-sync]
-verify_jwt = true
+verify_jwt = false
