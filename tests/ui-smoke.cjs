@@ -32,8 +32,13 @@ const server = http.createServer((req,res) => {
   }));
   try {
     await page.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded'});
-    await page.locator('#app .page-title').waitFor();
-    await page.locator('#app .hero-card').waitFor();
+    await page.waitForTimeout(500);
+    if(!(await page.locator('#app .page-title').count())){
+      const state=await page.evaluate(()=>({ready:document.readyState,app:document.querySelector('#app')?.innerHTML.slice(0,1200),nav:document.querySelector('#nav')?.innerHTML,appleLoaded:window.MYDAY_APPLE_UI_PENDING===false,body:document.body.innerText.slice(0,500)})).catch(e=>({evaluateError:e.message}));
+      throw new Error('Initial MYDAY screen did not render ('+(process.env.BROWSER||'chromium')+'): '+JSON.stringify({pageErrors,consoleErrors,state}));
+    }
+    await page.locator('#app .page-title').waitFor({timeout:5000});
+    await page.locator('#app .hero-card').waitFor({timeout:5000});
     if(await page.locator('#nav button svg').count()!==5) throw new Error('New SVG navigation icons did not render');
     await page.waitForTimeout(150);
     const widths=[320,360,375,390,393,414,430],layout=[];
