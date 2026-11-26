@@ -93,7 +93,7 @@ jobs:
         env:
           SUPABASE_URL: https://rzgsctbvgzerqizfjhuq.supabase.co
           SUPABASE_PUBLISHABLE_KEY: sb_publishable_VBs7WXcOJs8Oh8qNQL2KIw_FBG1ae67
-          TELEGRAM_BOT_TOKEN: \${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
           set -euo pipefail
           node <<'NODE'
