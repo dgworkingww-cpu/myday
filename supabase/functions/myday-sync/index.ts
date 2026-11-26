@@ -93,8 +93,9 @@ Deno.serve(async (req: Request) => {
       const url = base + "/rest/v1/myday_profiles?telegram_id=eq." + encodeURIComponent(telegramId) + "&select=data,revision";
       const response = await fetch(url, { headers });
       if (!response.ok) {
-        console.error("MYDAY profile load failed:", response.status, await response.text());
-        return json({ error: "Не удалось загрузить профиль из облака" }, 502);
+        const detail = (await response.text()).slice(0, 240);
+        console.error("MYDAY profile load failed:", response.status, detail);
+        return json({ error: "Не удалось загрузить профиль из облака (HTTP " + response.status + "): " + detail }, 502);
       }
       const rows = await response.json();
       return json({ data: rows.length ? rows[0].data : null, revision: rows.length ? Number(rows[0].revision) : 0 });
@@ -117,8 +118,9 @@ Deno.serve(async (req: Request) => {
         }),
       });
       if (!response.ok) {
-        console.error("MYDAY profile save failed:", response.status, await response.text());
-        return json({ error: "Не удалось сохранить профиль в облаке" }, 502);
+        const detail = (await response.text()).slice(0, 240);
+        console.error("MYDAY profile save failed:", response.status, detail);
+        return json({ error: "Не удалось сохранить профиль в облаке (HTTP " + response.status + "): " + detail }, 502);
       }
       const rows = await response.json();
       const result = Array.isArray(rows) ? rows[0] : rows;
