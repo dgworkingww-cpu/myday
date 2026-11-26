@@ -260,7 +260,7 @@ async function cloudRequest(action,data){
 }
 async function cloudPush(){
  if(!cloudReady||!cloudConfigured||!tgInitData)return false;
- try{await cloudRequest('save',S);cloudDirty=false;cloudStatus='Синхронизация включена';return true}catch(err){console.warn('MYDAY cloud save:',err);cloudStatus=err.message;return false}
+ try{await cloudRequest('save',S);cloudDirty=false;cloudStatus='Синхронизация включена';return true}catch(err){console.warn('MYDAY cloud save:',err);cloudDirty=false;cloudStatus=err.message;return false}
 }
 function queueCloudSave(){
  if(!cloudReady||!cloudConfigured||!tgInitData)return;
@@ -276,7 +276,7 @@ async function importLegacyData(){
  cloudStatus=ok?'Старые данные перенесены в ваш Telegram-профиль':'Данные сохранены на устройстве; облачная загрузка повторится позже';
  close_();render();
 }
-function skipLegacyImport(){localStorage.setItem('myday2:import-skipped:'+tgUserId,'1');cloudReady=true;save();close_();render()}
+function skipLegacyImport(){localStorage.setItem('myday2:import-skipped:'+tgUserId,'1');cloudReady=true;cloudStatus='Личный профиль создан. Облако ожидает настройки';save();close_();render()}
 async function initCloud(){
  if(!tgInitData){render();return}
  if(!cloudConfigured){if(legacyStore&&!localStorage.getItem('myday2:import-skipped:'+tgUserId)){sheet('<h1>Перенести старые данные?</h1><p class="sub">На устройстве найдены ранее сохранённые расписание, предметы и задания. Перенести их в личный профиль этого Telegram-аккаунта? Исходная копия останется на устройстве. Облачная синхронизация включится после подключения базы.</p><div class="row"><button class="btn g grow" onclick="skipLegacyImport()">Начать с нуля</button><button class="btn grow" onclick="importLegacyData()">Перенести</button></div>')}else render();return}
@@ -287,7 +287,7 @@ async function initCloud(){
    sheet('<h1>Перенести старые данные?</h1><p class="sub">На устройстве найдены ранее сохранённые расписание, предметы и задания. Перенести их в ваш Telegram-профиль? Исходная копия останется на устройстве.</p><div class="row"><button class="btn g grow" onclick="skipLegacyImport()">Начать с нуля</button><button class="btn grow" onclick="importLegacyData()">Перенести</button></div>');
    return;
   }
-  cloudReady=true;cloudStatus='Синхронизация включена';if(hadLocalProfile||localStorage.getItem('myday2:imported:'+tgUserId))await cloudPush();else await cloudPush();render();
+  cloudReady=true;cloudStatus='Синхронизация включена';await cloudPush();render();
  }catch(err){cloudStatus='Ошибка подключения: '+err.message;console.error(err);render()}
 }
 function save(){try{localStorage.setItem(localStoreKey,JSON.stringify(S));queueCloudSave();return true}catch(x){if(!mem){mem=true;alert('Не удалось сохранить данные (память браузера недоступна или заполнена). Сделайте экспорт в разделе «Ещё».')}return false}}
