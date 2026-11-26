@@ -1,0 +1,42 @@
+name: Validate MYDAY frontend
+
+on:
+  push:
+    branches:
+      - feature/multi-user-myday
+    paths:
+      - 'index.html'
+      - 'backend-config.js'
+      - 'sw.js'
+      - '.github/workflows/validate-myday-frontend-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check frontend JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+            .filter(([, attrs, body]) => !/\bsrc\s*=/.test(attrs) && body.trim())
+            .map(([, , body]) => body);
+          if (!scripts.length) throw new Error('No inline JavaScript found in index.html');
+          fs.writeFileSync('/tmp/myday-inline.js', scripts.join('\n;\n'));
+          NODE
+          node --check /tmp/myday-inline.js
+          node --check backend-config.js
+          node --check sw.js
