@@ -30,7 +30,7 @@ The workflow runs on changes to the frontend or Supabase backend and serializes 
 5. Checks frontend JavaScript syntax.
 6. Creates signed Telegram test data using the GitHub secret, verifies invalid signatures are rejected, performs a real profile load/save, and confirms stale writes are rejected with HTTP 409.
 
-The integration test uses a reserved synthetic Telegram ID (`4000000000000000`) and a small CI-only row in the profiles table; it never touches a real user's profile.
+The integration test uses a two reserved synthetic IDs above Telegram's 52-bit user-ID range (`9007199254740000` and `9007199254740001`) and two small CI-only rows in the profiles table; it never touches a real user's profile.
 
 If the workflow fails, inspect the Actions run log. Secret values are not printed by the workflow.
 
