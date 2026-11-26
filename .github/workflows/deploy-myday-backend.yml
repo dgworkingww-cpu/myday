@@ -127,6 +127,18 @@ jobs:
           const botToken = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
           if (!botToken) throw new Error('Missing TELEGRAM_BOT_TOKEN Actions secret');
 
+          // Official Telegram validation vector: catches key/message order regressions independently of our own signer.
+          const sampleToken = '5768337691:AAH5YkoiEuPk8-FZa32hStHTqXiLPtAEhx8';
+          const sampleSecret = createHmac('sha256', 'WebAppData').update(sampleToken).digest();
+          if (sampleSecret.toString('hex') !== 'a5c609aa52f63cb5e6d8ceb6e4138726ea82bbc36bb786d64482d445ea38ee5f') {
+            throw new Error('Telegram HMAC secret derivation does not match the official validation vector');
+          }
+          const sampleCheckString = 'auth_date=1662771648\nquery_id=AAHdF6IQAAAAAN0XohDhrOrc\nuser={"id":279058397,"first_name":"Vladislav","last_name":"Kibenko","username":"vdkfrost","language_code":"ru","is_premium":true}';
+          const sampleHash = createHmac('sha256', sampleSecret).update(sampleCheckString).digest('hex');
+          if (sampleHash !== 'c501b71e775f74ce10e377dea85a7ea24ecd640b223ea86dfe453e0eaed2e2b2') {
+            throw new Error('Telegram initData signature does not match the official validation vector');
+          }
+
           function signedInitData(userId) {
             const params = new URLSearchParams();
             params.set('auth_date', String(Math.floor(Date.now() / 1000)));
@@ -135,7 +147,7 @@ jobs:
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([key, value]) => key + '=' + value)
               .join('\n');
-            const secret = createHmac('sha256', botToken).update('WebAppData').digest();
+            const secret = createHmac('sha256', 'WebAppData').update(botToken).digest();
             const hash = createHmac('sha256', secret).update(checkString).digest('hex');
             params.set('hash', hash);
             return params.toString();
