@@ -1,51 +1,63 @@
 # MYDAY cloud sync setup
 
-This branch is intentionally not published to GitHub Pages yet. The live app remains unchanged until the backend is configured and tested.
+The cloud-sync work stays on `feature/multi-user-myday`. The live GitHub Pages app is unchanged until backend deployment and integration tests pass.
 
-## 1. Create a Supabase project
+## Supabase project
 
-Create a project in the Supabase dashboard. Keep the database password private.
+- Project ref: `rzgsctbvgzerqizfjhuq`
+- Project URL: `https://rzgsctbvgzerqizfjhuq.supabase.co`
+- Region: Frankfurt / Central EU
 
-## 2. Create the profile table
+Keep the database password and all API secrets private.
 
-Run the SQL in `supabase/migrations/001_myday_profiles.sql` in the Supabase SQL Editor.
+## Deploy through GitHub Actions
 
-The table has one row per Telegram ID. RLS is enabled and direct browser access is revoked. The Edge Function uses the server-only service-role key after validating Telegram's signed `initData`.
+A manual workflow is included at **Actions → Deploy MYDAY Supabase backend → Run workflow**. Before running it, add these repository Actions secrets in **Settings → Secrets and variables → Actions → New repository secret**:
 
-## 3. Deploy the Edge Function
+| Secret name | Value |
+|---|---|
+| `SUPABASE_ACCESS_TOKEN` | Personal access token created in Supabase Account → Access Tokens |
+| `SUPABASE_DB_PASSWORD` | Database password chosen when the Supabase project was created |
+| `SUPABASE_SERVICE_ROLE_KEY` | The project's server-side service-role key from Supabase API Keys |
+| `TELEGRAM_BOT_TOKEN` | Token for the MYDAY bot from BotFather |
 
-Deploy `supabase/functions/myday-sync/index.ts` as a function named `myday-sync`.
+Enter each value directly into GitHub's secret form. Never commit them, put them in `backend-config.js`, or send them in chat.
 
-Set these Edge Function secrets in Supabase Dashboard → Edge Functions → Secrets:
+The workflow:
+1. Links the CLI to the MYDAY Supabase project.
+2. Applies `supabase/migrations/001_myday_profiles.sql`.
+3. Sets `TELEGRAM_BOT_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_URL` as server-side Edge Function secrets.
+4. Deploys `myday-sync` with JWT verification enabled.
 
-- `TELEGRAM_BOT_TOKEN`: token from BotFather. Never paste this into ChatGPT, GitHub, or frontend files.
-- `SUPABASE_URL`: project URL.
-- `SUPABASE_SERVICE_ROLE_KEY`: service-role key. Keep it server-side only.
+If the workflow fails, inspect the Actions run log. Secret values are not printed by the workflow.
 
-Do not disable JWT verification as a shortcut. The function additionally verifies Telegram WebApp initData on every request.
+## Database and security
 
-## 4. Configure the public frontend
+The migration creates one private row per Telegram ID in `public.myday_profiles`. RLS is enabled, and direct table grants to `anon` and `authenticated` are revoked. The Edge Function uses the service-role key only server-side, after validating Telegram WebApp `initData` with the bot token.
 
-Edit `backend-config.js` and set only:
-- `supabaseUrl`: Supabase project URL.
-- `supabaseAnonKey`: Supabase anon/public key.
-- Keep `edgeFunctionName` as `myday-sync`.
+Do not disable Edge Function JWT verification. The frontend sends the Supabase publishable key as the gateway bearer token; the function additionally validates Telegram's signed `initData`.
 
-The anon key is designed for browser use. The bot token and service-role key must never be placed here.
+## Frontend configuration
 
-## 5. Telegram launch mode
+`backend-config.js` contains only public values:
+- `supabaseUrl`: project URL.
+- `supabaseAnonKey`: publishable key.
+- `edgeFunctionName`: `myday-sync`.
 
-The app must be opened from the bot's Telegram Web App menu button so `Telegram.WebApp.initData` is present. A plain external browser tab cannot authenticate a Telegram profile for cloud sync.
+Never put the bot token or service-role key in frontend code.
 
-## 6. Safe migration and verification
+## Telegram launch mode
 
-On first launch with a Telegram account, MYDAY checks the cloud profile. If none exists and old local data is present, it asks whether to import it. The original local copy is retained.
+Open MYDAY from the Telegram bot's Web App menu button so `Telegram.WebApp.initData` is available. A normal browser tab cannot authenticate the Telegram profile for cloud sync.
 
-Before publishing this branch:
-1. Test load/save with two different Telegram accounts.
-2. Confirm one account cannot read another account's profile.
-3. Test the same account on two devices.
-4. Test offline edits and reconnect/sync.
-5. Verify the old local data migration and export/restore.
+## Verification before publishing
+
+1. Confirm the migration succeeded and RLS is enabled.
+2. Confirm `myday-sync` is deployed and its secrets are set.
+3. Test load/save with one Telegram account.
+4. Test isolation with a second Telegram account.
+5. Test the same account on two devices.
+6. Test offline edits and reconnect.
+7. Verify legacy local-data import and export/restore.
 
 Only after these checks should the feature branch be merged into `main` and GitHub Pages updated.
