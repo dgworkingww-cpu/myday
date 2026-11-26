@@ -242,7 +242,7 @@ window.close_=function(){
  const o=document.querySelector('#ov');if(!o)return;o.classList.add('bye');setTimeout(()=>{o.remove();document.body.style.overflow=window._dialogOverflow||'';const t=window._dialogTrigger;window._dialogTrigger=null;if(t&&t.isConnected)t.focus({preventScroll:true})},190);
 };
 
-MYDAY_ICONS.sun='<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42'/>';
+MYDAY_ICONS.sun='<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/>';
 MYDAY_ICONS.moon='<path d="M20.2 15.1A8.4 8.4 0 0 1 8.9 3.8 8.8 8.8 0 1 0 20.2 15.1Z"/>';
 MYDAY_ICONS.system='<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8m-4-3v3"/>';
 MYDAY_ICONS.mic='<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-4 0h8"/>';
