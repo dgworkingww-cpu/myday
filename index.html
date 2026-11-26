@@ -205,7 +205,7 @@ document.addEventListener('touchend',()=>{if(!sw)return;const {c,dx}=sw;sw=null;
 const AC=[['#8b7bff','#5b8cff'],['#2fd1a0','#3bb8ff'],['#ff6b9a','#ff8e6b'],['#ffa24b','#ff6b6b'],['#4cc38a','#9be15d']];
 let tt,sd0=null;
 function toast(m,undo){const o=$('#toast');if(o)o.remove();clearTimeout(tt);const d=document.createElement('div');d.id='toast';d.className='toast';d.setAttribute('role','status');d.setAttribute('aria-live','polite');d.setAttribute('aria-atomic','true');d.innerHTML=`<span>${e(m)}</span>${undo?'<button class="toast-undo" type="button">Отменить</button>':''}`;if(undo)d.querySelector('button').onclick=()=>{undo();d.remove()};document.body.appendChild(d);tt=setTimeout(()=>d.remove(),4500)}
-function restoreBak(){const b=localStorage.getItem('myday2_bak');if(!b)return alert('Автокопии пока нет');if(!confirm('Вернуть данные на момент начала последнего сеанса?'))return;try{S=JSON.parse(b);save();render()}catch(_){alert('Копия повреждена')}}
+function restoreBak(){const b=localStorage.getItem(localStoreKey+':session-bak')||localStorage.getItem('myday2_bak');if(!b)return alert('Автокопии пока нет');if(!confirm('Вернуть данные на момент начала последнего сеанса?'))return;try{S=JSON.parse(b);save();render()}catch(_){alert('Копия повреждена')}}
 const evRows=k=>(S.events||[]).map((z,i)=>({z,i})).filter(o=>o.z.date==k).map(o=>`<div class="card row"><span class="pill" style="background:var(--ac);color:#fff">${e(o.z.type)}</span><div class="grow">${e(o.z.title)}</div><button class="chk" style="border:0;color:var(--er)" onclick="evDel(${o.i})">×</button></div>`).join('');
 function evForm(){sheet(`<h1>Зачёт / экзамен</h1><label>Название</label><input id="v1" list="sl2" placeholder="Предмет"><datalist id="sl2">${S.subjects.map(s=>`<option value="${e(s.name)}">`).join('')}</datalist><label>Тип</label><select id="v2"><option>Экзамен</option><option>Зачёт</option><option>Консультация</option><option>Сдача работы</option></select><label>Дата</label><input id="v3" type="date" value="${cdsel||today()}"><button class="btn" style="width:100%" onclick="evSave()">Сохранить</button>`)}
 function evSave(){const t=$('#v1').value.trim(),d=$('#v3').value;if(!t){fieldError($('#v1'),'Введите название события');return}if(!d){fieldError($('#v3'),'Укажите дату события');return}(S.events=S.events||[]).push({id:id(),title:t,type:$('#v2').value,date:d});save();close_();render()}
@@ -253,7 +253,7 @@ const cloudBaseKey=tgUserId?'myday2:sync-base:'+tgUserId:'';
 const cloudRevisionKey=tgUserId?'myday2:sync-revision:'+tgUserId:'';
 const cloudConflictKey=tgUserId?'myday2:sync-conflict:'+tgUserId:'';
 let cloudStatus=cloudConfigured?(tgInitData?'Подключение к облаку…':'Откройте MYDAY через Telegram'):'Облачная синхронизация пока не настроена';
-let cloudRevision=0,cloudRemoteData=null,cloudConflict=false;
+let cloudRevision=0,cloudRemoteData=null,cloudConflict=false,localMutationCounter=0;
 function cloudEndpoint(){const u=cloudCfg.supabaseUrl;return (u.endsWith('/')?u.slice(0,-1):u)+'/functions/v1/'+cloudCfg.edgeFunctionName}
 async function cloudRequest(action,data,expectedRevision){
  if(!cloudConfigured||!tgInitData)throw new Error(!tgInitData?'Откройте приложение через Telegram':'Синхронизация не настроена');
@@ -297,6 +297,7 @@ async function cloudPull(){
  if(document.querySelector('.sheet')||(document.activeElement&&/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)))return false;
  try{
   const result=await cloudRequest('load');
+  if(cloudDirty||cloudSyncing||cloudConflict)return false;
   const remoteRevision=Number(result.revision)||0;
   if(remoteRevision<=cloudRevision)return true;
   if(result.data){
@@ -316,6 +317,12 @@ function downloadCloudConflict(){
  let raw='';try{raw=localStorage.getItem(cloudConflictKey)||JSON.stringify(S,null,2)}catch(_){raw=JSON.stringify(S,null,2)}
  const blob=new Blob([raw],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
  a.href=url;a.download='myday-local-conflict-'+today()+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+async function keepLocalVersion(){
+ if(!cloudConflict)return;
+ if(!confirm('Заменить облачную версию текущими данными этого устройства? Локальная копия конфликта останется в резервной копии.'))return;
+ cloudConflict=false;cloudRemoteData=null;cloudReady=true;cloudDirty=true;cloudStatus='Сохраняю вашу версию в облако…';render();
+ await cloudPush();
 }
 function acceptCloudRemote(){
  if(!cloudConflict||!cloudRemoteData)return;
@@ -337,11 +344,13 @@ async function importLegacyData(){
 }
 function skipLegacyImport(){localStorage.setItem('myday2:import-skipped:'+tgUserId,'1');cloudReady=true;cloudStatus='Личный профиль создан';save();close_();render()}
 async function initCloud(){
+ const mutationAtStart=localMutationCounter;
  if(!tgInitData){render();return}
  if(!cloudConfigured){if(legacyStore&&!localStorage.getItem('myday2:import-skipped:'+tgUserId)){sheet('<h1>Перенести старые данные?</h1><p class="sub">На устройстве найдены ранее сохранённые расписание, предметы и задания. Перенести их в личный профиль этого Telegram-аккаунта? Исходная копия останется на устройстве.</p><div class="row"><button class="btn g grow" onclick="skipLegacyImport()">Начать с нуля</button><button class="btn grow" onclick="importLegacyData()">Перенести</button></div>')}else render();return}
  try{
   const result=await cloudRequest('load');
   cloudRevision=Number(result.revision)||0;
+  if(localMutationCounter>mutationAtStart){cloudReady=true;cloudDirty=true;await cloudPush();render();return}
   if(result.data){
    const remoteSnapshot=JSON.stringify(result.data),localSnapshot=JSON.stringify(S);
    let lastSynced='';try{lastSynced=localStorage.getItem(cloudBaseKey)||''}catch(_){}
@@ -359,7 +368,7 @@ async function initCloud(){
   cloudReady=true;cloudDirty=true;await cloudPush();render();
  }catch(err){cloudStatus='Ошибка подключения: '+err.message;console.error(err);render()}
 }
-function save(){try{localStorage.setItem(localStoreKey,JSON.stringify(S));queueCloudSave();return true}catch(x){if(!mem){mem=true;alert('Не удалось сохранить данные (память браузера недоступна или заполнена). Сделайте экспорт в разделе «Ещё».')}return false}}
+function save(){try{localMutationCounter++;if(!window._bk){const previous=localStorage.getItem(localStoreKey);if(previous&&!localStorage.getItem(localStoreKey+':session-bak'))localStorage.setItem(localStoreKey+':session-bak',previous);window._bk=1}localStorage.setItem(localStoreKey,JSON.stringify(S));queueCloudSave();return true}catch(x){if(!mem){mem=true;alert('Не удалось сохранить данные (память браузера недоступна или заполнена). Сделайте экспорт в разделе «Ещё».')}return false}}
 const weekStartKey=(d=new Date())=>{const x=new Date(d);x.setHours(12,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7));return ds(x)};
 const wk=(d=new Date())=>{const anchor=S.settings.weekAnchor||weekStartKey(new Date()),base=S.settings.weekAnchorType||(((isoWeek(new Date())+(S.settings.shift||0))%2)==1?'odd':'even');const a=anchor.split('-').map(Number),b=weekStartKey(d).split('-').map(Number),weeks=Math.floor((Date.UTC(b[0],b[1]-1,b[2])-Date.UTC(a[0],a[1]-1,a[2]))/604800000);return ((base=='odd'?0:1)+weeks%2+2)%2==0?'odd':'even'};
 function setWeekType(type){if(type!='odd'&&type!='even')return;S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=type;S.settings.shift=0;save();render()}
@@ -529,7 +538,7 @@ function vMore(){
  const open=k=>moreOpen.has(k)?'open':'';
  return head('Ещё','Инструменты и настройки приложения')+
  `<section class="more-section"><div class="study-section-head"><div><h2>Инструменты</h2><p>Дополнительные разделы MYDAY</p></div></div><div class="more-tools-grid">${toolHtml}</div></section>`+
- `<section class="more-section settings-section"><div class="study-section-head"><div><h2>Настройки</h2><p>Меняйте внешний вид, напоминания и данные</p></div></div><div class="settings-group card" style="padding:16px;margin-bottom:12px"><b>Синхронизация MYDAY</b><div class="tag">${tgUserId?'Профиль Telegram: подключён':'Откройте приложение через меню Telegram для личного профиля'}</div><div class="tag" role="status" aria-live="polite">${e(cloudStatus)}</div>${tgInitData&&!cloudConflict?'<button class="btn g" style="margin-top:10px" onclick="retryCloud()">Проверить соединение</button>':''}${cloudConflict?'<div class="row" style="margin-top:10px"><button class="btn g grow" onclick="downloadCloudConflict()">Скачать мою копию</button><button class="btn grow" onclick="acceptCloudRemote()">Загрузить облачную</button></div><div class="tag">Сначала скачай локальную копию, если в ней есть нужные изменения. Загрузка облачной версии заменит текущие данные на этом устройстве.</div>':''}</div>`+
+ `<section class="more-section settings-section"><div class="study-section-head"><div><h2>Настройки</h2><p>Меняйте внешний вид, напоминания и данные</p></div></div><div class="settings-group card" style="padding:16px;margin-bottom:12px"><b>Синхронизация MYDAY</b><div class="tag">${tgUserId?'Профиль Telegram: подключён':'Откройте приложение через меню Telegram для личного профиля'}</div><div class="tag" role="status" aria-live="polite">${e(cloudStatus)}</div>${tgInitData&&!cloudConflict?'<button class="btn g" style="margin-top:10px" onclick="retryCloud()">Проверить соединение</button>':''}${cloudConflict?'<div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn g grow" onclick="downloadCloudConflict()">Скачать мою копию</button><button class="btn g grow" onclick="acceptCloudRemote()">Загрузить облачную</button><button class="btn grow" onclick="keepLocalVersion()">Оставить мою</button></div><div class="tag">Сначала скачай локальную копию, если в ней есть нужные изменения. Загрузка облачной версии заменит текущие данные на этом устройстве.</div>':''}</div>`+
  `<details class="settings-group card" ${open('appearance')} ontoggle="this.open?moreOpen.add('appearance'):moreOpen.delete('appearance')"><summary><span class="settings-icon">◐</span><span class="settings-summary-copy"><b>Внешний вид</b><small>Тема и акцентный цвет</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Тема</label><select onchange="S.settings.theme=this.value;save();render()"><option value="dark" ${M.theme=='dark'?'selected':''}>Тёмная</option><option value="light" ${M.theme=='light'?'selected':''}>Светлая</option><option value="auto" ${M.theme=='auto'?'selected':''}>Как в системе</option></select><label>Акцентный цвет</label><div class="row settings-swatches">${AC.map((c,i)=>`<button onclick="S.settings.accent=${i};save();render()" aria-label="Цвет ${i+1}" aria-pressed="${(M.accent||0)==i}" style="--swatch-a:${c[0]};--swatch-b:${c[1]}"></button>`).join('')}</div></div></details>`+
  `<details class="settings-group card" ${open('week')} ontoggle="this.open?moreOpen.add('week'):moreOpen.delete('week')"><summary><span class="settings-icon">7</span><span class="settings-summary-copy"><b>Учебная неделя</b><small>${wkName(wk())}</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Тип текущей недели</label><select onchange="setWeekType(this.value)"><option value="odd" ${wk()=='odd'?'selected':''}>Нечётная (нижняя)</option><option value="even" ${wk()=='even'?'selected':''}>Чётная (верхняя)</option></select><div class="tag">Тип недели меняется каждый понедельник. Здесь можно скорректировать его вручную.</div></div></details>`+
  `<details class="settings-group card" ${open('notifications')} ontoggle="this.open?moreOpen.add('notifications'):moreOpen.delete('notifications')"><summary><span class="settings-icon">◷</span><span class="settings-summary-copy"><b>Напоминания</b><small>Утренний план и домашние задания</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Утреннее расписание</label><input type="time" value="${M.morning}" onchange="S.settings.morning=this.value;save()"><label>Спросить про домашку через (мин) после последней пары</label><input type="number" min="0" value="${M.hwDelay}" onchange="S.settings.hwDelay=+this.value;save()"><button class="btn" onclick="askNotif()">Разрешить уведомления</button><div class="tag settings-help">Статус: ${'Notification' in window?Notification.permission:'не поддерживается'}. Напоминания проверяются, пока MYDAY открыта; браузер может приостановить их в фоне.</div></div></details>`+
