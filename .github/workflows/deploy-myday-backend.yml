@@ -1,10 +1,23 @@
-name: Deploy MYDAY Supabase backend
+name: Deploy and validate MYDAY backend
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/multi-user-myday
+    paths:
+      - '.github/workflows/deploy-myday-backend.yml'
+      - 'supabase/**'
+      - 'index.html'
+      - 'backend-config.js'
+      - 'sw.js'
 
 permissions:
   contents: read
+
+concurrency:
+  group: myday-supabase-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -18,9 +31,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@v3
         with:
-          version: latest
+          # v2.stable is supported by setup-cli v3 and avoids resolving `latest` via GitHub API.
+          # Keep CLI v2 until the workflow is deliberately migrated to CLI v3 semantics.
+          version: v2.stable
 
       - name: Check required secrets
         shell: bash
@@ -39,7 +54,7 @@ jobs:
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
 
       - name: Apply database migrations
-        run: supabase db push --linked
+        run: supabase db push --linked --yes
 
       - name: Set Telegram bot token
         shell: bash
@@ -55,3 +70,105 @@ jobs:
 
       - name: Deploy Telegram-authenticated sync function
         run: supabase functions deploy myday-sync --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Check frontend JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+            .filter(([, attrs, body]) => !/\bsrc\s*=/.test(attrs) && body.trim())
+            .map(([, , body]) => body);
+          if (!scripts.length) throw new Error('No inline JavaScript found in index.html');
+          fs.writeFileSync('/tmp/myday-inline.js', scripts.join('\n;\n'));
+          NODE
+          node --check /tmp/myday-inline.js
+          node --check backend-config.js
+          node --check sw.js
+
+      - name: Verify signed Telegram auth, database read/write and revision conflicts
+        shell: bash
+        env:
+          SUPABASE_URL: https://rzgsctbvgzerqizfjhuq.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_VBs7WXcOJs8Oh8qNQL2KIw_FBG1ae67
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          import { createHmac } from 'node:crypto';
+          const base = process.env.SUPABASE_URL.replace(/\/+$/, '');
+          const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+          const botToken = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
+          if (!botToken) throw new Error('Missing TELEGRAM_BOT_TOKEN Actions secret');
+
+          function signedInitData(userId) {
+            const params = new URLSearchParams();
+            params.set('auth_date', String(Math.floor(Date.now() / 1000)));
+            params.set('user', JSON.stringify({ id: userId, first_name: 'MYDAY CI' }));
+            const checkString = [...params.entries()]
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([key, value]) => key + '=' + value)
+              .join('\n');
+            const secret = createHmac('sha256', botToken).update('WebAppData').digest();
+            const hash = createHmac('sha256', secret).update(checkString).digest('hex');
+            params.set('hash', hash);
+            return params.toString();
+          }
+
+          async function call(initData, action, data, expectedRevision) {
+            const response = await fetch(base + '/functions/v1/myday-sync', {
+              method: 'POST',
+              headers: { apikey: publishableKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action, initData, data, expectedRevision })
+            });
+            return { status: response.status, body: await response.json() };
+          }
+
+          const directAccess = await fetch(base + '/rest/v1/myday_profiles?select=telegram_id&limit=1', {
+            headers: { apikey: publishableKey }
+          });
+          if (directAccess.ok) throw new Error('Private profile table is accessible with the public key');
+
+          const invalid = await call('invalid', 'load');
+          if (invalid.status !== 401) throw new Error('Invalid Telegram signature was not rejected (HTTP ' + invalid.status + ')');
+
+          const userOne = signedInitData(9007199254740000);
+          const loaded = await call(userOne, 'load');
+          if (loaded.status !== 200 || !Number.isSafeInteger(loaded.body.revision)) {
+            throw new Error('Signed profile load failed: HTTP ' + loaded.status + ' ' + JSON.stringify(loaded.body));
+          }
+
+          const expected = loaded.body.revision;
+          const payload = { _myday_ci: true, run: process.env.GITHUB_RUN_ID };
+          const saved = await call(userOne, 'save', payload, expected);
+          if (saved.status !== 200 || saved.body.revision !== expected + 1) {
+            throw new Error('Signed profile save failed: HTTP ' + saved.status + ' ' + JSON.stringify(saved.body));
+          }
+
+          const conflict = await call(userOne, 'save', { _myday_ci: 'stale-write' }, expected);
+          if (conflict.status !== 409 || conflict.body.conflict !== true ||
+              conflict.body.revision !== saved.body.revision ||
+              conflict.body.data._myday_ci !== true || conflict.body.data.run !== payload.run) {
+            throw new Error('Revision conflict protection failed: HTTP ' + conflict.status + ' ' + JSON.stringify(conflict.body));
+          }
+
+          const userTwo = signedInitData(9007199254740001);
+          const secondLoad = await call(userTwo, 'load');
+          if (secondLoad.status !== 200 || !Number.isSafeInteger(secondLoad.body.revision) ||
+              (secondLoad.body.data !== null && secondLoad.body.data._myday_ci !== 'second-user')) {
+            throw new Error('Telegram account isolation failed: second user saw another profile');
+          }
+          const secondPayload = { _myday_ci: 'second-user', run: process.env.GITHUB_RUN_ID };
+          const secondSave = await call(userTwo, 'save', secondPayload, secondLoad.body.revision);
+          if (secondSave.status !== 200) throw new Error('Second Telegram profile save failed: ' + JSON.stringify(secondSave.body));
+
+          const firstReload = await call(userOne, 'load');
+          if (firstReload.status !== 200 || firstReload.body.data._myday_ci !== true ||
+              firstReload.body.data.run !== payload.run) {
+            throw new Error('Telegram account isolation failed: second user changed the first profile');
+          }
+
+          console.log('Passed: invalid signatures rejected; signed Telegram identities accepted; profile load/save works; stale writes are blocked; two Telegram accounts remain isolated.');
+          NODE

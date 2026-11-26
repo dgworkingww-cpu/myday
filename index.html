@@ -50,7 +50,7 @@ h2{margin:28px 3px 10px;color:var(--muted);font-size:11px;font-weight:750;line-h
 .chips{display:flex;gap:8px;overflow-x:auto;margin:0 -20px 13px;padding:2px 20px 5px;scroll-snap-type:x proximity;scrollbar-width:none}.chips::-webkit-scrollbar{display:none}
 .chips button{min-height:44px;flex:none;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);font-size:13px;font-weight:650;line-height:1.25;white-space:nowrap;scroll-snap-align:start;transition:transform var(--t-fast),background-color var(--t-fast),color var(--t-fast),border-color var(--t-fast)}
 .chips button.on{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 17%,var(--surface));color:var(--text)}
-.days{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:7px;margin:2px 0 16px}.days button{min-height:52px;padding:5px 2px;border:1px solid var(--line);border-radius:15px;background:var(--surface);color:var(--muted);line-height:1.2}.days button.on{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 14%,var(--surface));color:var(--text)}.days small{font-size:10px}
+.days{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin:4px 0 18px}.days button{min-height:62px;padding:9px 5px;border:1px solid var(--line);border-radius:17px;background:var(--surface);color:var(--muted);line-height:1.25;box-shadow:inset 0 1px 0 #ffffff08;transition:background .16s,border-color .16s,transform .16s}.days button b{font-size:15px!important;font-weight:750}.days button small{display:block;margin-top:5px;font-size:11px!important;opacity:.82}.days button.on{border:1.5px solid var(--ac);background:color-mix(in srgb,var(--ac) 16%,var(--surface));color:var(--text);box-shadow:0 7px 18px -14px var(--ac)}.days button:active{transform:scale(.97)}@media(max-width:600px){.days{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:5px 0 18px}.days button{min-height:70px;padding:10px 7px;border-radius:18px}.days button b{font-size:16px!important}.days button small{font-size:12px!important;margin-top:6px}}
 input,select,textarea{display:block;width:100%;min-width:0;min-height:48px;margin:6px 0 12px;padding:11px 13px;border:1px solid var(--line-strong);border-radius:13px;outline:0;background:var(--bg);color:var(--text);font-size:16px;line-height:1.4;transition:border-color var(--t-fast),box-shadow var(--t-fast),background-color var(--t-fast)}
 textarea{min-height:96px;resize:vertical}label{display:block;margin:5px 2px 0;color:var(--muted);font-size:12px;font-weight:650;letter-spacing:.015em}input::placeholder,textarea::placeholder{color:color-mix(in srgb,var(--muted) 78%,var(--bg))}.field-error{margin:-8px 3px 12px;color:var(--er);font-size:12px;font-weight:650;line-height:1.4}input[aria-invalid="true"],select[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--er);box-shadow:0 0 0 2px color-mix(in srgb,var(--er) 16%,transparent)}
 input[type=checkbox]{display:inline-block;width:24px;height:24px;min-height:24px;margin:0 10px 0 0;padding:0;accent-color:var(--ac);vertical-align:middle;-webkit-appearance:auto;appearance:auto}input[type=file]{padding:10px;font-size:14px}input[type=date],input[type=time]{min-width:0;line-height:1.2}input::-webkit-date-and-time-value{text-align:left}.row>input{margin:0;flex:1}select{padding-right:36px}
@@ -153,6 +153,8 @@ header.app-header .plus{width:48px;height:48px;border-radius:16px}
 </style></head><body>
 <div id="app"></div>
 <nav id="nav" aria-label="Основная навигация"></nav>
+<script src="./backend-config.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
 const DAYS=['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
 const CATS=['Учёба','Личные дела','Покупки','Автомобиль','Работа и проекты','Другое'];
@@ -203,7 +205,7 @@ document.addEventListener('touchend',()=>{if(!sw)return;const {c,dx}=sw;sw=null;
 const AC=[['#8b7bff','#5b8cff'],['#2fd1a0','#3bb8ff'],['#ff6b9a','#ff8e6b'],['#ffa24b','#ff6b6b'],['#4cc38a','#9be15d']];
 let tt,sd0=null;
 function toast(m,undo){const o=$('#toast');if(o)o.remove();clearTimeout(tt);const d=document.createElement('div');d.id='toast';d.className='toast';d.setAttribute('role','status');d.setAttribute('aria-live','polite');d.setAttribute('aria-atomic','true');d.innerHTML=`<span>${e(m)}</span>${undo?'<button class="toast-undo" type="button">Отменить</button>':''}`;if(undo)d.querySelector('button').onclick=()=>{undo();d.remove()};document.body.appendChild(d);tt=setTimeout(()=>d.remove(),4500)}
-function restoreBak(){const b=localStorage.getItem('myday2_bak');if(!b)return alert('Автокопии пока нет');if(!confirm('Вернуть данные на момент начала последнего сеанса?'))return;try{S=JSON.parse(b);save();render()}catch(_){alert('Копия повреждена')}}
+function restoreBak(){const b=localStorage.getItem(localStoreKey+':session-bak')||localStorage.getItem('myday2_bak');if(!b)return alert('Автокопии пока нет');if(!confirm('Вернуть данные на момент начала последнего сеанса?'))return;try{S=JSON.parse(b);save();render()}catch(_){alert('Копия повреждена')}}
 const evRows=k=>(S.events||[]).map((z,i)=>({z,i})).filter(o=>o.z.date==k).map(o=>`<div class="card row"><span class="pill" style="background:var(--ac);color:#fff">${e(o.z.type)}</span><div class="grow">${e(o.z.title)}</div><button class="chk" style="border:0;color:var(--er)" onclick="evDel(${o.i})">×</button></div>`).join('');
 function evForm(){sheet(`<h1>Зачёт / экзамен</h1><label>Название</label><input id="v1" list="sl2" placeholder="Предмет"><datalist id="sl2">${S.subjects.map(s=>`<option value="${e(s.name)}">`).join('')}</datalist><label>Тип</label><select id="v2"><option>Экзамен</option><option>Зачёт</option><option>Консультация</option><option>Сдача работы</option></select><label>Дата</label><input id="v3" type="date" value="${cdsel||today()}"><button class="btn" style="width:100%" onclick="evSave()">Сохранить</button>`)}
 function evSave(){const t=$('#v1').value.trim(),d=$('#v3').value;if(!t){fieldError($('#v1'),'Введите название события');return}if(!d){fieldError($('#v3'),'Укажите дату события');return}(S.events=S.events||[]).push({id:id(),title:t,type:$('#v2').value,date:d});save();close_();render()}
@@ -231,22 +233,193 @@ const fmt=s=>s?new Date(s+'T12:00').toLocaleDateString('ru-RU',{day:'numeric',mo
 function isoWeek(d){d=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const n=d.getUTCDay()||7;d.setUTCDate(d.getUTCDate()+4-n);const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));return Math.ceil(((d-y)/864e5+1)/7)}
 const subjNames=['Основы взаимозаменяемости и технические изменения','Сельскохозяйственные машины','Тракторы и автомобили','Детали машин, основы конструирования и ПТМ','Теоретические основы подготовки трактористов-машинистов','Теплотехника','Повышение надежности сельскохозяйственных машин','Техническое оборудование для переработки сельскохозяйственной продукции','Электротехника и электроника','Машины и оборудование в животноводстве'];
 function seed(){
- const subjects=subjNames.map((n,i)=>({id:'s'+i,name:n,closed:i==0}));
- const H=(i,t,d,extra={})=>({id:id(),subj:'s'+i,title:t,desc:d||'',due:'',status:0,subs:[],photos:[],...extra});
- const lab=(n)=>({t:'Лабораторная работа '+n,d:false});
- return {v:1,settings:{theme:'dark',morning:'07:30',shift:0,notif:true,hwDelay:60},
+ return {v:2,settings:{theme:'dark',morning:'07:30',shift:0,notif:true,hwDelay:60},
  sched:{odd:{},even:{}},tasks:[],inbox:[],fired:{},done:[],
- uni:{name:'',url:'',login:'',notes:'',links:'',teachers:''},subjects,
- hw:[H(1,'Лабораторные работы','Все лабораторные работы',{needDue:1}),H(1,'Курсовая работа','',{needDue:1}),
-  H(3,'Доработать курсовую работу',''),H(6,'Пример задания','Выполнить пример задания и подготовить ответ'),
-  H(7,'Лабораторная работа №3',''),H(7,'Лабораторная работа №4',''),
-  H(8,'Переписать конспекты','Переписать все конспекты в тетрадь'),
-  H(9,'Лабораторная работа 1',''),H(9,'Лабораторная работа 2',''),H(9,'Лабораторная работа 3','')]};
+ uni:{name:'',url:'',login:'',notes:'',links:'',teachers:''},subjects:[],hw:[],exc:[],events:[]};
 }
-let S;try{S=JSON.parse(localStorage.getItem('myday2'))}catch(_){}
-if(!S||!S.settings){S=seed()}
-let mem=false;
-function save(){try{if(!window._bk){window._bk=1;const p=localStorage.getItem('myday2');if(p)localStorage.setItem('myday2_bak',p)}localStorage.setItem('myday2',JSON.stringify(S));return true}catch(x){if(!mem){mem=true;alert('Не удалось сохранить данные (память браузера недоступна или заполнена). Сделайте экспорт в разделе «Ещё».')}return false}}
+function normalizeProfile(data){
+ const base=seed(),d=data&&typeof data==='object'&&!Array.isArray(data)?data:{};
+ return {...base,...d,
+  settings:{...base.settings,...(d.settings&&typeof d.settings==='object'?d.settings:{})},
+  uni:{...base.uni,...(d.uni&&typeof d.uni==='object'?d.uni:{})},
+  sched:{odd:d.sched&&d.sched.odd&&typeof d.sched.odd==='object'?d.sched.odd:{},even:d.sched&&d.sched.even&&typeof d.sched.even==='object'?d.sched.even:{}},
+  tasks:Array.isArray(d.tasks)?d.tasks:[],inbox:Array.isArray(d.inbox)?d.inbox:[],
+  fired:d.fired&&typeof d.fired==='object'&&!Array.isArray(d.fired)?d.fired:{},
+  done:Array.isArray(d.done)?d.done:[],subjects:Array.isArray(d.subjects)?d.subjects:[],
+  hw:Array.isArray(d.hw)?d.hw:[],exc:Array.isArray(d.exc)?d.exc:[],events:Array.isArray(d.events)?d.events:[]
+ };
+}
+const tgApp=window.Telegram&&window.Telegram.WebApp;
+try{tgApp&&tgApp.ready();tgApp&&tgApp.expand()}catch(_){}
+const tgInitData=tgApp&&tgApp.initData||'';
+const tgUserId=tgApp&&tgApp.initDataUnsafe&&tgApp.initDataUnsafe.user&&String(tgApp.initDataUnsafe.user.id)||'';
+const localStoreKey=tgUserId?'myday2:user:'+tgUserId:'myday2';
+const legacyStore=tgUserId?localStorage.getItem('myday2'):null;
+const hadLocalProfile=!!localStorage.getItem(localStoreKey);
+let S;try{S=JSON.parse(localStorage.getItem(localStoreKey))}catch(_){}
+if(!S||!S.settings)S=seed();
+let mem=false,cloudReady=false,cloudSyncTimer=null,cloudSyncing=false,cloudDirty=false;
+const cloudCfg=window.MYDAY_CONFIG||{};
+const cloudConfigured=!!(cloudCfg.supabaseUrl&&cloudCfg.supabaseAnonKey&&cloudCfg.edgeFunctionName);
+const cloudBaseKey=tgUserId?'myday2:sync-base:'+tgUserId:'';
+const cloudRevisionKey=tgUserId?'myday2:sync-revision:'+tgUserId:'';
+const cloudConflictKey=tgUserId?'myday2:sync-conflict:'+tgUserId:'';
+let cloudStatus=cloudConfigured?(tgInitData?'Подключение к облаку…':'Откройте MYDAY через Telegram'):'Облачная синхронизация пока не настроена';
+let cloudRevision=0,cloudRemoteData=null,cloudConflict=false,localMutationCounter=0,cloudConflictBackupAvailable=!!(cloudConflictKey&&localStorage.getItem(cloudConflictKey)),cloudConflictBackupPersisted=cloudConflictBackupAvailable,cloudConflictBackupDownloaded=false,cloudConflictLocalData=null;
+function updateCloudStatus(){const el=document.querySelector("[data-cloud-status]");if(el)el.textContent=cloudStatus}
+function cloudEndpoint(){const u=cloudCfg.supabaseUrl;return (u.endsWith('/')?u.slice(0,-1):u)+'/functions/v1/'+cloudCfg.edgeFunctionName}
+async function cloudRequest(action,data,expectedRevision){
+ if(!cloudConfigured||!tgInitData||!tgUserId)throw new Error(!tgInitData||!tgUserId?'Откройте приложение через меню Telegram':'Синхронизация не настроена');
+ const payload={action,initData:tgInitData};
+ if(data!==undefined)payload.data=data;
+ if(expectedRevision!==undefined)payload.expectedRevision=expectedRevision;
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
+ let r;try{r=await fetch(cloudEndpoint(),{method:'POST',headers:{'Content-Type':'application/json','apikey':cloudCfg.supabaseAnonKey},body:JSON.stringify(payload),signal:controller.signal})}finally{clearTimeout(timeout)}
+ const j=await r.json().catch(()=>({}));
+ if(r.status===409&&j.conflict)return j;
+ if(!r.ok||j.error)throw new Error(j.error||('Ошибка синхронизации: '+r.status));
+ return j;
+}
+function setCloudConflict(remote,revision){
+ cloudConflictLocalData=JSON.stringify(S);cloudConflictBackupPersisted=false;cloudConflictBackupDownloaded=false;
+ try{localStorage.setItem(cloudConflictKey,cloudConflictLocalData);cloudConflictBackupPersisted=true}catch(_){}
+ cloudConflictBackupAvailable=true;
+ cloudRemoteData=remote;cloudRevision=Number(revision)||0;cloudConflict=true;cloudDirty=false;
+ cloudStatus='Изменения отличаются от облачной версии. Локальная копия сохранена: выберите, какую версию оставить.';
+}
+async function snapshotHash(snapshot){
+ const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(snapshot));
+ return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function setCloudBase(snapshot,revision){
+ try{localStorage.setItem(cloudBaseKey,await snapshotHash(snapshot));localStorage.setItem(cloudRevisionKey,String(revision))}catch(err){console.warn('MYDAY sync metadata:',err)}
+}
+async function cloudPush(){
+ if(!cloudReady||!cloudConfigured||!tgInitData||cloudConflict)return false;
+ const snapshot=JSON.stringify(S);
+ try{
+  const result=await cloudRequest('save',JSON.parse(snapshot),cloudRevision);
+  if(result.conflict){setCloudConflict(result.data,result.revision);render();return false}
+  cloudRevision=Number(result.revision)||cloudRevision+1;
+  await setCloudBase(snapshot,cloudRevision);
+  if(JSON.stringify(S)===snapshot){cloudDirty=false;cloudStatus='Синхронизация включена'}
+  else{cloudDirty=true;cloudStatus='Сохраняю последние изменения…'}
+  updateCloudStatus();return true;
+ }catch(err){console.warn('MYDAY cloud save:',err);cloudDirty=true;cloudStatus='Ошибка синхронизации: '+err.message;updateCloudStatus();return false}
+}
+function queueCloudSave(delay=900){
+ if(!cloudReady||!cloudConfigured||!tgInitData||cloudConflict)return;
+ cloudDirty=true;clearTimeout(cloudSyncTimer);
+ cloudSyncTimer=setTimeout(()=>{if(!cloudSyncing&&!cloudConflict){cloudSyncing=true;cloudPush().finally(()=>{cloudSyncing=false;if(cloudDirty&&!cloudConflict)queueCloudSave(5000)})}},delay);
+}
+async function cloudPull(){
+ if(!cloudReady||!cloudConfigured||!tgInitData||cloudDirty||cloudSyncing||cloudConflict)return false;
+ if(document.querySelector('.sheet')||(document.activeElement&&/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)))return false;
+ try{
+  const result=await cloudRequest('load');
+  if(cloudDirty||cloudSyncing||cloudConflict)return false;
+  const remoteRevision=Number(result.revision)||0;
+  if(remoteRevision<=cloudRevision)return true;
+  if(result.data){
+   const localSnapshot=JSON.stringify(S),remoteSnapshot=JSON.stringify(result.data);
+   let lastSyncedHash='';try{lastSyncedHash=localStorage.getItem(cloudBaseKey)||''}catch(_){}
+   const localHash=await snapshotHash(localSnapshot),remoteHash=await snapshotHash(remoteSnapshot);
+   const knownRevision=Number(localStorage.getItem(cloudRevisionKey)||0);
+   if(localHash!==lastSyncedHash&&localHash!==remoteHash){
+    if(knownRevision!==remoteRevision){
+     setCloudConflict(result.data,remoteRevision);render();return false;
+    }
+    cloudRevision=remoteRevision;cloudDirty=true;await cloudPush();render();return false;
+   }
+   S=normalizeProfile(result.data);
+   localStorage.setItem(localStoreKey,JSON.stringify(S));cloudRevision=remoteRevision;await setCloudBase(JSON.stringify(S),cloudRevision);
+   cloudStatus='Синхронизация включена';render();
+  }
+  return true;
+ }catch(err){cloudStatus='Ошибка синхронизации: '+err.message;console.warn('MYDAY cloud load:',err);updateCloudStatus();return false}
+}
+function downloadCloudConflict(){
+ let raw='';try{raw=localStorage.getItem(cloudConflictKey)||cloudConflictLocalData||JSON.stringify(S,null,2)}catch(_){raw=cloudConflictLocalData||JSON.stringify(S,null,2)}
+ cloudConflictBackupDownloaded=true;
+ const blob=new Blob([raw],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download='myday-local-conflict-'+today()+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+async function keepLocalVersion(){
+ if(!cloudConflict)return;
+ if(!confirm('Заменить облачную версию текущими данными этого устройства? Локальная копия конфликта останется в резервной копии.'))return;
+ cloudConflict=false;cloudRemoteData=null;cloudReady=true;cloudDirty=true;cloudStatus='Сохраняю вашу версию в облако…';render();
+ await cloudPush();
+}
+async function acceptCloudRemote(){
+ if(!cloudConflict||!cloudRemoteData)return;
+ if(!cloudConflictBackupPersisted&&!cloudConflictBackupDownloaded){alert('Сначала скачайте локальную копию, затем загружайте облачную версию.');return}
+ S=normalizeProfile(cloudRemoteData);
+ localStorage.setItem(localStoreKey,JSON.stringify(S));try{localStorage.removeItem(cloudConflictKey)}catch(_){}
+ cloudConflict=false;cloudDirty=false;cloudRemoteData=null;await setCloudBase(JSON.stringify(S),cloudRevision);
+ cloudStatus='Облачная версия загружена. Локальная копия скачивается отдельно через кнопку резервной копии.';
+ render();
+}
+async function retryCloud(){if(!tgInitData){cloudStatus='Откройте MYDAY через меню Telegram';render();return}cloudStatus='Проверяю подключение…';render();await initCloud()}
+async function importLegacyData(){
+ let old;try{old=JSON.parse(legacyStore)}catch(_){}
+ if(!old||!old.settings){close_();return}
+ S=normalizeProfile(old);
+ localStorage.setItem(localStoreKey,JSON.stringify(S));localStorage.setItem('myday2:imported:'+tgUserId,'1');cloudReady=true;cloudDirty=true;
+ const ok=await cloudPush();
+ if(ok){cloudRemoteData=null;cloudStatus='Старые данные перенесены в ваш Telegram-профиль'}
+ else if(!cloudConflict)cloudStatus='Данные сохранены на устройстве; синхронизация повторится позже';
+ close_();render();
+}
+async function skipLegacyImport(){
+ localStorage.setItem('myday2:import-skipped:'+tgUserId,'1');
+ if(cloudRemoteData&&!cloudConflict){
+  S=cloudRemoteData;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
+  localStorage.setItem(localStoreKey,JSON.stringify(S));cloudReady=true;cloudDirty=false;await setCloudBase(JSON.stringify(S),cloudRevision);
+  cloudRemoteData=null;cloudStatus='Облачный профиль загружен';close_();render();return;
+ }
+ cloudReady=true;cloudStatus='Личный профиль создан';save();close_();render();
+}
+async function initCloud(){
+ const mutationAtStart=localMutationCounter;
+ if(!tgInitData||!tgUserId){render();return}
+ if(!cloudConfigured){if(legacyStore&&!localStorage.getItem('myday2:import-skipped:'+tgUserId)){sheet('<h1>Перенести старые данные?</h1><p class="sub">На устройстве найдены ранее сохранённые расписание, предметы и задания. Перенести их в личный профиль этого Telegram-аккаунта? Исходная копия останется на устройстве.</p><div class="row"><button class="btn g grow" onclick="skipLegacyImport()">Начать с нуля</button><button class="btn grow" onclick="importLegacyData()">Перенести</button></div>')}else render();return}
+ try{
+  const result=await cloudRequest('load');
+  cloudRevision=Number(result.revision)||0;
+  if(localMutationCounter>mutationAtStart){cloudReady=true;cloudDirty=true;await cloudPush();render();return}
+  if(result.data){
+   if(!hadLocalProfile&&legacyStore&&!localStorage.getItem('myday2:imported:'+tgUserId)&&!localStorage.getItem('myday2:import-skipped:'+tgUserId)){
+    let legacySnapshot='';try{const old=JSON.parse(legacyStore);if(old&&old.settings)legacySnapshot=JSON.stringify(old)}catch(_){}
+    const remoteSnapshotForLegacy=JSON.stringify(result.data);
+    if(legacySnapshot&&legacySnapshot!==remoteSnapshotForLegacy){
+     cloudRemoteData=result.data;cloudReady=true;
+     sheet('<h1>Найдены две версии данных</h1><p class="sub">На этом устройстве есть старое расписание и задания, а в облаке уже есть профиль. Можно перенести старые данные поверх облачного профиля или оставить облачную версию. Исходная копия останется на устройстве.</p><div class="row"><button class="btn g grow" onclick="skipLegacyImport()">Оставить облачную</button><button class="btn grow" onclick="importLegacyData()">Перенести старые</button></div>');
+     return;
+    }
+    localStorage.setItem('myday2:imported:'+tgUserId,'1');
+   }
+   const remoteSnapshot=JSON.stringify(result.data),localSnapshot=JSON.stringify(S);
+   let lastSyncedHash='';try{lastSyncedHash=localStorage.getItem(cloudBaseKey)||''}catch(_){}
+   const localHash=await snapshotHash(localSnapshot),remoteHash=await snapshotHash(remoteSnapshot);
+   const knownRevision=Number(localStorage.getItem(cloudRevisionKey)||0);
+   if(hadLocalProfile&&localSnapshot!==remoteSnapshot&&localHash!==lastSyncedHash&&knownRevision!==cloudRevision){
+    setCloudConflict(result.data,cloudRevision);cloudReady=true;render();return;
+   }
+   if(hadLocalProfile&&localSnapshot!==remoteSnapshot&&localHash!==lastSyncedHash&&knownRevision===cloudRevision){
+    cloudReady=true;cloudDirty=true;await cloudPush();render();return;
+   }
+   S=result.data;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
+   localStorage.setItem(localStoreKey,JSON.stringify(S));await setCloudBase(remoteSnapshot,cloudRevision);
+   cloudReady=true;cloudStatus='Синхронизация включена';render();return;
+  }
+  if(legacyStore&&!localStorage.getItem('myday2:imported:'+tgUserId)&&!localStorage.getItem('myday2:import-skipped:'+tgUserId)){
+   sheet('<h1>Перенести старые данные?</h1><p class="sub">На устройстве найдены ранее сохранённые расписание, предметы и задания. Перенести их в ваш Telegram-профиль? Исходная копия останется на устройстве.</p><div class="row"><button class="btn g grow" onclick="skipLegacyImport()">Начать с нуля</button><button class="btn grow" onclick="importLegacyData()">Перенести</button></div>');
+   return;
+  }
+  cloudReady=true;cloudDirty=true;await cloudPush();render();
+ }catch(err){cloudStatus='Ошибка подключения: '+err.message;console.error(err);render()}
+}
+function save(){try{localMutationCounter++;if(!window._bk){const previous=localStorage.getItem(localStoreKey);if(previous&&previous.length<350000&&!localStorage.getItem(localStoreKey+':session-bak')){try{localStorage.setItem(localStoreKey+':session-bak',previous)}catch(_){}}window._bk=1}localStorage.setItem(localStoreKey,JSON.stringify(S));queueCloudSave();return true}catch(x){if(!mem){mem=true;alert('Не удалось сохранить данные (память браузера недоступна или заполнена). Сделайте экспорт в разделе «Ещё».')}return false}}
 const weekStartKey=(d=new Date())=>{const x=new Date(d);x.setHours(12,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7));return ds(x)};
 const wk=(d=new Date())=>{const anchor=S.settings.weekAnchor||weekStartKey(new Date()),base=S.settings.weekAnchorType||(((isoWeek(new Date())+(S.settings.shift||0))%2)==1?'odd':'even');const a=anchor.split('-').map(Number),b=weekStartKey(d).split('-').map(Number),weeks=Math.floor((Date.UTC(b[0],b[1]-1,b[2])-Date.UTC(a[0],a[1]-1,a[2]))/604800000);return ((base=='odd'?0:1)+weeks%2+2)%2==0?'odd':'even'};
 function setWeekType(type){if(type!='odd'&&type!='even')return;S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=type;S.settings.shift=0;save();render()}
@@ -416,7 +589,7 @@ function vMore(){
  const open=k=>moreOpen.has(k)?'open':'';
  return head('Ещё','Инструменты и настройки приложения')+
  `<section class="more-section"><div class="study-section-head"><div><h2>Инструменты</h2><p>Дополнительные разделы MYDAY</p></div></div><div class="more-tools-grid">${toolHtml}</div></section>`+
- `<section class="more-section settings-section"><div class="study-section-head"><div><h2>Настройки</h2><p>Меняйте внешний вид, напоминания и данные</p></div></div>`+
+ `<section class="more-section settings-section"><div class="study-section-head"><div><h2>Настройки</h2><p>Меняйте внешний вид, напоминания и данные</p></div></div><div class="settings-group card" style="padding:16px;margin-bottom:12px"><b>Синхронизация MYDAY</b><div class="tag">${tgUserId?'Telegram-профиль: определён':'Откройте приложение через меню Telegram для личного профиля'}</div><div class="tag" role="status" aria-live="polite" data-cloud-status>${e(cloudStatus)}</div>${tgInitData&&!cloudConflict?'<button class="btn g" style="margin-top:10px" onclick="retryCloud()">Проверить соединение</button>':''}${cloudConflictBackupAvailable?'<button class="btn g" style="margin-top:10px" onclick="downloadCloudConflict()">Скачать сохранённую локальную копию</button>':''}${cloudConflict?'<div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn g grow" onclick="acceptCloudRemote()">Загрузить облачную</button><button class="btn grow" onclick="keepLocalVersion()">Оставить мою</button></div><div class="tag">Выбери, какую версию оставить. Локальная копия сохранена отдельно и доступна для скачивания.</div>':''}</div>`+
  `<details class="settings-group card" ${open('appearance')} ontoggle="this.open?moreOpen.add('appearance'):moreOpen.delete('appearance')"><summary><span class="settings-icon">◐</span><span class="settings-summary-copy"><b>Внешний вид</b><small>Тема и акцентный цвет</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Тема</label><select onchange="S.settings.theme=this.value;save();render()"><option value="dark" ${M.theme=='dark'?'selected':''}>Тёмная</option><option value="light" ${M.theme=='light'?'selected':''}>Светлая</option><option value="auto" ${M.theme=='auto'?'selected':''}>Как в системе</option></select><label>Акцентный цвет</label><div class="row settings-swatches">${AC.map((c,i)=>`<button onclick="S.settings.accent=${i};save();render()" aria-label="Цвет ${i+1}" aria-pressed="${(M.accent||0)==i}" style="--swatch-a:${c[0]};--swatch-b:${c[1]}"></button>`).join('')}</div></div></details>`+
  `<details class="settings-group card" ${open('week')} ontoggle="this.open?moreOpen.add('week'):moreOpen.delete('week')"><summary><span class="settings-icon">7</span><span class="settings-summary-copy"><b>Учебная неделя</b><small>${wkName(wk())}</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Тип текущей недели</label><select onchange="setWeekType(this.value)"><option value="odd" ${wk()=='odd'?'selected':''}>Нечётная (нижняя)</option><option value="even" ${wk()=='even'?'selected':''}>Чётная (верхняя)</option></select><div class="tag">Тип недели меняется каждый понедельник. Здесь можно скорректировать его вручную.</div></div></details>`+
  `<details class="settings-group card" ${open('notifications')} ontoggle="this.open?moreOpen.add('notifications'):moreOpen.delete('notifications')"><summary><span class="settings-icon">◷</span><span class="settings-summary-copy"><b>Напоминания</b><small>Утренний план и домашние задания</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Утреннее расписание</label><input type="time" value="${M.morning}" onchange="S.settings.morning=this.value;save()"><label>Спросить про домашку через (мин) после последней пары</label><input type="number" min="0" value="${M.hwDelay}" onchange="S.settings.hwDelay=+this.value;save()"><button class="btn" onclick="askNotif()">Разрешить уведомления</button><div class="tag settings-help">Статус: ${'Notification' in window?Notification.permission:'не поддерживается'}. Напоминания проверяются, пока MYDAY открыта; браузер может приостановить их в фоне.</div></div></details>`+
@@ -502,39 +675,7 @@ function hwPrompt(){S.fired[today()+'s']=Date.now()+18e5;save();notify('Заня
  <label>Задание</label><textarea id="ht"></textarea><label>Срок</label><input type="date" id="hd"><button class="btn" style="width:100%" onclick="hpSave()">Записать</button>
  <div class="row" style="margin-top:8px"><button class="btn g grow" onclick="S.fired[today()+'h']=1;save();close_()">Заданий нет</button><button class="btn g grow" onclick="S.fired[today()+'s']=Date.now()+18e5;save();close_()">Позже (30 мин)</button></div>`)}
 function hpSave(){const t=$('#ht').value.trim();if(!t)return fieldError($('#ht'),'Опишите задание');S.hw.push({id:id(),subj:$('#hp').value,title:t,desc:'',due:$('#hd').value,status:0,subs:[],photos:[]});S.fired[today()+'h']=1;save();close_();render()}
-function migrate(){if(!S.settings.weekAnchor){S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=((isoWeek(new Date())+(S.settings.shift||0))%2==1?'odd':'even')}
- if(S.schedSeeded){save();return}
- if(!Object.values(S.sched.odd).flat().length&&!Object.values(S.sched.even).flat().length){
-  const P={1:['08:30','10:00'],2:['10:10','11:40'],3:['12:20','13:50'],4:['14:00','15:30'],5:['15:40','17:10']};
-  `e|1|2|Л|0|225|Адакин Р.Д.
-e|1|3|ЛЗ|1|К-2|Кряклина И.В.
-e|1|4|ЛЗ|2|252|Адакин Р.Д.
-e|2|1|Л|4|168|Адакин Р.Д.
-e|2|2|ПЗ|2|252|Адакин Р.Д.
-e|2|3|Л|5|225|Адакин Р.Д.
-e|3|2|Л|6|251|Карпов Д.С.
-e|3|3|ЛЗ|7|К-1|Шешунов Е.В.
-e|3|4|ПЗ|6|251|Карпов Д.С.
-e|3|5|ЛЗ|6|251|Карпов Д.С.
-e|4|1|Л|1|225|Кряклина И.В.
-e|4|2|ПЗ|4|252|Адакин Р.Д.
-e|5|1|ПЗ|9|К-1|Смурыгин В.С.
-e|5|2|Л|3|225|Буликова Е.В.
-o|1|2|ПЗ|1|К-2|Кряклина И.В.
-o|1|3|ПЗ|3|136|Буликова Е.В.
-o|2|1|Л|4|168|Адакин Р.Д.
-o|2|2|Л|7|К-2|Шешунов Е.В.
-o|2|3|ПЗ|0|134|Адакин Р.Д.
-o|2|4|ПЗ|5|253|Аникеев Д.Б.
-o|3|2|Л|2|168|Адакин Р.Д.
-o|3|3|ЛЗ|8|306|Угловский А.С.
-o|3|4|ПЗ|6|251|Карпов Д.С.
-o|3|5|ЛЗ|2|252|Адакин Р.Д.
-o|4|1|Л|8|225|Угловский А.С.
-o|4|3|ПЗ|8|310|Угловский А.С.
-o|5|2|Л|9|К-2|Смурыгин В.С.
-o|5|3|ЛЗ|5|253|Аникеев Д.Б.`.split('\n').forEach(r=>{const [w,d,p,ty,si,room,teacher]=r.split('|'),t=w=='e'?'even':'odd';(S.sched[t][d]=S.sched[t][d]||[]).push({id:id(),subj:subjNames[si],s:P[p][0],e:P[p][1],room:ty+' · '+room,teacher})})}
- S.settings.shift=isoWeek(new Date())%2==1?0:1;S.schedSeeded=1;save()}
-try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}migrate();render();tick();setInterval(tick,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){tick();render()}});
+function migrate(){S=normalizeProfile(S);if(!S.settings.weekAnchor){S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=((isoWeek(new Date())+(S.settings.shift||0))%2==1?'odd':'even')}S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};S.subjects=S.subjects||[];S.hw=S.hw||[];S.exc=S.exc||[];S.events=S.events||[];save()}
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}migrate();render();initCloud();tick();setInterval(tick,30000);setInterval(()=>{if(!document.hidden)cloudPull()},20000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){tick();render();cloudPull()}});
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('./sw.js').catch(()=>{});
 </script></body></html>
