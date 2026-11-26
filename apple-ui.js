@@ -200,7 +200,7 @@ window.sheet=function(h){
  const old=document.querySelector('#ov'),replacing=!!old;
  if(old)old.remove();else{window._dialogTrigger=document.activeElement!==document.body?document.activeElement:null;window._dialogOverflow=document.body.style.overflow;document.body.style.overflow='hidden'}
  const o=document.createElement('div');o.className='ov'+(replacing?' nos':'');o.id='ov';o.addEventListener('click',ev=>{if(ev.target===o)close_()});
- o.innerHTML='<div class="sheet" role="dialog" aria-modal="true" tabindex="-1"><div class="grab" aria-hidden="true"></div><button class="sheet-close" type="button" aria-label="Закрыть" onclick="close_()">×</button>'+h+'</div>';
+ o.innerHTML='<div class="sheet" role="dialog" aria-modal="true" tabindex="-1"><div class="grab" aria-hidden="true"></div><button class="sheet-close" type="button" aria-label="Закрыть" onclick="close_()">'+mydayIcon('close',17)+'</button>'+h+'</div>';
  document.body.appendChild(o);
  const panel=o.querySelector('.sheet'),title=panel.querySelector('h1');
  if(title){title.id=title.id||'dialog-title';panel.setAttribute('aria-labelledby',title.id);title.tabIndex=-1}else panel.setAttribute('aria-label','Диалог');
