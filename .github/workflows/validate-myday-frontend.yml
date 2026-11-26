@@ -31,11 +31,11 @@ jobs:
           node <<'NODE'
           const fs = require('node:fs');
           const html = fs.readFileSync('index.html', 'utf8');
-          const scripts = [...html.matchAll(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script>/gi)]
-            .filter(([, attrs, body]) => !/\\bsrc\\s*=/.test(attrs) && body.trim())
+          const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+            .filter(([, attrs, body]) => !/\bsrc\s*=/.test(attrs) && body.trim())
             .map(([, , body]) => body);
           if (!scripts.length) throw new Error('No inline JavaScript found in index.html');
-          fs.writeFileSync('/tmp/myday-inline.js', scripts.join('\\n;\\n'));
+          fs.writeFileSync('/tmp/myday-inline.js', scripts.join('\n;\n'));
           NODE
           node --check /tmp/myday-inline.js
           node --check backend-config.js
