@@ -14,6 +14,7 @@
 <nav id="nav" aria-label="Основная навигация"></nav>
 <script src="./backend-config.js"></script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>window.MYDAY_APPLE_UI_PENDING=true;setTimeout(function(){if(window.MYDAY_APPLE_UI_PENDING){window.MYDAY_APPLE_UI_PENDING=false;if(window.render)window.render();}},3500);</script>
 <script>
 const DAYS=['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
 const CATS=['Учёба','Личные дела','Покупки','Автомобиль','Работа и проекты','Другое'];
@@ -292,6 +293,7 @@ let tab='today',tf={cat:'',show:'open'},taskSpace='study',schedSpace='study',sd=
 function resolvedTheme(){const mode=S.settings.theme||'dark';if(mode!=='auto')return mode;const tgScheme=tgApp&&tgApp.colorScheme;if(tgScheme==='light'||tgScheme==='dark')return tgScheme;return matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'}
 function setTheme(mode){if(!['dark','light','auto'].includes(mode))return;S.settings.theme=mode;save();render()}
 function render(){
+ if(window.MYDAY_APPLE_UI_PENDING)return;
  const th=resolvedTheme(),root=document.documentElement;root.dataset.theme=th;
  const ai=S.settings.accent||0,rs=root.style,accent=AC[ai]||AC[0];
  rs.setProperty('--accent',accent[0]);rs.setProperty('--accent-2',accent[1]);rs.setProperty('--ac',accent[0]);rs.setProperty('--ac2',accent[1]);rs.setProperty('--accent-soft',`color-mix(in srgb,${accent[0]} 12%,var(--surface))`);rs.setProperty('--accent-ink','#fffdf7');
@@ -547,6 +549,6 @@ function hwPrompt(){S.fired[today()+'s']=Date.now()+18e5;save();notify('Заня
  <div class="row" style="margin-top:8px"><button class="btn g grow" onclick="S.fired[today()+'h']=1;save();close_()">Заданий нет</button><button class="btn g grow" onclick="S.fired[today()+'s']=Date.now()+18e5;save();close_()">Позже (30 мин)</button></div>`)}
 function hpSave(){const t=$('#ht').value.trim();if(!t)return fieldError($('#ht'),'Опишите задание');S.hw.push({id:id(),subj:$('#hp').value,title:t,desc:'',due:$('#hd').value,status:0,subs:[],photos:[]});S.fired[today()+'h']=1;save();close_();render()}
 function migrate(){S=normalizeProfile(S);if(!S.settings.weekAnchor){S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=((isoWeek(new Date())+(S.settings.shift||0))%2==1?'odd':'even')}S.sched=S.sched||{odd:{},even:{},work:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};S.sched.work=S.sched.work||{};S.subjects=S.subjects||[];S.hw=S.hw||[];S.exc=S.exc||[];S.events=S.events||[];save()}
-try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}migrate();render();try{const mq=window.matchMedia('(prefers-color-scheme: light)');mq.addEventListener?mq.addEventListener('change',()=>{if(S.settings.theme==='auto'&&!(tgApp&&tgApp.colorScheme))render()}):mq.addListener&&mq.addListener(()=>{if(S.settings.theme==='auto'&&!(tgApp&&tgApp.colorScheme))render()});tgApp&&tgApp.onEvent&&tgApp.onEvent('themeChanged',()=>{if(S.settings.theme==='auto')render()})}catch(_){}initCloud();tick();setInterval(tick,30000);setInterval(()=>{if(!document.hidden)cloudPull()},20000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){tick();render();cloudPull()}});
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}migrate();render();try{const mq=window.matchMedia('(prefers-color-scheme: light)');mq.addEventListener?mq.addEventListener('change',()=>{if(S.settings.theme==='auto'&&!(tgApp&&tgApp.colorScheme))render()}):mq.addListener&&mq.addListener(()=>{if(S.settings.theme==='auto'&&!(tgApp&&tgApp.colorScheme))render()});tgApp&&tgApp.onEvent&&tgApp.onEvent('themeChanged',()=>{if(S.settings.theme==='auto')render()})}catch(_){}initCloud();setTimeout(()=>tick(),400);setInterval(tick,30000);setInterval(()=>{if(!document.hidden)cloudPull()},20000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){tick();render();cloudPull()}});
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('./sw.js').catch(()=>{});
-</script></body></html>
+</script><script src="./apple-ui.js" defer></script></body></html>

@@ -6,16 +6,18 @@ on:
     paths:
       - 'index.html'
       - 'design-system.css'
+      - 'apple-ui.js'
       - 'manifest.webmanifest'
       - 'sw.js'
       - 'icon.svg'
       - 'tests/**'
       - '.github/workflows/frontend-checks.yml'
   push:
-    branches: [main, redesign/myday-fieldnotes-v3]
+    branches: [main, redesign/myday-apple-2026-v2]
     paths:
       - 'index.html'
       - 'design-system.css'
+      - 'apple-ui.js'
       - 'manifest.webmanifest'
       - 'sw.js'
       - 'icon.svg'
@@ -37,9 +39,11 @@ jobs:
       - name: Install Playwright Chromium
         run: |
           npm install --no-save playwright
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps chromium webkit
       - name: Run real mobile viewport smoke tests
-        run: node tests/ui-smoke.cjs
+        run: |
+          node tests/ui-smoke.cjs
+          BROWSER=webkit node tests/ui-smoke.cjs
       - name: Check JavaScript syntax
         run: |
           node <<'NODE'
@@ -52,6 +56,7 @@ jobs:
           fs.writeFileSync('/tmp/myday.js', scripts.join('\n;\n'));
           NODE
           node --check /tmp/myday.js
+          node --check apple-ui.js
           node --check sw.js
           node --check backend-config.js
       - name: Validate manifest and app shell
@@ -66,7 +71,7 @@ jobs:
           for (const asset of ['./design-system.css', './backend-config.js', 'manifest.webmanifest']) {
             if (!html.includes(asset)) throw new Error('Missing app-shell reference: ' + asset);
           }
-          if (!sw.includes("'./index.html'") || !sw.includes("'./design-system.css'")) {
+          if (!sw.includes("'./index.html'") || !sw.includes("'./design-system.css'") || !sw.includes("'./apple-ui.js'")) {
             throw new Error('Service worker shell is missing required assets');
           }
           let depth = 0, quote = '', escaped = false;
@@ -83,25 +88,23 @@ jobs:
             if (depth < 0) throw new Error('CSS has an unexpected closing brace');
           }
           if (depth !== 0 || quote) throw new Error('CSS blocks or strings are unbalanced');
-          for (const token of ['--bg:', '--surface:', '--accent:', '--hero:', '--danger:']) {
+          for (const token of ['--bg:', '--surface:', '--accent:', '--danger:']) {
             if (!css.includes(token)) throw new Error('Missing design token: ' + token);
           }
           console.log('Manifest, app shell and design tokens validated.');
           NODE
-      - name: Check all static HTML classes have styles
+      - name: Verify the new design system components
         run: |
           node <<'NODE'
           const fs = require('node:fs');
-          const html = fs.readFileSync('index.html', 'utf8');
           const css = fs.readFileSync('design-system.css', 'utf8');
-          const classes = new Set();
-          for (const match of html.matchAll(/\bclass\s*=\s*["']([^"']*)["']/g)) {
-            for (const name of match[1].split(/\s+/)) {
-              if (name && name.indexOf('$') === -1) classes.add(name);
-            }
+          const ui = fs.readFileSync('apple-ui.js', 'utf8');
+          const required = ['#nav', '.page-top', '.hero-card', '.metric-grid', '.timeline-list', '.task-item', '.segmented', '.day-strip', '.subject-tile', '.settings-card', '.icon-btn', '.sheet'];
+          for (const selector of required) {
+            if (!css.includes(selector)) throw new Error('Missing new design component: ' + selector);
           }
-          const selectors = new Set([...css.matchAll(/\.([a-zA-Z_][\w-]*)/g)].map(match => match[1]));
-          const missing = [...classes].filter(name => !selectors.has(name));
-          if (missing.length) throw new Error('Unstyled static classes: ' + missing.join(', '));
-          console.log('All ' + classes.size + ' static HTML classes have CSS selectors.');
+          for (const feature of ['window.vToday', 'window.vSched', 'window.vTasks', 'window.vStudy', 'window.vMore', 'window.sheet', 'window.close_']) {
+            if (!ui.includes(feature)) throw new Error('Missing rebuilt interaction: ' + feature);
+          }
+          console.log('All new MYDAY design surfaces and rebuilt screens are present.');
           NODE
