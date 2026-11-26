@@ -184,7 +184,152 @@ header.app-header .plus{width:48px;height:48px;border-radius:16px}
  .sheet{padding-right:13px;padding-left:13px}
  .btn{padding-right:12px;padding-left:12px}
  .days{gap:7px}
-}</style></head><body>
+}
+/* MYDAY design system v2: mobile-first, theme-safe, no horizontal overflow */
+:root{--content-max:1120px;--page-pad:clamp(14px,4vw,32px);--safe-bottom:max(env(safe-area-inset-bottom,0px),var(--tg-safe-area-inset-bottom,0px));--safe-top:max(env(safe-area-inset-top,0px),var(--tg-safe-area-inset-top,0px));--nav-h:66px;--focus-ring:0 0 0 3px color-mix(in srgb,var(--ac) 28%,transparent)}
+html,body{width:100%;min-width:320px;max-width:100%;overflow-x:clip}
+body{background:radial-gradient(ellipse 52rem 26rem at 58% -18rem,color-mix(in srgb,var(--ac) 10%,transparent),transparent 74%),var(--bg);transition:background-color .2s,color .2s}
+#app{width:100%;max-width:var(--content-max);margin:0 auto;padding:clamp(18px,4vw,34px) var(--page-pad) calc(var(--nav-h) + 38px + var(--safe-bottom))}
+header.app-header{align-items:center;gap:12px;margin:0 0 22px}
+header.app-header>div:first-child{min-width:0}
+header.app-header h1{max-width:100%;font-size:clamp(27px,6vw,40px);line-height:1.08;overflow-wrap:anywhere}
+header.app-header .sub{max-width:62ch;line-height:1.45}
+header.app-header .row{flex:none;gap:7px!important}
+header.app-header .plus{width:44px;height:44px;min-width:44px;border-radius:14px}
+.brandline{flex-wrap:wrap;row-gap:5px}
+.card,.today-panel,.today-mini,.schedule-wrap,.settings-group,.more-tool-card,.subject-card{min-width:0}
+.today-hero,.study-hero{border-color:color-mix(in srgb,var(--ac) 22%,var(--line));background:radial-gradient(ellipse at 92% 0,color-mix(in srgb,var(--ac) 17%,transparent),transparent 43%),linear-gradient(125deg,var(--surface-raised),var(--surface));color:var(--text)}
+.today-hero:after{border-color:color-mix(in srgb,var(--ac) 12%,transparent);box-shadow:0 0 0 25px color-mix(in srgb,var(--ac) 5%,transparent),0 0 0 50px color-mix(in srgb,var(--ac) 3%,transparent)}
+.hero-kicker,.study-eyebrow{color:var(--ac)}
+.hero-title,.hero-note,.hero-progress,.study-hero-title,.study-hero-note{color:var(--text)}
+.hero-note,.study-hero-note{opacity:.76}
+.hero-progress{border-color:var(--line);background:color-mix(in srgb,var(--surface) 78%,transparent)}
+.hero-progress-label span{color:var(--muted)}
+.today-panel,.today-mini,.schedule-wrap,.settings-group,.subject-card,.more-tool-card{background:var(--surface);border-color:var(--line);color:var(--text)}
+.today-panel{box-shadow:var(--lift)}
+.section-head h2,.today-mini h2,.lesson-title,.lesson-time,.mini-line{color:var(--text)}
+.lesson-meta,.lesson-room,.mini-line span:last-child{color:var(--muted)}
+.lesson-node{border-color:var(--surface);background:var(--muted)}
+.lesson-row.current .lesson-node{background:var(--ac);box-shadow:0 0 0 4px color-mix(in srgb,var(--ac) 20%,transparent),0 0 16px color-mix(in srgb,var(--ac) 45%,transparent)}
+.current-callout{margin:4px 0 12px 83px;border-color:color-mix(in srgb,var(--ac) 35%,var(--line));background:color-mix(in srgb,var(--ac) 13%,var(--surface));color:var(--text)}
+.current-callout span{color:var(--muted)}
+.task-panel input,.task-panel .empty-state,.empty-state{background:var(--surface-soft);border-color:var(--line-strong);color:var(--text)}
+.empty-state b{color:var(--text)}
+.card:not(.hero){background:var(--surface);border-color:var(--line);color:var(--text);box-shadow:var(--lift)}
+.card:not(.hero) .t,.card:not(.hero) b{color:var(--text)}
+.btn:not(.g){background:var(--ac);color:var(--accent-ink);box-shadow:0 7px 20px -15px var(--ac)}
+.btn.g{background:var(--surface-raised);border-color:var(--line);color:var(--text)}
+.chips button.on,.days button.on{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 14%,var(--surface));color:var(--text);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 20%,transparent)}
+#nav{bottom:calc(8px + var(--safe-bottom));width:min(660px,calc(100% - 20px));padding:5px;border-color:var(--line-strong);background:color-mix(in srgb,var(--surface-raised) 91%,transparent);box-shadow:0 14px 40px -24px #0008,inset 0 1px #ffffff10}
+#nav button{min-width:0;min-height:54px;gap:4px;padding:5px 2px;color:var(--muted);font-size:10px}
+#nav button.on{background:color-mix(in srgb,var(--ac) 13%,transparent);color:var(--text)}
+#nav button.on b{color:var(--ac)}
+.schedule-wrap .lesson-row{border-bottom-color:var(--line)}
+.schedule-wrap .timeline:before,.timeline:before{background:color-mix(in srgb,var(--line-strong) 80%,transparent)}
+.lesson-row{min-width:0}
+.lesson-main{min-width:0;overflow-wrap:anywhere}
+.lesson-title{overflow-wrap:anywhere}
+.lesson-room{max-width:150px;overflow-wrap:anywhere;white-space:normal;text-align:right}
+.task-toolbar,.task-toolbar .chips,.schedule-toolbar,.schedule-toolbar .chips{min-width:0;max-width:100%}
+.task-toolbar .chips,.schedule-toolbar .chips{scrollbar-width:none}
+.task-toolbar .chips::-webkit-scrollbar,.schedule-toolbar .chips::-webkit-scrollbar{display:none}
+.settings-body{min-width:0}
+.settings-body input,.settings-body select,.settings-body textarea{max-width:100%}
+.theme-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:9px 0 5px}
+.theme-options button{display:flex;min-width:0;min-height:78px;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:9px 5px;border:1px solid var(--line);border-radius:15px;background:var(--surface-raised);color:var(--muted);font-size:12px;transition:border-color .15s,background .15s,color .15s}
+.theme-options button.on{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,var(--surface));color:var(--text);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 22%,transparent)}
+.theme-option-icon{display:grid;width:29px;height:29px;place-items:center;border-radius:10px;background:var(--surface-soft);color:var(--ac);font-size:20px;line-height:1}
+.theme-options button b{font-size:11px;font-weight:700}
+.theme-note{display:block;margin:7px 0 16px;line-height:1.45}
+.settings-swatches{display:flex;flex-wrap:wrap;align-items:center;gap:13px;margin:10px 0 4px}
+.settings-swatches button{display:grid;width:42px;height:42px;place-items:center;flex:none;padding:0;border:3px solid transparent;border-radius:50%;background:linear-gradient(135deg,var(--swatch-a),var(--swatch-b));color:white;font-size:17px;font-weight:800;box-shadow:0 3px 12px -5px #0008}
+.settings-swatches button[aria-pressed=true]{border-color:var(--surface);outline:2px solid var(--ac);outline-offset:2px}
+.settings-group summary{min-width:0}
+.settings-summary-copy{overflow-wrap:anywhere}
+.sheet{max-height:min(90dvh,900px);padding-bottom:calc(22px + var(--safe-bottom));overscroll-behavior:contain}
+.sheet input,.sheet select,.sheet textarea{width:100%;max-width:100%}
+.sheet .row{flex-wrap:wrap}
+.sheet .row>.grow{flex:1 1 180px}
+.ov{padding-bottom:var(--safe-bottom)}
+input,select,textarea{scroll-margin-bottom:130px}
+:focus-visible{outline-color:var(--ac)}
+@media(max-width:760px){
+ #app{padding:18px 16px calc(var(--nav-h) + 28px + var(--safe-bottom))}
+ .today-hero{grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:19px}
+ .today-grid{grid-template-columns:minmax(0,1fr);gap:12px}
+ .today-panel{padding:16px}
+ .today-right{grid-template-columns:minmax(0,1fr)}
+ .schedule-toolbar{align-items:stretch;flex-direction:column;gap:8px}
+ .schedule-toolbar>.chips{width:100%;margin:0 -16px;padding:2px 16px 5px;overflow-x:auto}
+ .task-toolbar{align-items:stretch;flex-direction:column;gap:7px}
+ .task-toolbar>.chips{width:100%;overflow-x:auto}
+ .lesson-row{grid-template-columns:47px 12px minmax(0,1fr);gap:8px;padding:10px 5px}
+ .lesson-room{grid-column:3;display:block;max-width:100%;justify-self:start;padding:2px 0 0;text-align:left}
+ .schedule-wrap .timeline:before{left:60px}
+ .current-callout{margin-left:66px}
+ .study-stats{gap:8px}
+ .more-tools-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:430px){
+ :root{--nav-h:62px}
+ #app{padding:16px 13px calc(var(--nav-h) + 28px + var(--safe-bottom))}
+ header.app-header{align-items:center;gap:8px;margin-bottom:17px}
+ header.app-header h1{font-size:clamp(26px,8vw,32px)}
+ header.app-header .sub{font-size:12px}
+ header.app-header .plus{width:41px;height:41px;min-width:41px}
+ .today-hero{grid-template-columns:minmax(0,1fr);gap:13px;padding:17px;border-radius:22px}
+ .hero-title{font-size:21px}
+ .hero-progress{display:flex;justify-self:start;gap:9px;padding:7px 11px}
+ .hero-progress svg{width:38px;height:38px}
+ .hero-progress-label{min-width:80px;text-align:left}
+ .today-panel{padding:14px;border-radius:19px}
+ .section-head{gap:8px}
+ .lesson-row{grid-template-columns:43px 11px minmax(0,1fr);gap:7px;min-height:72px}
+ .schedule-wrap .timeline:before{left:54px}
+ .lesson-time{font-size:11px}
+ .lesson-title{font-size:13px}
+ .lesson-meta{font-size:10px}
+ .lesson-room{font-size:10px}
+ .current-callout{margin-left:59px}
+ .days{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+ .days button{min-height:62px;padding:8px 4px;border-radius:15px}
+ .study-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .study-stat{min-height:68px;padding:10px 8px 10px 42px}
+ .study-stat-icon{left:8px;width:27px;height:27px}
+ .subjects-grid{grid-template-columns:1fr}
+ .subject-card{min-height:132px}
+ .more-tools-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .more-tool-card{min-height:126px;padding:12px}
+ .settings-group summary{min-height:64px;padding:10px 12px}
+ .settings-body{padding:13px}
+ .theme-options{gap:6px}
+ .theme-options button{min-height:72px}
+ .settings-swatches{gap:12px}
+ .settings-swatches button{width:40px;height:40px}
+ #nav{width:calc(100% - 16px);bottom:calc(5px + var(--safe-bottom));padding:4px}
+ #nav button{min-height:51px;font-size:9px}
+ #nav button b{height:21px}
+ .sheet{width:100%;max-height:88dvh;padding:14px 15px calc(18px + var(--safe-bottom));border-radius:23px 23px 0 0}
+ .sheet .row>.grow{flex:1 1 100%}
+}
+@media(max-width:360px){
+ #app{padding-right:11px;padding-left:11px}
+ header.app-header .plus{width:39px;height:39px;min-width:39px}
+ #nav{width:calc(100% - 12px)}
+ #nav button{font-size:8px}
+ .theme-options button b{font-size:10px}
+}
+@media(min-width:1040px){
+ #app{padding:40px 38px 70px}
+ #nav{top:22px;bottom:22px;left:20px;width:218px;max-width:none;transform:none;flex-direction:column;align-items:stretch;justify-content:flex-start;padding:17px 12px}
+ #nav .nav-brand{display:flex;align-items:center;gap:10px;margin:3px 7px 26px;color:var(--text)}
+ #nav .nav-caption{display:block;margin:4px 10px 7px;color:var(--muted)}
+ #nav button{flex:none;min-height:50px;flex-direction:row;justify-content:flex-start;gap:13px;padding:0 13px;font-size:13px}
+ #nav button.on{background:color-mix(in srgb,var(--ac) 13%,transparent);color:var(--text)}
+ #app{width:calc(100% - 258px);max-width:var(--content-max);margin:0 0 0 258px}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style></head><body>
 <div id="app"></div>
 <nav id="nav" aria-label="Основная навигация"></nav>
 <script src="./backend-config.js"></script>
@@ -464,8 +609,10 @@ const subj=i=>(S.subjects.find(s=>s.id==i)||{}).name||'—';
 const ruCount=(n,one,few,many)=>`${n} ${n%100>=11&&n%100<=14?many:n%10==1?one:n%10>=2&&n%10<=4?few:many}`;
 let tab='today',tf={cat:'',show:'open'},taskSpace='study',schedSpace='study',sd=new Date().getDay()||1,st=null,openSubj=null,studyFilter='open',moreOpen=new Set(['appearance']);
 
+function resolvedTheme(){const mode=S.settings.theme||'dark';if(mode!=='auto')return mode;const tgScheme=tgApp&&tgApp.colorScheme;if(tgScheme==='light'||tgScheme==='dark')return tgScheme;return matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'}
+function setTheme(mode){if(!['dark','light','auto'].includes(mode))return;S.settings.theme=mode;save();render()}
 function render(){
- const th=S.settings.theme=='auto'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):S.settings.theme;document.documentElement.dataset.theme=th;const ai=S.settings.accent||0,rs=document.documentElement.style;if(ai){rs.setProperty('--ac',AC[ai][0]);rs.setProperty('--ac2',AC[ai][1])}else{rs.removeProperty('--ac');rs.removeProperty('--ac2')}
+ const th=resolvedTheme(),root=document.documentElement;root.dataset.theme=th;const ai=S.settings.accent||0,rs=root.style;if(ai){rs.setProperty('--ac',AC[ai][0]);rs.setProperty('--ac2',AC[ai][1])}else{rs.removeProperty('--ac');rs.removeProperty('--ac2')}const pageColor=th==='light'?'#f1f5f2':'#080b0a';const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.content=pageColor;try{tgApp&&tgApp.setHeaderColor&&tgApp.setHeaderColor(pageColor);tgApp&&tgApp.setBackgroundColor&&tgApp.setBackgroundColor(pageColor);tgApp&&tgApp.setBottomBarColor&&tgApp.setBottomBarColor(pageColor)}catch(_){}
 const T=[['today','◉','Сегодня'],['sched','▦','Расписание'],['tasks','☑','Задачи'],['study','✎','Учёба'],['more','⋯','Ещё']];
  $('#nav').innerHTML=`<div class="nav-brand"><span class="nav-brand-mark">M</span><span>MYDAY<small>ТВОЙ ДЕНЬ</small></span></div><div class="nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</div>`+T.map(t=>`<button class="${tab==t[0]?'on':''}" aria-current="${tab==t[0]?'page':'false'}" onclick="go('${t[0]}')"><b><svg aria-hidden="true" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${NI[t[0]]}</svg></b>${t[2]}</button>`).join('');
  $('#app').innerHTML=({today:vToday,sched:vSched,tasks:vTasks,study:vStudy,more:vMore})[tab]();
@@ -628,7 +775,12 @@ function vMore(){
  return head('Ещё','Инструменты и настройки приложения')+
  `<section class="more-section"><div class="study-section-head"><div><h2>Инструменты</h2><p>Дополнительные разделы MYDAY</p></div></div><div class="more-tools-grid">${toolHtml}</div></section>`+
  `<section class="more-section settings-section"><div class="study-section-head"><div><h2>Настройки</h2><p>Меняйте внешний вид, напоминания и данные</p></div></div><div class="settings-group card" style="padding:16px;margin-bottom:12px"><b>Синхронизация MYDAY</b><div class="tag">${tgUserId?'Telegram-профиль: определён':'Откройте приложение через меню Telegram для личного профиля'}</div><div class="tag" role="status" aria-live="polite" data-cloud-status>${e(cloudStatus)}</div>${tgInitData&&!cloudConflict?'<button class="btn g" style="margin-top:10px" onclick="retryCloud()">Проверить соединение</button>':''}${cloudConflictBackupAvailable?'<button class="btn g" style="margin-top:10px" onclick="downloadCloudConflict()">Скачать сохранённую локальную копию</button>':''}${cloudConflict?'<div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn g grow" onclick="acceptCloudRemote()">Загрузить облачную</button><button class="btn grow" onclick="keepLocalVersion()">Оставить мою</button></div><div class="tag">Выбери, какую версию оставить. Локальная копия сохранена отдельно и доступна для скачивания.</div>':''}</div>`+
- `<details class="settings-group card" ${open('appearance')} ontoggle="this.open?moreOpen.add('appearance'):moreOpen.delete('appearance')"><summary><span class="settings-icon">◐</span><span class="settings-summary-copy"><b>Внешний вид</b><small>Тема и акцентный цвет</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Тема</label><select onchange="S.settings.theme=this.value;save();render()"><option value="dark" ${M.theme=='dark'?'selected':''}>Тёмная</option><option value="light" ${M.theme=='light'?'selected':''}>Светлая</option><option value="auto" ${M.theme=='auto'?'selected':''}>Как в системе</option></select><label>Акцентный цвет</label><div class="row settings-swatches">${AC.map((c,i)=>`<button onclick="S.settings.accent=${i};save();render()" aria-label="Цвет ${i+1}" aria-pressed="${(M.accent||0)==i}" style="--swatch-a:${c[0]};--swatch-b:${c[1]}"></button>`).join('')}</div></div></details>`+
+ `<details class="settings-group card" ${open('appearance')} ontoggle="this.open?moreOpen.add('appearance'):moreOpen.delete('appearance')"><summary><span class="settings-icon">◐</span><span class="settings-summary-copy"><b>Внешний вид</b><small>Тема и акцентный цвет</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Режим оформления</label><div class="theme-options" role="group" aria-label="Режим оформления">
+ <button type="button" class="${M.theme=='light'?'on':''}" aria-pressed="${M.theme=='light'}" onclick="setTheme('light')"><span class="theme-option-icon" aria-hidden="true">☼</span><b>Светлая</b></button>
+ <button type="button" class="${M.theme=='dark'?'on':''}" aria-pressed="${M.theme=='dark'}" onclick="setTheme('dark')"><span class="theme-option-icon" aria-hidden="true">☾</span><b>Тёмная</b></button>
+ <button type="button" class="${M.theme=='auto'?'on':''}" aria-pressed="${M.theme=='auto'}" onclick="setTheme('auto')"><span class="theme-option-icon" aria-hidden="true">◐</span><b>Система</b></button>
+ </div><div class="tag theme-note">${M.theme=='auto'?'Оформление повторяет тему Telegram. В браузере используется тема устройства.':M.theme=='light'?'Светлая тема включена на всех экранах приложения.':'Тёмная тема включена на всех экранах приложения.'}</div>
+ <label>Акцентный цвет</label><div class="row settings-swatches">${AC.map((c,i)=>`<button type="button" onclick="S.settings.accent=${i};save();render()" aria-label="Акцентный цвет ${['Фиолетовый','Мятный','Розовый','Оранжевый','Зелёный'][i]}" title="${['Фиолетовый','Мятный','Розовый','Оранжевый','Зелёный'][i]}" aria-pressed="${(M.accent||0)==i}" style="--swatch-a:${c[0]};--swatch-b:${c[1]}">${(M.accent||0)==i?'<span aria-hidden="true">✓</span>':''}</button>`).join('')}</div></div></details>`+
  `<details class="settings-group card" ${open('week')} ontoggle="this.open?moreOpen.add('week'):moreOpen.delete('week')"><summary><span class="settings-icon">7</span><span class="settings-summary-copy"><b>Учебная неделя</b><small>${wkName(wk())}</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Тип текущей недели</label><select onchange="setWeekType(this.value)"><option value="odd" ${wk()=='odd'?'selected':''}>Нечётная (нижняя)</option><option value="even" ${wk()=='even'?'selected':''}>Чётная (верхняя)</option></select><div class="tag">Тип недели меняется каждый понедельник. Здесь можно скорректировать его вручную.</div></div></details>`+
  `<details class="settings-group card" ${open('notifications')} ontoggle="this.open?moreOpen.add('notifications'):moreOpen.delete('notifications')"><summary><span class="settings-icon">◷</span><span class="settings-summary-copy"><b>Напоминания</b><small>Утренний план и домашние задания</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Утреннее расписание</label><input type="time" value="${M.morning}" onchange="S.settings.morning=this.value;save()"><label>Спросить про домашку через (мин) после последней пары</label><input type="number" min="0" value="${M.hwDelay}" onchange="S.settings.hwDelay=+this.value;save()"><button class="btn" onclick="askNotif()">Разрешить уведомления</button><div class="tag settings-help">Статус: ${'Notification' in window?Notification.permission:'не поддерживается'}. Напоминания проверяются, пока MYDAY открыта; браузер может приостановить их в фоне.</div></div></details>`+
  `<details class="settings-group card" ${open('data')} ontoggle="this.open?moreOpen.add('data'):moreOpen.delete('data')"><summary><span class="settings-icon">↗</span><span class="settings-summary-copy"><b>Данные и резервные копии</b><small>Экспорт, восстановление и перенос</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><div class="settings-actions"><button class="btn g" onclick="exp()">Скачать копию</button><button class="btn g" onclick="imp()">Импорт JSON</button><button class="btn g" onclick="restoreBak()">Автокопия</button><button class="btn r" onclick="reset()">Сбросить всё</button></div><div class="tag settings-help">Данные хранятся в этом браузере. Экспортируйте копию перед переносом на другое устройство.</div></div></details>`+
@@ -714,6 +866,6 @@ function hwPrompt(){S.fired[today()+'s']=Date.now()+18e5;save();notify('Заня
  <div class="row" style="margin-top:8px"><button class="btn g grow" onclick="S.fired[today()+'h']=1;save();close_()">Заданий нет</button><button class="btn g grow" onclick="S.fired[today()+'s']=Date.now()+18e5;save();close_()">Позже (30 мин)</button></div>`)}
 function hpSave(){const t=$('#ht').value.trim();if(!t)return fieldError($('#ht'),'Опишите задание');S.hw.push({id:id(),subj:$('#hp').value,title:t,desc:'',due:$('#hd').value,status:0,subs:[],photos:[]});S.fired[today()+'h']=1;save();close_();render()}
 function migrate(){S=normalizeProfile(S);if(!S.settings.weekAnchor){S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=((isoWeek(new Date())+(S.settings.shift||0))%2==1?'odd':'even')}S.sched=S.sched||{odd:{},even:{},work:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};S.sched.work=S.sched.work||{};S.subjects=S.subjects||[];S.hw=S.hw||[];S.exc=S.exc||[];S.events=S.events||[];save()}
-try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}migrate();render();initCloud();tick();setInterval(tick,30000);setInterval(()=>{if(!document.hidden)cloudPull()},20000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){tick();render();cloudPull()}});
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}migrate();render();try{const mq=window.matchMedia('(prefers-color-scheme: light)');mq.addEventListener?mq.addEventListener('change',()=>{if(S.settings.theme==='auto'&&!(tgApp&&tgApp.colorScheme))render()}):mq.addListener&&mq.addListener(()=>{if(S.settings.theme==='auto'&&!(tgApp&&tgApp.colorScheme))render()});tgApp&&tgApp.onEvent&&tgApp.onEvent('themeChanged',()=>{if(S.settings.theme==='auto')render()})}catch(_){}initCloud();tick();setInterval(tick,30000);setInterval(()=>{if(!document.hidden)cloudPull()},20000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){tick();render();cloudPull()}});
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('./sw.js').catch(()=>{});
 </script></body></html>
