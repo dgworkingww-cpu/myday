@@ -99,6 +99,7 @@ const server = http.createServer((req, res) => {
     await page.locator('#app button[aria-label="Быстрое добавление"]').click();
     const quickSheet = page.locator('#ov .sheet');
     await quickSheet.waitFor();
+    await page.waitForTimeout(280); // Let the sheet entrance animation finish before measuring its final bounds.
     const quickBounds = await quickSheet.boundingBox();
     const viewportHeight = await page.evaluate(() => ({ innerHeight: window.innerHeight, visualHeight: window.visualViewport?.height || null }));
     if (!quickBounds || quickBounds.x < 0 || quickBounds.x + quickBounds.width > 390 || quickBounds.y + quickBounds.height > viewportHeight.innerHeight) {
@@ -111,6 +112,7 @@ const server = http.createServer((req, res) => {
     await page.getByRole('button', { name: /Новая задача/ }).click();
     const taskSheet = page.locator('#ov .sheet');
     await taskSheet.waitFor();
+    await page.waitForTimeout(280);
     const taskBounds = await taskSheet.boundingBox();
     const taskViewportHeight = await page.evaluate(() => window.innerHeight);
     if (!taskBounds || taskBounds.x < 0 || taskBounds.x + taskBounds.width > 390 || taskBounds.y + taskBounds.height > taskViewportHeight) {
