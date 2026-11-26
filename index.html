@@ -332,7 +332,7 @@ async function keepLocalVersion(){
  cloudConflict=false;cloudRemoteData=null;cloudReady=true;cloudDirty=true;cloudStatus='Сохраняю вашу версию в облако…';render();
  await cloudPush();
 }
-function acceptCloudRemote(){
+async function acceptCloudRemote(){
  if(!cloudConflict||!cloudRemoteData)return;
  S=cloudRemoteData;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
  localStorage.setItem(localStoreKey,JSON.stringify(S));try{localStorage.removeItem(cloudConflictKey)}catch(_){}
@@ -371,7 +371,7 @@ async function initCloud(){
     cloudReady=true;cloudDirty=true;await cloudPush();render();return;
    }
    S=result.data;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
-   localStorage.setItem(localStoreKey,JSON.stringify(S));setCloudBase(remoteSnapshot,cloudRevision);
+   localStorage.setItem(localStoreKey,JSON.stringify(S));await setCloudBase(remoteSnapshot,cloudRevision);
    cloudReady=true;cloudStatus='Синхронизация включена';render();return;
   }
   if(legacyStore&&!localStorage.getItem('myday2:imported:'+tgUserId)&&!localStorage.getItem('myday2:import-skipped:'+tgUserId)){
@@ -381,7 +381,7 @@ async function initCloud(){
   cloudReady=true;cloudDirty=true;await cloudPush();render();
  }catch(err){cloudStatus='Ошибка подключения: '+err.message;console.error(err);render()}
 }
-function save(){try{localMutationCounter++;if(!window._bk){const previous=localStorage.getItem(localStoreKey);if(previous&&previous.length<350000&&!localStorage.getItem(localStoreKey+':session-bak'))localStorage.setItem(localStoreKey+':session-bak',previous);window._bk=1}localStorage.setItem(localStoreKey,JSON.stringify(S));queueCloudSave();return true}catch(x){if(!mem){mem=true;alert('Не удалось сохранить данные (память браузера недоступна или заполнена). Сделайте экспорт в разделе «Ещё».')}return false}}
+function save(){try{localMutationCounter++;if(!window._bk){const previous=localStorage.getItem(localStoreKey);if(previous&&previous.length<350000&&!localStorage.getItem(localStoreKey+':session-bak')){try{localStorage.setItem(localStoreKey+':session-bak',previous)}catch(_){}}window._bk=1}localStorage.setItem(localStoreKey,JSON.stringify(S));queueCloudSave();return true}catch(x){if(!mem){mem=true;alert('Не удалось сохранить данные (память браузера недоступна или заполнена). Сделайте экспорт в разделе «Ещё».')}return false}}
 const weekStartKey=(d=new Date())=>{const x=new Date(d);x.setHours(12,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7));return ds(x)};
 const wk=(d=new Date())=>{const anchor=S.settings.weekAnchor||weekStartKey(new Date()),base=S.settings.weekAnchorType||(((isoWeek(new Date())+(S.settings.shift||0))%2)==1?'odd':'even');const a=anchor.split('-').map(Number),b=weekStartKey(d).split('-').map(Number),weeks=Math.floor((Date.UTC(b[0],b[1]-1,b[2])-Date.UTC(a[0],a[1]-1,a[2]))/604800000);return ((base=='odd'?0:1)+weeks%2+2)%2==0?'odd':'even'};
 function setWeekType(type){if(type!='odd'&&type!='even')return;S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=type;S.settings.shift=0;save();render()}
