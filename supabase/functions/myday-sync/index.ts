@@ -5,6 +5,7 @@ const corsHeaders = {
 };
 
 const encoder = new TextEncoder();
+const MAX_BODY_BYTES = 1_100_000;
 
 function hex(bytes: ArrayBuffer): string {
   return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -25,12 +26,14 @@ function safeEqual(a: string, b: string): boolean {
 async function validateTelegramInitData(initData: string, botToken: string): Promise<string> {
   if (!initData || initData.length > 12_000) throw new Error("Telegram initData отсутствует или слишком длинный");
   const params = new URLSearchParams(initData);
+  const keys = Array.from(params.keys());
+  if (new Set(keys).size !== keys.length) throw new Error("Некорректные данные Telegram");
   const receivedHash = params.get("hash") || "";
   if (!/^[a-f0-9]{64}$/i.test(receivedHash)) throw new Error("Некорректная подпись Telegram");
 
   const authDate = Number(params.get("auth_date") || 0);
   const now = Math.floor(Date.now() / 1000);
-  if (!authDate || authDate > now + 60 || now - authDate > 86_400) {
+  if (!Number.isSafeInteger(authDate) || !authDate || authDate > now + 60 || now - authDate > 86_400) {
     throw new Error("Срок авторизации Telegram истёк. Закройте и заново откройте MYDAY.");
   }
 
@@ -60,6 +63,18 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   try {
+    const length = Number(req.headers.get("content-length") || 0);
+    if (length > MAX_BODY_BYTES) return json({ error: "Запрос слишком большой" }, 413);
+    const rawBody = await req.text();
+    if (encoder.encode(rawBody).length > MAX_BODY_BYTES) return json({ error: "Запрос слишком большой" }, 413);
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(rawBody);
+      if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error();
+    } catch {
+      return json({ error: "Некорректный JSON" }, 400);
+    }
+
     const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     let serviceKey = "";
@@ -70,34 +85,52 @@ Deno.serve(async (req: Request) => {
     if (!serviceKey) serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     if (!botToken || !supabaseUrl || !serviceKey) return json({ error: "Сервер MYDAY не настроен: отсутствуют секреты" }, 503);
 
-    const body = await req.json();
     const telegramId = await validateTelegramInitData(String(body.initData || ""), botToken);
     const base = supabaseUrl.replace(/\/+$/, "");
     const headers = { apikey: serviceKey, "Content-Type": "application/json" };
 
     if (body.action === "load") {
-      const url = base + "/rest/v1/myday_profiles?telegram_id=eq." + encodeURIComponent(telegramId) + "&select=data";
+      const url = base + "/rest/v1/myday_profiles?telegram_id=eq." + encodeURIComponent(telegramId) + "&select=data,revision";
       const response = await fetch(url, { headers });
-      if (!response.ok) throw new Error("Ошибка чтения профиля из базы");
+      if (!response.ok) {
+        console.error("MYDAY profile load failed:", response.status, await response.text());
+        return json({ error: "Не удалось загрузить профиль из облака" }, 502);
+      }
       const rows = await response.json();
-      return json({ data: rows.length ? rows[0].data : null });
+      return json({ data: rows.length ? rows[0].data : null, revision: rows.length ? Number(rows[0].revision) : 0 });
     }
 
     if (body.action === "save") {
       if (!body.data || typeof body.data !== "object" || Array.isArray(body.data)) return json({ error: "Некорректные данные профиля" }, 400);
       const serialized = JSON.stringify(body.data);
-      if (serialized.length > 1_000_000) return json({ error: "Размер профиля превышает 1 МБ" }, 413);
-      const response = await fetch(base + "/rest/v1/myday_profiles?on_conflict=telegram_id", {
+      if (encoder.encode(serialized).length > 1_000_000) return json({ error: "Размер профиля превышает 1 МБ" }, 413);
+      const expectedRevision = Number(body.expectedRevision);
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) return json({ error: "Некорректная версия профиля" }, 400);
+
+      const response = await fetch(base + "/rest/v1/rpc/myday_sync_profile", {
         method: "POST",
-        headers: { ...headers, Prefer: "resolution=merge-duplicates,return=minimal" },
-        body: JSON.stringify({ telegram_id: telegramId, data: body.data, updated_at: new Date().toISOString() }),
+        headers,
+        body: JSON.stringify({
+          p_telegram_id: telegramId,
+          p_data: body.data,
+          p_expected_revision: expectedRevision,
+        }),
       });
-      if (!response.ok) throw new Error("Ошибка сохранения профиля в базе");
-      return json({ ok: true });
+      if (!response.ok) {
+        console.error("MYDAY profile save failed:", response.status, await response.text());
+        return json({ error: "Не удалось сохранить профиль в облаке" }, 502);
+      }
+      const rows = await response.json();
+      const result = Array.isArray(rows) ? rows[0] : rows;
+      if (!result) return json({ error: "Пустой ответ базы данных" }, 502);
+      if (result.conflict) return json({ conflict: true, data: result.data, revision: Number(result.revision) }, 409);
+      return json({ ok: true, revision: Number(result.revision) });
     }
 
     return json({ error: "Неизвестное действие" }, 400);
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "Внутренняя ошибка сервера" }, 400);
+    const message = error instanceof Error ? error.message : "Внутренняя ошибка сервера";
+    const authError = /Telegram|подпись|авторизац/i.test(message);
+    return json({ error: message }, authError ? 401 : 400);
   }
 });
