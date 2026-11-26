@@ -268,7 +268,8 @@ async function cloudRequest(action,data,expectedRevision){
  return j;
 }
 function setCloudConflict(remote,revision){
- try{localStorage.setItem(cloudConflictKey,JSON.stringify(S));cloudConflictBackupAvailable=true}catch(_){}
+ try{localStorage.setItem(cloudConflictKey,JSON.stringify(S))}catch(_){}
+ cloudConflictBackupAvailable=true;
  cloudRemoteData=remote;cloudRevision=Number(revision)||0;cloudConflict=true;cloudDirty=false;
  cloudStatus='Изменения отличаются от облачной версии. Локальная копия сохранена: выберите, какую версию оставить.';
 }
