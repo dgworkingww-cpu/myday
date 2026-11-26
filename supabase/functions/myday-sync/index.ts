@@ -62,13 +62,18 @@ Deno.serve(async (req: Request) => {
   try {
     const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    let serviceKey = "";
+    try {
+      const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}");
+      serviceKey = secretKeys.default || "";
+    } catch { /* fall back to the legacy key below */ }
+    if (!serviceKey) serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     if (!botToken || !supabaseUrl || !serviceKey) return json({ error: "Сервер MYDAY не настроен: отсутствуют секреты" }, 503);
 
     const body = await req.json();
     const telegramId = await validateTelegramInitData(String(body.initData || ""), botToken);
     const base = supabaseUrl.replace(/\/+$/, "");
-    const headers = { apikey: serviceKey, Authorization: "Bearer " + serviceKey, "Content-Type": "application/json" };
+    const headers = { apikey: serviceKey, "Content-Type": "application/json" };
 
     if (body.action === "load") {
       const url = base + "/rest/v1/myday_profiles?telegram_id=eq." + encodeURIComponent(telegramId) + "&select=data";
