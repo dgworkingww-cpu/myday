@@ -435,6 +435,7 @@ details[open] .settings-chevron{transform:rotate(180deg)}
 }
 @media(max-width:390px){
   #app{padding-right:13px;padding-left:13px}
+  .chips{margin-right:-13px;margin-left:-13px;padding-right:13px;padding-left:13px}
   .today-hero{grid-template-columns:minmax(0,1fr);gap:13px}
   .hero-progress{width:max-content}
   .study-hero{align-items:flex-start;flex-direction:column}
