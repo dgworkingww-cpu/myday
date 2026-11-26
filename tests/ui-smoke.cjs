@@ -98,8 +98,19 @@ const server = http.createServer((req,res) => {
     await page.waitForTimeout(260);
     const taskBounds=await sheet.boundingBox();
     if(!taskBounds || taskBounds.x<0 || taskBounds.x+taskBounds.width>390 || taskBounds.y+taskBounds.height>vh+1) throw new Error('Task editor sheet exceeds phone viewport: '+JSON.stringify({taskBounds,vh}));
-    await page.locator('#ov .sheet-close').click();
+    await page.locator('#ov #f1').fill('MYDAY UI smoke task');
+    await page.getByRole('button',{name:'Сохранить'}).click();
     await page.locator('#ov').waitFor({state:'detached'});
+    await page.getByText('MYDAY UI smoke task',{exact:true}).waitFor();
+
+    await page.locator('#nav button').nth(1).click();
+    await page.getByRole('button',{name:/Добавить/}).click();
+    await page.locator('#ov #f1').fill('MYDAY UI smoke class');
+    await page.locator('#ov #f2').fill('09:00');
+    await page.locator('#ov #f3').fill('10:00');
+    await page.getByRole('button',{name:'Сохранить'}).click();
+    await page.locator('#ov').waitFor({state:'detached'});
+    await page.getByText('MYDAY UI smoke class',{exact:true}).waitFor();
 
     if(pageErrors.length) throw new Error('Page errors: '+pageErrors.join(' | '));
     if(consoleErrors.length) throw new Error('Console errors: '+consoleErrors.join(' | '));
