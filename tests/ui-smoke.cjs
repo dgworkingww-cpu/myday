@@ -83,7 +83,8 @@ const server = http.createServer((req, res) => {
 
     await page.locator('#nav button').nth(4).click();
     const appearance = page.locator('details.settings-group').filter({ hasText: 'Внешний вид' });
-    await appearance.locator('summary').click();
+    await appearance.evaluate(el => { el.open = true; });
+    await page.waitForTimeout(60);
     const themeButtons = appearance.locator('.theme-options button');
     if (await themeButtons.count() !== 3) throw new Error('Expected three theme mode controls');
     for (const [index, label, expected] of [[0, 'Светлая', 'light'], [1, 'Тёмная', 'dark'], [2, 'Система', null]]) {
