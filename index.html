@@ -332,7 +332,7 @@ async function cloudPull(){
     cloudRevision=remoteRevision;cloudDirty=true;await cloudPush();render();return false;
    }
    S=normalizeProfile(result.data);
-   localStorage.setItem(localStoreKey,JSON.stringify(S));cloudRevision=remoteRevision;await setCloudBase(remoteSnapshot,cloudRevision);
+   localStorage.setItem(localStoreKey,JSON.stringify(S));cloudRevision=remoteRevision;await setCloudBase(JSON.stringify(S),cloudRevision);
    cloudStatus='Синхронизация включена';render();
   }
   return true;
