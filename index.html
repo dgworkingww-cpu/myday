@@ -287,8 +287,8 @@ async function cloudPush(){
   setCloudBase(snapshot,cloudRevision);
   if(JSON.stringify(S)===snapshot){cloudDirty=false;cloudStatus='Синхронизация включена'}
   else{cloudDirty=true;cloudStatus='Сохраняю последние изменения…'}
-  render();return true;
- }catch(err){console.warn('MYDAY cloud save:',err);cloudDirty=true;cloudStatus='Ошибка синхронизации: '+err.message;render();return false}
+  updateCloudStatus();return true;
+ }catch(err){console.warn('MYDAY cloud save:',err);cloudDirty=true;cloudStatus='Ошибка синхронизации: '+err.message;updateCloudStatus();return false}
 }
 function queueCloudSave(delay=900){
  if(!cloudReady||!cloudConfigured||!tgInitData||cloudConflict)return;
@@ -314,7 +314,7 @@ async function cloudPull(){
    cloudStatus='Синхронизация включена';render();
   }
   return true;
- }catch(err){cloudStatus='Ошибка синхронизации: '+err.message;console.warn('MYDAY cloud load:',err);render();return false}
+ }catch(err){cloudStatus='Ошибка синхронизации: '+err.message;console.warn('MYDAY cloud load:',err);updateCloudStatus();return false}
 }
 function downloadCloudConflict(){
  let raw='';try{raw=localStorage.getItem(cloudConflictKey)||JSON.stringify(S,null,2)}catch(_){raw=JSON.stringify(S,null,2)}
