@@ -6,16 +6,18 @@ on:
     paths:
       - 'index.html'
       - 'design-system.css'
+      - 'apple-ui.js'
       - 'manifest.webmanifest'
       - 'sw.js'
       - 'icon.svg'
       - 'tests/**'
       - '.github/workflows/frontend-checks.yml'
   push:
-    branches: [main, redesign/myday-fieldnotes-v3]
+    branches: [main, redesign/myday-apple-2026-v2]
     paths:
       - 'index.html'
       - 'design-system.css'
+      - 'apple-ui.js'
       - 'manifest.webmanifest'
       - 'sw.js'
       - 'icon.svg'
@@ -52,6 +54,7 @@ jobs:
           fs.writeFileSync('/tmp/myday.js', scripts.join('\n;\n'));
           NODE
           node --check /tmp/myday.js
+          node --check apple-ui.js
           node --check sw.js
           node --check backend-config.js
       - name: Validate manifest and app shell
@@ -66,7 +69,7 @@ jobs:
           for (const asset of ['./design-system.css', './backend-config.js', 'manifest.webmanifest']) {
             if (!html.includes(asset)) throw new Error('Missing app-shell reference: ' + asset);
           }
-          if (!sw.includes("'./index.html'") || !sw.includes("'./design-system.css'")) {
+          if (!sw.includes("'./index.html'") || !sw.includes("'./design-system.css'") || !sw.includes("'./apple-ui.js'")) {
             throw new Error('Service worker shell is missing required assets');
           }
           let depth = 0, quote = '', escaped = false;
@@ -83,7 +86,7 @@ jobs:
             if (depth < 0) throw new Error('CSS has an unexpected closing brace');
           }
           if (depth !== 0 || quote) throw new Error('CSS blocks or strings are unbalanced');
-          for (const token of ['--bg:', '--surface:', '--accent:', '--hero:', '--danger:']) {
+          for (const token of ['--bg:', '--surface:', '--accent:', '--danger:']) {
             if (!css.includes(token)) throw new Error('Missing design token: ' + token);
           }
           console.log('Manifest, app shell and design tokens validated.');
