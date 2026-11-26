@@ -22,17 +22,21 @@ A manual workflow is available at **Actions â†’ Deploy MYDAY Supabase backend â†
 
 Enter each value directly into GitHub's secret form. Never commit them, put them in `backend-config.js`, or send them in chat.
 
-The workflow:
+The workflow runs on changes to the frontend or Supabase backend and serializes deployments to avoid overlapping migrations. It:
 1. Links the CLI to the MYDAY Supabase project.
-2. Applies `supabase/migrations/001_myday_profiles.sql`.
-3. Sets `TELEGRAM_BOT_TOKEN` as a server-side Edge Function secret. Supabase injects `SUPABASE_URL` and the project's server-side secret API key automatically.
+2. Applies all pending migrations, including `001_myday_profiles.sql` and `002_myday_sync_revisions.sql`.
+3. Sets `TELEGRAM_BOT_TOKEN` as a server-side Edge Function secret. Supabase injects `SUPABASE_URL` and `SUPABASE_SECRET_KEYS` automatically.
 4. Deploys `myday-sync`.
+5. Checks frontend JavaScript syntax.
+6. Creates signed Telegram test data using the GitHub secret, verifies invalid signatures are rejected, performs a real profile load/save, and confirms stale writes are rejected with HTTP 409.
+
+The integration test uses a reserved synthetic Telegram ID (`4000000000000000`) and a small CI-only row in the profiles table; it never touches a real user's profile.
 
 If the workflow fails, inspect the Actions run log. Secret values are not printed by the workflow.
 
 ## Database and security
 
-The migration creates one private row per Telegram ID in `public.myday_profiles`. RLS is enabled, and direct table grants to `anon` and `authenticated` are revoked. The Edge Function reads the Supabase secret key from the injected `SUPABASE_SECRET_KEYS` (with a legacy service-role fallback) and uses it only in the `apikey` header for server-side REST calls.
+The migrations create one private row per Telegram ID in `public.myday_profiles`, add a monotonically increasing `revision`, and define an atomic compare-and-swap RPC for writes. RLS is enabled, and direct table grants to `anon` and `authenticated` are revoked. The Edge Function reads the Supabase secret key from the injected `SUPABASE_SECRET_KEYS` (with a legacy service-role fallback) and uses it only in the `apikey` header for server-side REST calls. It does not send the new non-JWT secret key as a Bearer token.
 
 The function's platform JWT check is intentionally disabled because the frontend uses a modern `sb_publishable_...` key, which is not a JWT. The frontend sends that key only in the `apikey` header. The function itself validates Telegram WebApp `initData` with the bot-token HMAC signature before reading or writing any profile. Do not remove that Telegram signature check.
 
@@ -53,10 +57,10 @@ Open MYDAY from the Telegram bot's Web App menu button so `Telegram.WebApp.initD
 
 1. Confirm the migration succeeded and RLS is enabled.
 2. Confirm `myday-sync` is deployed and the bot-token secret is set.
-3. Test load/save with one Telegram account.
-4. Test isolation with a second Telegram account.
-5. Test the same account on two devices.
-6. Test offline edits and reconnect.
-7. Verify legacy local-data import and export/restore.
+3. Automated CI tests a real signed Telegram payload, database load/save, and stale-write conflict rejection.
+4. On actual devices, confirm the signed Telegram profile is shown and the sync status is active.
+5. Test isolation with a second Telegram account.
+6. Test the same account on two devices, including simultaneous edits and offline reconnect.
+7. Verify legacy local-data import, conflict backup download, and export/restore.
 
 Only after these checks should the feature branch be merged into `main` and GitHub Pages updated.
