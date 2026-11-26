@@ -75,7 +75,7 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Некорректный JSON" }, 400);
     }
 
-    const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+    const botToken = (Deno.env.get("TELEGRAM_BOT_TOKEN") || "").trim();
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     let serviceKey = "";
     try {
