@@ -150,7 +150,41 @@ header.app-header .plus{width:48px;height:48px;border-radius:16px}
 :root[data-theme=light] .study-section-head h2,:root[data-theme=auto] .study-section-head h2,:root[data-theme=light] .study-section-head p,:root[data-theme=auto] .study-section-head p{color:var(--text)}
 @media(prefers-reduced-motion:reduce){.lesson-row:hover{transform:none}}
 
-</style></head><body>
+/* Mobile polish: prevent flex/grid overflow and keep controls inside the viewport. */
+.workspace-switch{margin:2px 0 14px;padding:3px;border:1px solid var(--line);border-radius:16px;background:var(--surface);gap:5px}
+.workspace-switch button{flex:1;min-width:0;justify-content:center;text-align:center}
+@media(max-width:600px){
+ #app{padding:16px 14px calc(124px + env(safe-area-inset-bottom,0px))}
+ header{align-items:flex-start;gap:10px;margin:2px 0 17px}
+ header .row{flex:none;gap:6px!important}
+ .plus{width:42px;height:42px}
+ .row{flex-wrap:wrap;min-width:0}
+ .row>.grow{flex:1 1 100%;min-width:0}
+ .row>.btn{flex:1 1 auto;min-width:0}
+ .card{padding:13px 14px;border-radius:18px}
+ .days{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .schedule-toolbar>.chips{margin-right:-14px;margin-left:-14px;padding-right:14px;padding-left:14px}
+ .lesson-row{grid-template-columns:48px 12px minmax(0,1fr);gap:8px}
+ .lesson-room{grid-column:3;justify-self:start;max-width:100%;text-align:left}
+ .lesson-main{min-width:0;overflow-wrap:anywhere}
+ .lesson-title{overflow-wrap:anywhere}
+ .sheet{width:100%;max-height:88dvh;padding:14px 16px calc(22px + env(safe-area-inset-bottom,0px));border-radius:24px 24px 0 0}
+ .sheet .row{align-items:stretch}
+ .sheet .row>.grow{flex:1 1 100%}
+ .sheet .btn{min-height:46px}
+ input,select,textarea{max-width:100%}
+ #nav{width:calc(100% - 16px);bottom:calc(7px + env(safe-area-inset-bottom,0px));padding:5px;border-radius:19px;gap:2px}
+ #nav .nav-brand,#nav .nav-caption{display:none}
+ #nav button{flex:1;min-width:0;padding:5px 2px;font-size:10px}
+ #nav button b{width:100%;height:24px}
+}
+@media(max-width:370px){
+ #app{padding-right:12px;padding-left:12px}
+ .brand-caption{display:none}
+ .sheet{padding-right:13px;padding-left:13px}
+ .btn{padding-right:12px;padding-left:12px}
+ .days{gap:7px}
+}</style></head><body>
 <div id="app"></div>
 <nav id="nav" aria-label="Основная навигация"></nav>
 <script src="./backend-config.js"></script>
@@ -183,7 +217,7 @@ const excCancel=(l,k)=>excSet(l,k,'cancel',{});
 function excReset(l,k){S.exc=(S.exc||[]).filter(z=>!(z.date==k&&z.lid==l));save();close_();render()}
 function addExtra(k){const i0='x'+id();S.exc=S.exc||[];S.exc.push({date:k,id:i0,type:'add',o:{s:'09:00',e:'10:30',room:'',subj:'Пара'}});save();lessonDay(i0,k)}
 function lessonDay(lid,k){const l=lessons(new Date(k+'T12:00')).find(x=>x.id==lid);if(!l)return;sheet(`<h1>${e(l.subj)}</h1><div class="sub">${fmt(k)} · только этот день, сетка не меняется</div><div class="row" style="margin:10px 0"><div class="grow"><label>Начало</label><input id="x1" type="time" value="${l.s}"></div><div class="grow"><label>Конец</label><input id="x2" type="time" value="${l.e}"></div></div><label>Аудитория</label><input id="x3" value="${e(l.room)}"><label>Предмет</label><input id="x4" value="${e(l.subj)}"><button class="btn" style="width:100%;margin-bottom:8px" onclick="excSave('${lid}','${k}')">Сохранить</button><div class="row"><button class="btn r grow" onclick="excCancel('${lid}','${k}')">Отменить пару</button>${l.chg&&!String(lid).startsWith('x')?`<button class="btn g grow" onclick="excReset('${lid}','${k}')">Как в сетке</button>`:''}</div>`)}
-function excRows(k){const n=new Date(k+'T12:00'),base=(S.sched[wk(n)]||{})[n.getDay()]||[];return (S.exc||[]).filter(z=>z.date==k&&z.type=='cancel').map(z=>{const l=base.find(b=>b.id==z.lid)||{subj:'Пара'};return `<div class="card row" style="padding:9px 14px;opacity:.6"><div class="grow tag" style="text-decoration:line-through">${e(l.subj)}</div><button class="btn g" style="padding:4px 12px" onclick="excReset('${z.lid}','${k}')">Вернуть</button></div>`}).join('')+`<button class="btn g" style="width:100%;margin-top:4px" onclick="addExtra('${k}')">+ Пара только на сегодня</button>`}
+function excRows(k){const n=new Date(k+'T12:00'),base=(scheduleBucket('study',wk(n))[n.getDay()]||[]);return (S.exc||[]).filter(z=>z.date==k&&z.type=='cancel').map(z=>{const l=base.find(b=>b.id==z.lid)||{subj:'Пара'};return `<div class="card row" style="padding:9px 14px;opacity:.6"><div class="grow tag" style="text-decoration:line-through">${e(l.subj)}</div><button class="btn g" style="padding:4px 12px" onclick="excReset('${z.lid}','${k}')">Вернуть</button></div>`}).join('')+`<button class="btn g" style="width:100%;margin-top:4px" onclick="addExtra('${k}')">+ Пара только на сегодня</button>`}
 function search(){sheet(`<input id="sq" aria-label="Поиск по задачам и заданиям" placeholder="Поиск по задачам и заданиям" oninput="doSearch()"><div id="sr" aria-live="polite"></div>`);setTimeout(()=>$('#sq').focus(),60)}
 function doSearch(){const q=$('#sq').value.trim().toLowerCase();if(!q){$('#sr').innerHTML='';return}const R=[...S.tasks.map(t=>({...t,k:'t'})),...S.hw.map(h=>({...h,k:'h',title:subj(h.subj)+': '+h.title}))].filter(x=>(x.title+' '+(x.desc||'')).toLowerCase().includes(q)).slice(0,30);$('#sr').innerHTML=R.length?R.map(x=>`<div class="card" onclick="detail('${x.k}','${x.id}')"><div class="${x.status==2?'t done':''}">${e(x.title)}</div><div class="tag">${x.due?fmt(x.due)+' · ':''}${ST[x.status]}</div></div>`).join(''):'<div class="sub">Ничего не найдено</div>'}
 function calView(){const b=new Date();b.setDate(1);b.setMonth(b.getMonth()+cm);const y=b.getFullYear(),m=b.getMonth(),off=(b.getDay()+6)%7,dim=new Date(y,m+1,0).getDate(),all=[...S.tasks,...S.hw].filter(x=>x.due&&x.status!=2),cnt={};all.forEach(x=>cnt[x.due]=(cnt[x.due]||0)+1);(S.events||[]).forEach(z=>cnt[z.date]=(cnt[z.date]||0)+1);let c='';for(let i=0;i<off;i++)c+='<div></div>';for(let d=1;d<=dim;d++){const k=y+'-'+pad(m+1)+'-'+pad(d),n=cnt[k]||0,s=k==cdsel;c+=`<div onclick="cdsel='${k}';render()" style="text-align:center;padding:8px 0;border-radius:12px;${k==today()?'border:1px solid var(--ac);':''}${s?'background:var(--ac);color:#fff;':''}">${d}<div style="height:8px;font-size:8px;color:${s?'#fff':'var(--ac)'}">${'●'.repeat(Math.min(n,3))}</div></div>`}const sel=cdsel?all.filter(x=>x.due==cdsel):[];
@@ -217,13 +251,13 @@ document.addEventListener('touchend',()=>{if(!sd0)return;const {s,d}=sd0;sd0=nul
 const NI={today:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',sched:'<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/>',tasks:'<circle cx="12" cy="12" r="8"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>',study:'<path d="M4 6c3-1 6-1 8 1 2-2 5-2 8-1v12c-3-1-6-1-8 1-2-2-5-2-8-1z"/>',more:'<circle cx="6" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4"/>'};
 const dch=i=>`<div class="chips">${[['Сегодня',0],['Завтра',1],['+ неделя',7]].map(a=>`<button onclick="$('#${i}').value=addDays(today(),${a[1]})">${a[0]}</button>`).join('')}<button onclick="$('#${i}').value=''">Без срока</button></div>`;
 function tm(){const d=new Date();d.setDate(d.getDate()+1);const L=lessons(d);
- if(!Object.values(S.sched.odd).flat().length&&!Object.values(S.sched.even).flat().length)return `<section class="today-mini" onclick="go('sched')"><h2>Заполните расписание</h2><span class="sub">Добавьте пары, чтобы видеть план недели и получать напоминания ›</span></section>`;
+ if(!Object.values(scheduleBucket('study','odd')).flat().length&&!Object.values(scheduleBucket('study','even')).flat().length)return `<section class="today-mini" onclick="go('sched')"><h2>Заполните расписание</h2><span class="sub">Добавьте пары, чтобы видеть план недели и получать напоминания ›</span></section>`;
  const up=allOpen().filter(x=>x.due>today()&&x.due<=addDays(today(),3)).sort((a,b)=>a.due.localeCompare(b.due)),bk=(!S.lastExport||Date.now()-S.lastExport>12096e5)&&(S.tasks.length+S.hw.length)?`<div class="card backup-card" role="note" onclick="go('more')"><b>Сделайте резервную копию</b><div class="tag">Данные хранятся только на этом устройстве · открыть настройки ›</div></div>`:'';return bk+evSoon()+(up.length?`<section class="today-mini"><h2>Ближайшие дедлайны</h2>${up.slice(0,3).map(row).join('')}</section>`:'')}
 function snz(k,i){const x=(k=='t'?S.tasks:S.hw).find(y=>y.id==i);x.due=addDays(today(),1);if(k=='h')x.needDue=0;save();close_();render()}
 function bulkForm(t){sheet(`<h1>Быстрый ввод · ${DAYS[sd]}</h1><div class="sub">Одна пара в строке:<br>09:00-10:30 Теплотехника, 214, Иванов И.И.<br>Аудитория и преподаватель — по желанию.</div><textarea id="bk" style="height:180px"></textarea><button class="btn" style="width:100%" onclick="saveBulk('${t}')">Добавить</button>`)}
-function saveBulk(t){const a=(S.sched[t][sd]=S.sched[t][sd]||[]),bad=[];$('#bk').value.split('\n').forEach(l=>{l=l.trim();if(!l)return;const m=l.match(/^(\d{1,2})[:.](\d{2})\s*[-–—]\s*(\d{1,2})[:.](\d{2})\s+(.+)$/);if(!m||+m[1]>23||+m[3]>23||+m[2]>59||+m[4]>59){bad.push(l);return}const s=pad(+m[1])+':'+m[2],f=pad(+m[3])+':'+m[4];if(f<=s){bad.push(l);return}const p=m[5].split(',').map(x=>x.trim());a.push({id:id(),subj:p[0],s,e:f,room:p[1]||'',teacher:p[2]||''})});save();close_();render();if(bad.length)alert('Не распознано:\n'+bad.join('\n'))}
-function copyForm(t){const o=t=='odd'?'even':'odd',n=o=='odd'?'нечётную':'чётную';sheet(`<h1>Копировать</h1><button class="btn g" style="width:100%;margin-bottom:8px" onclick="copyDay('${t}','${o}',0)">${DAYS[sd]} → на ${n} неделю</button><button class="btn g" style="width:100%" onclick="copyDay('${t}','${o}',1)">Всю неделю → на ${n}</button>`)}
-function copyDay(t,o,all){if(!confirm('Заменить занятия в целевой неделе?'))return;(all?[1,2,3,4,5,6]:[sd]).forEach(d=>{S.sched[o][d]=JSON.parse(JSON.stringify(S.sched[t][d]||[])).map(l=>({...l,id:id()}))});save();close_();st=o;render()}
+function saveBulk(t){const bucket=scheduleBucket(schedSpace,t),a=(bucket[sd]=bucket[sd]||[]),bad=[];$('#bk').value.split('\n').forEach(l=>{l=l.trim();if(!l)return;const m=l.match(/^(\d{1,2})[:.](\d{2})\s*[-–—]\s*(\d{1,2})[:.](\d{2})\s+(.+)$/);if(!m||+m[1]>23||+m[3]>23||+m[2]>59||+m[4]>59){bad.push(l);return}const s=pad(+m[1])+':'+m[2],f=pad(+m[3])+':'+m[4];if(f<=s){bad.push(l);return}const p=m[5].split(',').map(x=>x.trim());a.push({id:id(),subj:p[0],s,e:f,room:p[1]||'',teacher:p[2]||''})});save();close_();render();if(bad.length)alert('Не распознано:\n'+bad.join('\n'))}
+function copyForm(t){if(schedSpace!=='study')return;const o=t=='odd'?'even':'odd',n=o=='odd'?'нечётную':'чётную';sheet(`<h1>Копировать</h1><button class="btn g" style="width:100%;margin-bottom:8px" onclick="copyDay('${t}','${o}',0)">${DAYS[sd]} → на ${n} неделю</button><button class="btn g" style="width:100%" onclick="copyDay('${t}','${o}',1)">Всю неделю → на ${n}</button>`)}
+function copyDay(t,o,all){if(!confirm('Заменить занятия в целевой неделе?'))return;const from=scheduleBucket('study',t),to=scheduleBucket('study',o);(all?[1,2,3,4,5,6]:[sd]).forEach(d=>{to[d]=JSON.parse(JSON.stringify(from[d]||[])).map(l=>({...l,id:id()}))});save();close_();st=o;render()}
 const e=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pad=n=>String(n).padStart(2,'0');
 const ds=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
@@ -234,7 +268,7 @@ function isoWeek(d){d=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()
 const subjNames=['Основы взаимозаменяемости и технические изменения','Сельскохозяйственные машины','Тракторы и автомобили','Детали машин, основы конструирования и ПТМ','Теоретические основы подготовки трактористов-машинистов','Теплотехника','Повышение надежности сельскохозяйственных машин','Техническое оборудование для переработки сельскохозяйственной продукции','Электротехника и электроника','Машины и оборудование в животноводстве'];
 function seed(){
  return {v:2,settings:{theme:'dark',morning:'07:30',shift:0,notif:true,hwDelay:60},
- sched:{odd:{},even:{}},tasks:[],inbox:[],fired:{},done:[],
+ sched:{odd:{},even:{},work:{}},tasks:[],inbox:[],fired:{},done:[],
  uni:{name:'',url:'',login:'',notes:'',links:'',teachers:''},subjects:[],hw:[],exc:[],events:[]};
 }
 function normalizeProfile(data){
@@ -242,8 +276,8 @@ function normalizeProfile(data){
  return {...base,...d,
   settings:{...base.settings,...(d.settings&&typeof d.settings==='object'?d.settings:{})},
   uni:{...base.uni,...(d.uni&&typeof d.uni==='object'?d.uni:{})},
-  sched:{odd:d.sched&&d.sched.odd&&typeof d.sched.odd==='object'?d.sched.odd:{},even:d.sched&&d.sched.even&&typeof d.sched.even==='object'?d.sched.even:{}},
-  tasks:Array.isArray(d.tasks)?d.tasks:[],inbox:Array.isArray(d.inbox)?d.inbox:[],
+  sched:{odd:d.sched&&d.sched.odd&&typeof d.sched.odd==='object'?d.sched.odd:{},even:d.sched&&d.sched.even&&typeof d.sched.even==='object'?d.sched.even:{},work:d.sched&&d.sched.work&&typeof d.sched.work==='object'?d.sched.work:{}},
+  tasks:Array.isArray(d.tasks)?d.tasks.map(t=>({...t,space:t.space||(t.cat==='Работа и проекты'?'work':t.cat==='Учёба'?'study':'personal')})):[],inbox:Array.isArray(d.inbox)?d.inbox:[],
   fired:d.fired&&typeof d.fired==='object'&&!Array.isArray(d.fired)?d.fired:{},
   done:Array.isArray(d.done)?d.done:[],subjects:Array.isArray(d.subjects)?d.subjects:[],
   hw:Array.isArray(d.hw)?d.hw:[],exc:Array.isArray(d.exc)?d.exc:[],events:Array.isArray(d.events)?d.events:[]
@@ -373,7 +407,7 @@ async function importLegacyData(){
 async function skipLegacyImport(){
  localStorage.setItem('myday2:import-skipped:'+tgUserId,'1');
  if(cloudRemoteData&&!cloudConflict){
-  S=cloudRemoteData;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
+  S=cloudRemoteData;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{},work:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};S.sched.work=S.sched.work||{};
   localStorage.setItem(localStoreKey,JSON.stringify(S));cloudReady=true;cloudDirty=false;await setCloudBase(JSON.stringify(S),cloudRevision);
   cloudRemoteData=null;cloudStatus='Облачный профиль загружен';close_();render();return;
  }
@@ -424,10 +458,11 @@ const weekStartKey=(d=new Date())=>{const x=new Date(d);x.setHours(12,0,0,0);x.s
 const wk=(d=new Date())=>{const anchor=S.settings.weekAnchor||weekStartKey(new Date()),base=S.settings.weekAnchorType||(((isoWeek(new Date())+(S.settings.shift||0))%2)==1?'odd':'even');const a=anchor.split('-').map(Number),b=weekStartKey(d).split('-').map(Number),weeks=Math.floor((Date.UTC(b[0],b[1]-1,b[2])-Date.UTC(a[0],a[1]-1,a[2]))/604800000);return ((base=='odd'?0:1)+weeks%2+2)%2==0?'odd':'even'};
 function setWeekType(type){if(type!='odd'&&type!='even')return;S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=type;S.settings.shift=0;save();render()}
 const wkName=t=>t=='odd'?'нечётная (нижняя)':'чётная (верхняя)';
-const lessons=(d=new Date(),t=wk(d))=>{const k=ds(d),X=S.exc||[];let L=((S.sched[t]||{})[d.getDay()]||[]).map(l=>{const z=X.find(z=>z.date==k&&z.lid==l.id);return z?(z.type=='cancel'?null:{...l,...z.o,chg:1}):l}).filter(Boolean);L=L.concat(X.filter(z=>z.date==k&&z.type=='add').map(z=>({id:z.id,...z.o,chg:1})));return L.sort((a,b)=>a.s.localeCompare(b.s))};
+const scheduleBucket=(space='study',week=wk())=>{if(space==='work'){S.sched.work=S.sched.work||{};return S.sched.work}return S.sched[week]||(S.sched[week]={})};
+const lessons=(d=new Date(),t=wk(d))=>{const k=ds(d),X=S.exc||[];let L=((scheduleBucket('study',t)[d.getDay()]||[])).map(l=>{const z=X.find(z=>z.date==k&&z.lid==l.id);return z?(z.type=='cancel'?null:{...l,...z.o,chg:1}):l}).filter(Boolean);L=L.concat(X.filter(z=>z.date==k&&z.type=='add').map(z=>({id:z.id,...z.o,chg:1})));return L.sort((a,b)=>a.s.localeCompare(b.s))};
 const subj=i=>(S.subjects.find(s=>s.id==i)||{}).name||'—';
 const ruCount=(n,one,few,many)=>`${n} ${n%100>=11&&n%100<=14?many:n%10==1?one:n%10>=2&&n%10<=4?few:many}`;
-let tab='today',tf={cat:'',show:'open'},sd=new Date().getDay()||1,st=null,openSubj=null,studyFilter='open',moreOpen=new Set(['appearance']);
+let tab='today',tf={cat:'',show:'open'},taskSpace='study',schedSpace='study',sd=new Date().getDay()||1,st=null,openSubj=null,studyFilter='open',moreOpen=new Set(['appearance']);
 
 function render(){
  const th=S.settings.theme=='auto'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):S.settings.theme;document.documentElement.dataset.theme=th;const ai=S.settings.accent||0,rs=document.documentElement.style;if(ai){rs.setProperty('--ac',AC[ai][0]);rs.setProperty('--ac2',AC[ai][1])}else{rs.removeProperty('--ac');rs.removeProperty('--ac2')}
@@ -476,41 +511,43 @@ function vToday(){
  `${tm()}`+
  `</aside></div>`}
 function qadd(){const v=$('#qa').value.trim();if(!v)return;S.tasks.push(mk({title:v,due:guess(v)||today(),cat:catGuess(v)||'Другое'}));save();render()}
-const mk=o=>({id:id(),title:'',desc:'',cat:'Другое',due:'',prio:1,status:0,subs:[],repeat:'',created:today(),...o});
+const mk=o=>({id:id(),title:'',desc:'',cat:'Другое',space:'personal',due:'',prio:1,status:0,subs:[],repeat:'',created:today(),...o});
 
 function vSched(){
- const t=st||wk(),shortDays=['','Пн','Вт','Ср','Чт','Пт','Сб'];const dayBtns=[1,2,3,4,5,6].map(d=>`<button class="${sd==d?'on':''}" aria-label="${DAYS[d]}, занятий: ${((S.sched[t]||{})[d]||[]).length}" onclick="sd=${d};render()"><b style="font-size:14px">${shortDays[d]}</b><small style="display:block;font-size:10px;opacity:.8">${((S.sched[t]||{})[d]||[]).length||'—'}${d==new Date().getDay()&&t==wk()?' ●':''}</small></button>`).join('');
- const L=((S.sched[t]||{})[sd]||[]).slice().sort((a,b)=>a.s.localeCompare(b.s));
- return head('Расписание','Пары, аудитории и изменения на каждый учебный день')+
- `<div class="schedule-toolbar"><div class="chips"><button class="${t=='odd'?'on':''}" onclick="st='odd';render()">Нечётная · нижняя</button><button class="${t=='even'?'on':''}" onclick="st='even';render()">Чётная · верхняя</button></div><div class="days">${dayBtns}</div></div>`+
- (L.length?`<section class="schedule-wrap"><div class="timeline">${L.map(l=>`<div class="lesson-row" role="button" tabindex="0" aria-label="Изменить занятие: ${e(l.subj)}, ${l.s}–${l.e}" onclick="lessonForm('${t}','${l.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();lessonForm('${t}','${l.id}')}"><div class="lesson-time">${l.s}</div><span class="lesson-node"></span><div class="lesson-main"><span class="lesson-title">${e(l.subj)}</span><div class="lesson-meta">${tyP(l)}<span>${l.s}–${l.e}</span>${l.teacher?`<span>${e(l.teacher)}</span>`:''}</div></div><span class="lesson-room">${e(roomOf(l))}</span></div>`).join('')}</div></section>`:'<div class="empty-state"><b>Для этого дня занятий пока нет</b><span class="sub">Добавьте занятие или скопируйте расписание сюда.</span></div>')+
- `<div class="row" style="margin-top:14px"><button class="btn grow" onclick="lessonForm('${t}')">+ Добавить пару</button><button class="btn g grow" onclick="bulkForm('${t}')">Добавить списком</button><button class="btn g" onclick="copyForm('${t}')">Копировать</button></div>`}
+ const t=schedSpace==='work'?'work':(st||wk()),bucket=scheduleBucket(schedSpace,t),shortDays=['','Пн','Вт','Ср','Чт','Пт','Сб'];
+ const dayBtns=[1,2,3,4,5,6].map(d=>`<button class="${sd==d?'on':''}" aria-label="${DAYS[d]}, событий: ${(bucket[d]||[]).length}" onclick="sd=${d};render()"><b style="font-size:14px">${shortDays[d]}</b><small style="display:block;font-size:10px;opacity:.8">${(bucket[d]||[]).length||'—'}${d==new Date().getDay()?' ●':''}</small></button>`).join('');
+ const L=(bucket[sd]||[]).slice().sort((x,y)=>x.s.localeCompare(y.s));
+ return head('Расписание',schedSpace==='study'?'Учебные пары отдельно от рабочих событий':'Рабочие смены, встречи и блоки времени')+
+ `<div class="chips workspace-switch"><button class="${schedSpace==='study'?'on':''}" onclick="schedSpace='study';st=null;render()">Учёба</button><button class="${schedSpace==='work'?'on':''}" onclick="schedSpace='work';st='work';render()">Работа</button></div><div class="schedule-toolbar">${schedSpace==='study'?`<div class="chips"><button class="${t=='odd'?'on':''}" onclick="st='odd';render()">Нечётная · нижняя</button><button class="${t=='even'?'on':''}" onclick="st='even';render()">Чётная · верхняя</button></div>`:'<p class="sub">Обычная недельная сетка, не зависит от чётности учебной недели</p>'}<div class="days">${dayBtns}</div></div>`+
+ (L.length?`<section class="schedule-wrap"><div class="timeline">${L.map(l=>`<div class="lesson-row" role="button" tabindex="0" aria-label="Изменить запись: ${e(l.subj)}, ${l.s}–${l.e}" onclick="lessonForm('${t}','${l.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();lessonForm('${t}','${l.id}')}"><div class="lesson-time">${l.s}</div><span class="lesson-node"></span><div class="lesson-main"><span class="lesson-title">${e(l.subj)}</span><div class="lesson-meta">${schedSpace==='study'?tyP(l):''}<span>${l.s}–${l.e}</span>${l.teacher?`<span>${e(l.teacher)}</span>`:''}</div></div><span class="lesson-room">${e(roomOf(l))}</span></div>`).join('')}</div></section>`:'<div class="empty-state"><b>Для этого дня записей пока нет</b><span class="sub">Добавьте пару, смену или встречу. Они останутся в своём разделе.</span></div>')+
+ `<div class="row" style="margin-top:14px"><button class="btn grow" onclick="lessonForm('${t}')">+ ${schedSpace==='study'?'Добавить пару':'Добавить событие'}</button><button class="btn g grow" onclick="bulkForm('${t}')">Добавить списком</button>${schedSpace==='study'?`<button class="btn g" onclick="copyForm('${t}')">Копировать</button>`:''}</div>`
+}
 function lessonForm(t,lid){
- const l=lid?S.sched[t][sd].find(x=>x.id==lid):{subj:'',s:'09:00',e:'10:30',room:'',teacher:''};
+ const bucket=scheduleBucket(schedSpace,t),l=lid?bucket[sd].find(x=>x.id==lid):{subj:'',s:'09:00',e:'10:30',room:'',teacher:''};
  sheet(`<h1>${lid?'Занятие':'Новое занятие'} · ${DAYS[sd]}</h1><label>Предмет</label><input id="f1" list="sl" value="${e(l.subj)}"><datalist id="sl">${S.subjects.map(s=>`<option value="${e(s.name)}">`).join('')}</datalist>
  <div class="row"><div class="grow"><label>Начало</label><input id="f2" type="time" value="${l.s}"></div><div class="grow"><label>Конец</label><input id="f3" type="time" value="${l.e}"></div></div>
  <label>Аудитория</label><input id="f4" value="${e(l.room)}"><label>Преподаватель (необязательно)</label><input id="f5" value="${e(l.teacher)}">
  <div class="row"><button class="btn grow" onclick="saveLesson('${t}','${lid||''}')">Сохранить</button>${lid?`<button class="btn r" onclick="delLesson('${t}','${lid}')">Удалить</button>`:''}</div>`)}
 function saveLesson(t,lid){const o={subj:$('#f1').value.trim(),s:$('#f2').value,e:$('#f3').value,room:$('#f4').value.trim(),teacher:$('#f5').value.trim()};
  if(!o.subj){fieldError($('#f1'),'Укажите предмет занятия');return}if(!o.s){fieldError($('#f2'),'Укажите время начала');return}if(!o.e){fieldError($('#f3'),'Укажите время окончания');return}if(o.e<=o.s){fieldError($('#f3'),'Время окончания должно быть позже начала');return}
- const a=(S.sched[t][sd]=S.sched[t][sd]||[]);if(lid)Object.assign(a.find(x=>x.id==lid),o);else a.push({id:id(),...o});save();close_();render()}
-function delLesson(t,lid){if(!confirm('Удалить занятие?'))return;S.sched[t][sd]=S.sched[t][sd].filter(x=>x.id!=lid);save();close_();render()}
+ const bucket=scheduleBucket(schedSpace,t),a=(bucket[sd]=bucket[sd]||[]);if(lid)Object.assign(a.find(x=>x.id==lid),o);else a.push({id:id(),...o});save();close_();render()}
+function delLesson(t,lid){if(!confirm('Удалить запись?'))return;const bucket=scheduleBucket(schedSpace,t);bucket[sd]=bucket[sd].filter(x=>x.id!=lid);save();close_();render()}
 
 function vTasks(){
- let L=S.tasks.filter(t=>(tf.show=='done'?t.status==2:t.status!=2)&&(!tf.cat||t.cat==tf.cat));
+ let L=S.tasks.filter(t=>(t.space||'personal')===taskSpace&&(tf.show=='done'?t.status==2:t.status!=2)&&(!tf.cat||t.cat==tf.cat));
  L.sort((a,b)=>tf.show=='done'?(b.doneAt||'').localeCompare(a.doneAt||''):(a.due||'9').localeCompare(b.due||'9')||b.prio-a.prio);
  const taskWord=L.length===1?'задача':L.length>=2&&L.length<=4?'задачи':'задач';
- return head('Задачи','Все дела, сроки и приоритеты — в одном списке')+`<div class="task-toolbar"><div class="chips"><button class="${tf.show=='open'?'on':''}" onclick="tf.show='open';render()">Активные</button><button class="${tf.show=='done'?'on':''}" onclick="tf.show='done';tf.mode='';render()">История</button><button class="${tf.mode=='prio'&&tf.show=='open'?'on':''}" onclick="tf.show='open';tf.mode=tf.mode=='prio'?'':'prio';render()">По приоритету</button></div><span class="task-count">${L.length} ${taskWord}</span></div>
+ return head('Задачи','Отдельные списки для учёбы, работы и личных дел')+`<div class="chips workspace-switch"><button class="${taskSpace==='study'?'on':''}" onclick="taskSpace='study';tf.cat='';render()">Учёба</button><button class="${taskSpace==='work'?'on':''}" onclick="taskSpace='work';tf.cat='';render()">Работа</button><button class="${taskSpace==='personal'?'on':''}" onclick="taskSpace='personal';tf.cat='';render()">Личное</button></div><div class="task-toolbar"><div class="chips"><button class="${tf.show=='open'?'on':''}" onclick="tf.show='open';render()">Активные</button><button class="${tf.show=='done'?'on':''}" onclick="tf.show='done';tf.mode='';render()">История</button><button class="${tf.mode=='prio'&&tf.show=='open'?'on':''}" onclick="tf.show='open';tf.mode=tf.mode=='prio'?'':'prio';render()">По приоритету</button></div><span class="task-count">${L.length} ${taskWord}</span></div>
  <div class="chips"><button class="${!tf.cat?'on':''}" onclick="tf.cat='';render()">Все</button>${CATS.map(c=>`<button class="${tf.cat==c?'on':''}" onclick="tf.cat='${c}';render()">${c}</button>`).join('')}</div>`+
  (tf.show=='open'&&tf.mode=='prio'?`<div class="tag" style="margin-bottom:8px">Перетащите задачу в секцию или откройте её, чтобы изменить.</div>`+[2,1,0].map(p=>`<div class="zone" data-p="${p}"><h2>${PR[p]} приоритет</h2>${L.filter(t=>t.prio==p).map(t=>`<div class="dr"><div class="hd" aria-hidden="true" onpointerdown="dragStart(event,'${t.id}')">⠇</div>${row(t)}</div>`).join('')||'<div class="sub dz">Перетащите задачу сюда</div>'}</div>`).join(''):L.length?L.map(row).join(''):`<div class="empty-state"><b>${tf.show=='done'?'История пока пуста':'В этом списке пока нет задач'}</b><span class="sub">${tf.show=='done'?'Выполненные задачи будут храниться здесь.':'Создайте первую задачу и задайте срок, если он известен.'}</span></div>`) + `<button class="btn" style="margin-top:12px" onclick="taskForm()">+ Новая задача</button>`}
 function taskForm(tid){const t=tid?S.tasks.find(x=>x.id==tid):mk({});
- sheet(`<h1>${tid?'Задача':'Новая задача'}</h1><label>Название</label><input id="f1" value="${e(t.title)}"><label>Описание</label><textarea id="f2">${e(t.desc)}</textarea>
+ sheet(`<h1>${tid?'Задача':'Новая задача'}</h1><label>Раздел</label><select id="f0"><option value="study" ${(t.space||'personal')==='study'?'selected':''}>Учёба</option><option value="work" ${(t.space||'personal')==='work'?'selected':''}>Работа</option><option value="personal" ${(t.space||'personal')==='personal'?'selected':''}>Личное</option></select><label>Название</label><input id="f1" value="${e(t.title)}"><label>Описание</label><textarea id="f2">${e(t.desc)}</textarea>
  <label>Категория</label><select id="f3">${CATS.map(c=>`<option ${c==t.cat?'selected':''}>${c}</option>`).join('')}</select>
  <label>Срок</label><input id="f4" type="date" value="${t.due}">${dch('f4')}<label>Приоритет</label><select id="f5">${PR.map((p,i)=>`<option value="${i}" ${i==t.prio?'selected':''}>${p}</option>`).join('')}</select>
  <label>Статус</label><select id="f6">${ST.map((p,i)=>`<option value="${i}" ${i==t.status?'selected':''}>${p}</option>`).join('')}</select>
  <label>Повтор</label><select id="f7">${[['','Нет'],['d','Каждый день'],['w','Каждую неделю'],['m','Каждый месяц']].map(r=>`<option value="${r[0]}" ${r[0]==t.repeat?'selected':''}>${r[1]}</option>`).join('')}</select>
  <div class="row"><button class="btn grow" onclick="saveTask('${tid||''}')">Сохранить</button></div>`)}
-function saveTask(tid){const o={title:$('#f1').value.trim(),desc:$('#f2').value,cat:$('#f3').value,due:$('#f4').value,prio:+$('#f5').value,status:+$('#f6').value,repeat:$('#f7').value};
+function saveTask(tid){const o={space:$('#f0').value,title:$('#f1').value.trim(),desc:$('#f2').value,cat:$('#f3').value,due:$('#f4').value,prio:+$('#f5').value,status:+$('#f6').value,repeat:$('#f7').value};
  if(!o.title){fieldError($('#f1'),'Введите название задачи');return}if(tid){const t=S.tasks.find(x=>x.id==tid);const was=t.status;Object.assign(t,o);if(o.status==2&&was!=2)finish('t',t)}else S.tasks.push(mk(o));save();close_();render()}
 function nextDue(d,r){if(!d)return '';const x=new Date(d+'T12:00');if(r=='d')x.setDate(x.getDate()+1);if(r=='w')x.setDate(x.getDate()+7);if(r=='m')x.setMonth(x.getMonth()+1);return ds(x)}
 function finish(k,x){x.status=2;x.doneAt=today();S.done.push(today());if(k=='t'&&x.repeat){S.tasks.push(mk({...x,id:id(),status:0,doneAt:'',due:nextDue(x.due||today(),x.repeat),subs:x.subs.map(s=>({...s,d:false}))}))}}
