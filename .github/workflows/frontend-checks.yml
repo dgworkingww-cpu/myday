@@ -37,11 +37,11 @@ jobs:
           node <<'NODE'
           const fs = require('node:fs');
           const html = fs.readFileSync('index.html', 'utf8');
-          const scripts = [...html.matchAll(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script>/gi)]
-            .filter(([, attrs, body]) => !/\\bsrc\\s*=/.test(attrs) && body.trim())
+          const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+            .filter(([, attrs, body]) => !/\bsrc\s*=/.test(attrs) && body.trim())
             .map(([, , body]) => body);
           if (!scripts.length) throw new Error('No inline app script found');
-          fs.writeFileSync('/tmp/myday.js', scripts.join('\\n;\\n'));
+          fs.writeFileSync('/tmp/myday.js', scripts.join('\n;\n'));
           NODE
           node --check /tmp/myday.js
           node --check sw.js
@@ -65,7 +65,7 @@ jobs:
           for (const ch of css) {
             if (quote) {
               if (escaped) { escaped = false; continue; }
-              if (ch === '\\\\') { escaped = true; continue; }
+              if (ch === '\\') { escaped = true; continue; }
               if (ch === quote) quote = '';
               continue;
             }
@@ -87,12 +87,12 @@ jobs:
           const html = fs.readFileSync('index.html', 'utf8');
           const css = fs.readFileSync('design-system.css', 'utf8');
           const classes = new Set();
-          for (const match of html.matchAll(/\\bclass\\s*=\\s*["']([^"']*)["']/g)) {
-            for (const name of match[1].split(/\\s+/)) {
-              if (name && !name.includes('${')) classes.add(name);
+          for (const match of html.matchAll(/\bclass\s*=\s*["']([^"']*)["']/g)) {
+            for (const name of match[1].split(/\s+/)) {
+              if (name && name.indexOf('$') === -1) classes.add(name);
             }
           }
-          const selectors = new Set([...css.matchAll(/\\.([a-zA-Z_][\\w-]*)/g)].map(match => match[1]));
+          const selectors = new Set([...css.matchAll(/\.([a-zA-Z_][\w-]*)/g)].map(match => match[1]));
           const missing = [...classes].filter(name => !selectors.has(name));
           if (missing.length) throw new Error('Unstyled static classes: ' + missing.join(', '));
           console.log('All ' + classes.size + ' static HTML classes have CSS selectors.');
