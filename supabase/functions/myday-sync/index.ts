@@ -87,7 +87,7 @@ Deno.serve(async (req: Request) => {
 
     const telegramId = await validateTelegramInitData(String(body.initData || ""), botToken);
     const base = supabaseUrl.replace(/\/+$/, "");
-    const headers = { apikey: serviceKey, "Content-Type": "application/json" };
+    const headers = { apikey: serviceKey, Authorization: "Bearer " + serviceKey, "Content-Type": "application/json" };
 
     if (body.action === "load") {
       const url = base + "/rest/v1/myday_profiles?telegram_id=eq." + encodeURIComponent(telegramId) + "&select=data,revision";
