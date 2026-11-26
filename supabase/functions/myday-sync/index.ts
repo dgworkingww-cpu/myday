@@ -4,6 +4,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// Bot-token validation follows Telegram's HMAC-SHA256 scheme: key=bot token, message=WebAppData.
 const encoder = new TextEncoder();
 const MAX_BODY_BYTES = 4_200_000;
 
