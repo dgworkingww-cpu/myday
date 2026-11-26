@@ -313,8 +313,11 @@ async function cloudPull(){
    let lastSyncedHash='';try{lastSyncedHash=localStorage.getItem(cloudBaseKey)||''}catch(_){}
    const localHash=await snapshotHash(localSnapshot),remoteHash=await snapshotHash(remoteSnapshot);
    const knownRevision=Number(localStorage.getItem(cloudRevisionKey)||0);
-   if(localHash!==lastSyncedHash&&localHash!==remoteHash&&knownRevision!==cloudRevision){
-    setCloudConflict(result.data,remoteRevision);render();return false;
+   if(localHash!==lastSyncedHash&&localHash!==remoteHash){
+    if(knownRevision!==remoteRevision){
+     setCloudConflict(result.data,remoteRevision);render();return false;
+    }
+    cloudRevision=remoteRevision;cloudDirty=true;await cloudPush();render();return false;
    }
    S=result.data;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
    localStorage.setItem(localStoreKey,JSON.stringify(S));cloudRevision=remoteRevision;await setCloudBase(remoteSnapshot,cloudRevision);
