@@ -100,8 +100,9 @@ const server = http.createServer((req, res) => {
     const quickSheet = page.locator('#ov .sheet');
     await quickSheet.waitFor();
     const quickBounds = await quickSheet.boundingBox();
-    if (!quickBounds || quickBounds.x < 0 || quickBounds.x + quickBounds.width > 390 || quickBounds.y + quickBounds.height > 844) {
-      throw new Error('Quick-add sheet does not fit the phone viewport: ' + JSON.stringify(quickBounds));
+    const viewportHeight = await page.evaluate(() => ({ innerHeight: window.innerHeight, visualHeight: window.visualViewport?.height || null }));
+    if (!quickBounds || quickBounds.x < 0 || quickBounds.x + quickBounds.width > 390 || quickBounds.y + quickBounds.height > viewportHeight.innerHeight) {
+      throw new Error('Quick-add sheet does not fit the actual phone viewport: ' + JSON.stringify({ quickBounds, viewportHeight }));
     }
     await page.locator('#ov .sheet-close').click();
     await page.locator('#ov').waitFor({ state: 'detached' });
@@ -111,8 +112,9 @@ const server = http.createServer((req, res) => {
     const taskSheet = page.locator('#ov .sheet');
     await taskSheet.waitFor();
     const taskBounds = await taskSheet.boundingBox();
-    if (!taskBounds || taskBounds.x < 0 || taskBounds.x + taskBounds.width > 390 || taskBounds.y + taskBounds.height > 844) {
-      throw new Error('Task form does not fit the phone viewport: ' + JSON.stringify(taskBounds));
+    const taskViewportHeight = await page.evaluate(() => window.innerHeight);
+    if (!taskBounds || taskBounds.x < 0 || taskBounds.x + taskBounds.width > 390 || taskBounds.y + taskBounds.height > taskViewportHeight) {
+      throw new Error('Task form does not fit the actual phone viewport: ' + JSON.stringify({ taskBounds, taskViewportHeight }));
     }
     await page.locator('#ov .sheet-close').click();
     await page.locator('#ov').waitFor({ state: 'detached' });
