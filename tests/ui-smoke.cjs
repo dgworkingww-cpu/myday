@@ -55,6 +55,24 @@ const server = http.createServer((req,res) => {
     for(let i=0;i<5;i++){await nav.nth(i).click();await page.locator('#app .page-title').waitFor();screens.push(await page.locator('#app .page-title').first().innerText());}
     if(!screens[1].includes('Расписание') || !screens[2].includes('Задачи') || !screens[3].includes('Учёба') || !screens[4].includes('Настройки')) throw new Error('Unexpected screen navigation: '+screens.join(' | '));
 
+    // Exercise the rebuilt secondary screens from the More tab.
+    await page.locator('#nav button').nth(4).click();
+    await page.getByRole('button',{name:/Календарь/}).click();
+    await page.locator('.calendar-grid').waitFor();
+    if(!(await page.locator('#app .page-title').innerText()).includes('Календарь')) throw new Error('Calendar screen did not open');
+    await page.locator('#nav button').nth(4).click();
+    await page.getByRole('button',{name:/План недели/}).click();
+    await page.locator('.week-list').waitFor();
+    await page.locator('#nav button').nth(4).click();
+    await page.getByRole('button',{name:/Статистика/}).click();
+    await page.locator('.stats-bars').waitFor();
+    await page.locator('#nav button').nth(4).click();
+    await page.getByRole('button',{name:/Университет/}).click();
+    await page.locator('#u1').waitFor();
+    await page.locator('#nav button').nth(4).click();
+    await page.getByRole('button',{name:/Идеи и заметки/}).click();
+    await page.locator('#app .page-title').waitFor();
+
     const themeButtons=page.locator('.theme-options button');
     if(await themeButtons.count()!==3) throw new Error('Expected Light, Dark and System theme controls');
     await themeButtons.nth(0).click();
