@@ -58,7 +58,7 @@ const server = http.createServer((req,res) => {
     // Exercise the rebuilt secondary screens from the More tab.
     await page.locator('#nav button').nth(4).click();
     await page.getByRole('button',{name:/Календарь/}).click();
-    await page.locator('.calendar-grid').waitFor();
+    await page.locator('.calendar-grid').nth(1).waitFor();
     if(!(await page.locator('#app .page-title').innerText()).includes('Календарь')) throw new Error('Calendar screen did not open');
     await page.locator('#nav button').nth(4).click();
     await page.getByRole('button',{name:/План недели/}).click();
