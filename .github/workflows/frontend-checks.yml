@@ -32,6 +32,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Run real mobile viewport smoke tests
+        run: node tests/ui-smoke.cjs
       - name: Check JavaScript syntax
         run: |
           node <<'NODE'
