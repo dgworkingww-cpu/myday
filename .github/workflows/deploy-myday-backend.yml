@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SUPABASE_PROJECT_REF: rzgsctbvgzerqizfjhuq
-      SUPABASE_URL: https://rzgsctbvgzerqizfjhuq.supabase.co
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
     steps:
@@ -27,10 +26,9 @@ jobs:
         shell: bash
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
-          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD TELEGRAM_BOT_TOKEN SUPABASE_SERVICE_ROLE_KEY; do
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD TELEGRAM_BOT_TOKEN; do
             if [[ -z "${!name:-}" ]]; then
               echo "::error::Missing GitHub Actions secret: $name"
               exit 1
@@ -47,14 +45,12 @@ jobs:
         shell: bash
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
           umask 077
           secret_file="$RUNNER_TEMP/myday-function-secrets.env"
-          printf 'TELEGRAM_BOT_TOKEN=%s\nSUPABASE_SERVICE_ROLE_KEY=%s\nSUPABASE_URL=%s\n' \
-            "$TELEGRAM_BOT_TOKEN" "$SUPABASE_SERVICE_ROLE_KEY" "$SUPABASE_URL" > "$secret_file"
-          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$secret_file"
+          printf 'TELEGRAM_BOT_TOKEN=%s\\n' "$TELEGRAM_BOT_TOKEN" > "$secret_file"
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$secret_file" --yes
           rm -f "$secret_file"
 
       - name: Deploy Telegram-authenticated sync function
