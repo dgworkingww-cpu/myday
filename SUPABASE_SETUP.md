@@ -24,7 +24,7 @@ Enter each value directly into GitHub's secret form. Never commit them, put them
 
 The workflow runs on changes to the frontend or Supabase backend and serializes deployments to avoid overlapping migrations. It:
 1. Links the CLI to the MYDAY Supabase project.
-2. Applies all pending migrations, including `001_myday_profiles.sql`, `002_myday_sync_revisions.sql`, and `003_myday_service_role_grants.sql`.
+2. Applies all pending migrations, including `001_myday_profiles.sql`, `002_myday_sync_revisions.sql`,  `003_myday_service_role_grants.sql`, and `004_myday_restrict_public_access.sql`.
 3. Sets `TELEGRAM_BOT_TOKEN` as a server-side Edge Function secret. Supabase injects `SUPABASE_URL` and `SUPABASE_SECRET_KEYS` automatically.
 4. Deploys `myday-sync`.
 5. Checks frontend JavaScript syntax.
