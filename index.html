@@ -277,7 +277,8 @@ async function importLegacyData(){
 }
 function skipLegacyImport(){localStorage.setItem('myday2:import-skipped:'+tgUserId,'1');cloudReady=true;save();close_();render()}
 async function initCloud(){
- if(!cloudConfigured||!tgInitData){render();return}
+ if(!tgInitData){render();return}
+ if(!cloudConfigured){if(legacyStore&&!localStorage.getItem('myday2:import-skipped:'+tgUserId)){sheet('<h1>Перенести старые данные?</h1><p class="sub">На устройстве найдены ранее сохранённые расписание, предметы и задания. Перенести их в личный профиль этого Telegram-аккаунта? Исходная копия останется на устройстве. Облачная синхронизация включится после подключения базы.</p><div class="row"><button class="btn g grow" onclick="skipLegacyImport()">Начать с нуля</button><button class="btn grow" onclick="importLegacyData()">Перенести</button></div>')}else render();return}
  try{
   const result=await cloudRequest('load');
   if(result.data){S=result.data;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};localStorage.setItem(localStoreKey,JSON.stringify(S));cloudReady=true;cloudStatus='Синхронизация включена';render();return}
