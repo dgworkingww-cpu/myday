@@ -84,8 +84,10 @@ const server = http.createServer((req, res) => {
     await page.locator('#nav button').nth(4).click();
     const appearance = page.locator('details.settings-group').filter({ hasText: 'Внешний вид' });
     await appearance.locator('summary').click();
-    for (const [label, expected] of [['Светлая', 'light'], ['Тёмная', 'dark'], ['Система', null]]) {
-      await appearance.getByRole('button', { name: new RegExp(label) }).click();
+    const themeButtons = appearance.locator('.theme-options button');
+    if (await themeButtons.count() !== 3) throw new Error('Expected three theme mode controls');
+    for (const [index, label, expected] of [[0, 'Светлая', 'light'], [1, 'Тёмная', 'dark'], [2, 'Система', null]]) {
+      await themeButtons.nth(index).click();
       if (expected) {
         const actual = await page.locator('html').getAttribute('data-theme');
         if (actual !== expected) throw new Error('Theme ' + label + ' did not apply; got ' + actual);
