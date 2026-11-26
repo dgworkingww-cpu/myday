@@ -129,7 +129,7 @@ jobs:
           const invalid = await call('invalid', 'load');
           if (invalid.status !== 401) throw new Error('Invalid Telegram signature was not rejected (HTTP ' + invalid.status + ')');
 
-          const userOne = signedInitData(4000000000000000);
+          const userOne = signedInitData(9007199254740000);
           const loaded = await call(userOne, 'load');
           if (loaded.status !== 200 || !Number.isSafeInteger(loaded.body.revision)) {
             throw new Error('Signed profile load failed: HTTP ' + loaded.status + ' ' + JSON.stringify(loaded.body));
@@ -149,7 +149,7 @@ jobs:
             throw new Error('Revision conflict protection failed: HTTP ' + conflict.status + ' ' + JSON.stringify(conflict.body));
           }
 
-          const userTwo = signedInitData(4000000000000001);
+          const userTwo = signedInitData(9007199254740001);
           const secondLoad = await call(userTwo, 'load');
           if (secondLoad.status !== 200 || !Number.isSafeInteger(secondLoad.body.revision) ||
               (secondLoad.body.data !== null && secondLoad.body.data._myday_ci !== 'second-user')) {
