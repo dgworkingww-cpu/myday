@@ -249,62 +249,114 @@ if(!S||!S.settings)S=seed();
 let mem=false,cloudReady=false,cloudSyncTimer=null,cloudSyncing=false,cloudDirty=false;
 const cloudCfg=window.MYDAY_CONFIG||{};
 const cloudConfigured=!!(cloudCfg.supabaseUrl&&cloudCfg.supabaseAnonKey&&cloudCfg.edgeFunctionName);
+const cloudBaseKey=tgUserId?'myday2:sync-base:'+tgUserId:'';
+const cloudRevisionKey=tgUserId?'myday2:sync-revision:'+tgUserId:'';
+const cloudConflictKey=tgUserId?'myday2:sync-conflict:'+tgUserId:'';
 let cloudStatus=cloudConfigured?(tgInitData?'Подключение к облаку…':'Откройте MYDAY через Telegram'):'Облачная синхронизация пока не настроена';
+let cloudRevision=0,cloudRemoteData=null,cloudConflict=false;
 function cloudEndpoint(){const u=cloudCfg.supabaseUrl;return (u.endsWith('/')?u.slice(0,-1):u)+'/functions/v1/'+cloudCfg.edgeFunctionName}
-async function cloudRequest(action,data){
+async function cloudRequest(action,data,expectedRevision){
  if(!cloudConfigured||!tgInitData)throw new Error(!tgInitData?'Откройте приложение через Telegram':'Синхронизация не настроена');
- const r=await fetch(cloudEndpoint(),{method:'POST',headers:{'Content-Type':'application/json','apikey':cloudCfg.supabaseAnonKey},body:JSON.stringify({action,initData:tgInitData,data})});
+ const payload={action,initData:tgInitData};
+ if(data!==undefined)payload.data=data;
+ if(expectedRevision!==undefined)payload.expectedRevision=expectedRevision;
+ const r=await fetch(cloudEndpoint(),{method:'POST',headers:{'Content-Type':'application/json','apikey':cloudCfg.supabaseAnonKey},body:JSON.stringify(payload)});
  const j=await r.json().catch(()=>({}));
+ if(r.status===409&&j.conflict)return j;
  if(!r.ok||j.error)throw new Error(j.error||('Ошибка синхронизации: '+r.status));
  return j;
 }
+function setCloudConflict(remote,revision){
+ try{localStorage.setItem(cloudConflictKey,JSON.stringify(S))}catch(_){}
+ cloudRemoteData=remote;cloudRevision=Number(revision)||0;cloudConflict=true;cloudDirty=false;
+ cloudStatus='Изменения отличаются от облачной версии. Локальная копия сохранена: выберите, какую версию оставить.';
+}
+function setCloudBase(snapshot,revision){
+ try{localStorage.setItem(cloudBaseKey,snapshot);localStorage.setItem(cloudRevisionKey,String(revision))}catch(err){console.warn('MYDAY sync metadata:',err)}
+}
 async function cloudPush(){
- if(!cloudReady||!cloudConfigured||!tgInitData)return false;
- try{await cloudRequest('save',S);cloudDirty=false;cloudStatus='Синхронизация включена';render();return true}catch(err){console.warn('MYDAY cloud save:',err);cloudDirty=true;cloudStatus='Ошибка синхронизации: '+err.message;render();return false}
+ if(!cloudReady||!cloudConfigured||!tgInitData||cloudConflict)return false;
+ const snapshot=JSON.stringify(S);
+ try{
+  const result=await cloudRequest('save',JSON.parse(snapshot),cloudRevision);
+  if(result.conflict){setCloudConflict(result.data,result.revision);render();return false}
+  cloudRevision=Number(result.revision)||cloudRevision+1;
+  setCloudBase(snapshot,cloudRevision);
+  if(JSON.stringify(S)===snapshot){cloudDirty=false;cloudStatus='Синхронизация включена'}
+  else{cloudDirty=true;cloudStatus='Сохраняю последние изменения…'}
+  render();return true;
+ }catch(err){console.warn('MYDAY cloud save:',err);cloudDirty=true;cloudStatus='Ошибка синхронизации: '+err.message;render();return false}
 }
 function queueCloudSave(delay=900){
- if(!cloudReady||!cloudConfigured||!tgInitData)return;
+ if(!cloudReady||!cloudConfigured||!tgInitData||cloudConflict)return;
  cloudDirty=true;clearTimeout(cloudSyncTimer);
- cloudSyncTimer=setTimeout(()=>{if(!cloudSyncing){cloudSyncing=true;cloudPush().finally(()=>{cloudSyncing=false;if(cloudDirty)queueCloudSave(5000)})}},delay);
+ cloudSyncTimer=setTimeout(()=>{if(!cloudSyncing&&!cloudConflict){cloudSyncing=true;cloudPush().finally(()=>{cloudSyncing=false;if(cloudDirty&&!cloudConflict)queueCloudSave(5000)})}},delay);
 }
 async function cloudPull(){
- if(!cloudReady||!cloudConfigured||!tgInitData||cloudDirty||cloudSyncing)return false;
+ if(!cloudReady||!cloudConfigured||!tgInitData||cloudDirty||cloudSyncing||cloudConflict)return false;
  if(document.querySelector('.sheet')||(document.activeElement&&/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)))return false;
  try{
   const result=await cloudRequest('load');
-  if(cloudDirty||cloudSyncing)return false;
+  const remoteRevision=Number(result.revision)||0;
+  if(remoteRevision<=cloudRevision)return true;
   if(result.data){
-   const remote=JSON.stringify(result.data);
-   if(remote!==JSON.stringify(S)){
-    S=result.data;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
-    localStorage.setItem(localStoreKey,JSON.stringify(S));render();
+   const localSnapshot=JSON.stringify(S),remoteSnapshot=JSON.stringify(result.data);
+   let lastSynced='';try{lastSynced=localStorage.getItem(cloudBaseKey)||''}catch(_){}
+   if(localSnapshot!==lastSynced&&localSnapshot!==remoteSnapshot){
+    setCloudConflict(result.data,remoteRevision);render();return false;
    }
-   cloudStatus='Синхронизация включена';
+   S=result.data;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
+   localStorage.setItem(localStoreKey,JSON.stringify(S));cloudRevision=remoteRevision;setCloudBase(remoteSnapshot,cloudRevision);
+   cloudStatus='Синхронизация включена';render();
   }
   return true;
  }catch(err){cloudStatus='Ошибка синхронизации: '+err.message;console.warn('MYDAY cloud load:',err);render();return false}
 }
+function downloadCloudConflict(){
+ let raw='';try{raw=localStorage.getItem(cloudConflictKey)||JSON.stringify(S,null,2)}catch(_){raw=JSON.stringify(S,null,2)}
+ const blob=new Blob([raw],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download='myday-local-conflict-'+today()+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function acceptCloudRemote(){
+ if(!cloudConflict||!cloudRemoteData)return;
+ S=cloudRemoteData;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
+ localStorage.setItem(localStoreKey,JSON.stringify(S));try{localStorage.removeItem(cloudConflictKey)}catch(_){}
+ cloudConflict=false;cloudDirty=false;cloudRemoteData=null;setCloudBase(JSON.stringify(S),cloudRevision);
+ cloudStatus='Облачная версия загружена. Локальная копия скачивается отдельно через кнопку резервной копии.';
+ render();
+}
+async function retryCloud(){if(!tgInitData){cloudStatus='Откройте MYDAY через меню Telegram';render();return}cloudStatus='Проверяю подключение…';render();await initCloud()}
 async function importLegacyData(){
  let old;try{old=JSON.parse(legacyStore)}catch(_){}
  if(!old||!old.settings){close_();return}
  S=old;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
- localStorage.setItem(localStoreKey,JSON.stringify(S));localStorage.setItem('myday2:imported:'+tgUserId,'1');cloudReady=true;
+ localStorage.setItem(localStoreKey,JSON.stringify(S));localStorage.setItem('myday2:imported:'+tgUserId,'1');cloudReady=true;cloudDirty=true;
  const ok=await cloudPush();
- cloudStatus=ok?'Старые данные перенесены в ваш Telegram-профиль':'Данные сохранены на устройстве; облачная загрузка повторится позже';
+ cloudStatus=ok?'Старые данные перенесены в ваш Telegram-профиль':'Данные сохранены на устройстве; синхронизация повторится позже';
  close_();render();
 }
-function skipLegacyImport(){localStorage.setItem('myday2:import-skipped:'+tgUserId,'1');cloudReady=true;cloudStatus='Личный профиль создан. Облако ожидает настройки';save();close_();render()}
+function skipLegacyImport(){localStorage.setItem('myday2:import-skipped:'+tgUserId,'1');cloudReady=true;cloudStatus='Личный профиль создан';save();close_();render()}
 async function initCloud(){
  if(!tgInitData){render();return}
- if(!cloudConfigured){if(legacyStore&&!localStorage.getItem('myday2:import-skipped:'+tgUserId)){sheet('<h1>Перенести старые данные?</h1><p class="sub">На устройстве найдены ранее сохранённые расписание, предметы и задания. Перенести их в личный профиль этого Telegram-аккаунта? Исходная копия останется на устройстве. Облачная синхронизация включится после подключения базы.</p><div class="row"><button class="btn g grow" onclick="skipLegacyImport()">Начать с нуля</button><button class="btn grow" onclick="importLegacyData()">Перенести</button></div>')}else render();return}
+ if(!cloudConfigured){if(legacyStore&&!localStorage.getItem('myday2:import-skipped:'+tgUserId)){sheet('<h1>Перенести старые данные?</h1><p class="sub">На устройстве найдены ранее сохранённые расписание, предметы и задания. Перенести их в личный профиль этого Telegram-аккаунта? Исходная копия останется на устройстве.</p><div class="row"><button class="btn g grow" onclick="skipLegacyImport()">Начать с нуля</button><button class="btn grow" onclick="importLegacyData()">Перенести</button></div>')}else render();return}
  try{
   const result=await cloudRequest('load');
-  if(result.data){S=result.data;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};localStorage.setItem(localStoreKey,JSON.stringify(S));cloudReady=true;cloudStatus='Синхронизация включена';render();return}
+  cloudRevision=Number(result.revision)||0;
+  if(result.data){
+   const remoteSnapshot=JSON.stringify(result.data),localSnapshot=JSON.stringify(S);
+   let lastSynced='';try{lastSynced=localStorage.getItem(cloudBaseKey)||''}catch(_){}
+   if(hadLocalProfile&&localSnapshot!==remoteSnapshot&&localSnapshot!==lastSynced){
+    setCloudConflict(result.data,cloudRevision);cloudReady=true;render();return;
+   }
+   S=result.data;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
+   localStorage.setItem(localStoreKey,JSON.stringify(S));setCloudBase(remoteSnapshot,cloudRevision);
+   cloudReady=true;cloudStatus='Синхронизация включена';render();return;
+  }
   if(legacyStore&&!localStorage.getItem('myday2:imported:'+tgUserId)&&!localStorage.getItem('myday2:import-skipped:'+tgUserId)){
    sheet('<h1>Перенести старые данные?</h1><p class="sub">На устройстве найдены ранее сохранённые расписание, предметы и задания. Перенести их в ваш Telegram-профиль? Исходная копия останется на устройстве.</p><div class="row"><button class="btn g grow" onclick="skipLegacyImport()">Начать с нуля</button><button class="btn grow" onclick="importLegacyData()">Перенести</button></div>');
    return;
   }
-  cloudReady=true;cloudStatus='Синхронизация включена';await cloudPush();render();
+  cloudReady=true;cloudDirty=true;await cloudPush();render();
  }catch(err){cloudStatus='Ошибка подключения: '+err.message;console.error(err);render()}
 }
 function save(){try{localStorage.setItem(localStoreKey,JSON.stringify(S));queueCloudSave();return true}catch(x){if(!mem){mem=true;alert('Не удалось сохранить данные (память браузера недоступна или заполнена). Сделайте экспорт в разделе «Ещё».')}return false}}
@@ -477,7 +529,7 @@ function vMore(){
  const open=k=>moreOpen.has(k)?'open':'';
  return head('Ещё','Инструменты и настройки приложения')+
  `<section class="more-section"><div class="study-section-head"><div><h2>Инструменты</h2><p>Дополнительные разделы MYDAY</p></div></div><div class="more-tools-grid">${toolHtml}</div></section>`+
- `<section class="more-section settings-section"><div class="study-section-head"><div><h2>Настройки</h2><p>Меняйте внешний вид, напоминания и данные</p></div></div><div class="settings-group card" style="padding:16px;margin-bottom:12px"><b>Синхронизация MYDAY</b><div class="tag">${tgUserId?'Профиль Telegram: подключён':'Откройте приложение через меню Telegram для личного профиля'}</div><div class="tag">${e(cloudStatus)}</div></div>`+
+ `<section class="more-section settings-section"><div class="study-section-head"><div><h2>Настройки</h2><p>Меняйте внешний вид, напоминания и данные</p></div></div><div class="settings-group card" style="padding:16px;margin-bottom:12px"><b>Синхронизация MYDAY</b><div class="tag">${tgUserId?'Профиль Telegram: подключён':'Откройте приложение через меню Telegram для личного профиля'}</div><div class="tag" role="status" aria-live="polite">${e(cloudStatus)}</div>${tgInitData&&!cloudConflict?'<button class="btn g" style="margin-top:10px" onclick="retryCloud()">Проверить соединение</button>':''}${cloudConflict?'<div class="row" style="margin-top:10px"><button class="btn g grow" onclick="downloadCloudConflict()">Скачать мою копию</button><button class="btn grow" onclick="acceptCloudRemote()">Загрузить облачную</button></div><div class="tag">Сначала скачай локальную копию, если в ней есть нужные изменения. Загрузка облачной версии заменит текущие данные на этом устройстве.</div>':''}</div>`+
  `<details class="settings-group card" ${open('appearance')} ontoggle="this.open?moreOpen.add('appearance'):moreOpen.delete('appearance')"><summary><span class="settings-icon">◐</span><span class="settings-summary-copy"><b>Внешний вид</b><small>Тема и акцентный цвет</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Тема</label><select onchange="S.settings.theme=this.value;save();render()"><option value="dark" ${M.theme=='dark'?'selected':''}>Тёмная</option><option value="light" ${M.theme=='light'?'selected':''}>Светлая</option><option value="auto" ${M.theme=='auto'?'selected':''}>Как в системе</option></select><label>Акцентный цвет</label><div class="row settings-swatches">${AC.map((c,i)=>`<button onclick="S.settings.accent=${i};save();render()" aria-label="Цвет ${i+1}" aria-pressed="${(M.accent||0)==i}" style="--swatch-a:${c[0]};--swatch-b:${c[1]}"></button>`).join('')}</div></div></details>`+
  `<details class="settings-group card" ${open('week')} ontoggle="this.open?moreOpen.add('week'):moreOpen.delete('week')"><summary><span class="settings-icon">7</span><span class="settings-summary-copy"><b>Учебная неделя</b><small>${wkName(wk())}</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Тип текущей недели</label><select onchange="setWeekType(this.value)"><option value="odd" ${wk()=='odd'?'selected':''}>Нечётная (нижняя)</option><option value="even" ${wk()=='even'?'selected':''}>Чётная (верхняя)</option></select><div class="tag">Тип недели меняется каждый понедельник. Здесь можно скорректировать его вручную.</div></div></details>`+
  `<details class="settings-group card" ${open('notifications')} ontoggle="this.open?moreOpen.add('notifications'):moreOpen.delete('notifications')"><summary><span class="settings-icon">◷</span><span class="settings-summary-copy"><b>Напоминания</b><small>Утренний план и домашние задания</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Утреннее расписание</label><input type="time" value="${M.morning}" onchange="S.settings.morning=this.value;save()"><label>Спросить про домашку через (мин) после последней пары</label><input type="number" min="0" value="${M.hwDelay}" onchange="S.settings.hwDelay=+this.value;save()"><button class="btn" onclick="askNotif()">Разрешить уведомления</button><div class="tag settings-help">Статус: ${'Notification' in window?Notification.permission:'не поддерживается'}. Напоминания проверяются, пока MYDAY открыта; браузер может приостановить их в фоне.</div></div></details>`+
