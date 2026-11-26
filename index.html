@@ -253,21 +253,22 @@ const cloudBaseKey=tgUserId?'myday2:sync-base:'+tgUserId:'';
 const cloudRevisionKey=tgUserId?'myday2:sync-revision:'+tgUserId:'';
 const cloudConflictKey=tgUserId?'myday2:sync-conflict:'+tgUserId:'';
 let cloudStatus=cloudConfigured?(tgInitData?'Подключение к облаку…':'Откройте MYDAY через Telegram'):'Облачная синхронизация пока не настроена';
-let cloudRevision=0,cloudRemoteData=null,cloudConflict=false,localMutationCounter=0;
+let cloudRevision=0,cloudRemoteData=null,cloudConflict=false,localMutationCounter=0,cloudConflictBackupAvailable=!!(cloudConflictKey&&localStorage.getItem(cloudConflictKey));
 function cloudEndpoint(){const u=cloudCfg.supabaseUrl;return (u.endsWith('/')?u.slice(0,-1):u)+'/functions/v1/'+cloudCfg.edgeFunctionName}
 async function cloudRequest(action,data,expectedRevision){
  if(!cloudConfigured||!tgInitData)throw new Error(!tgInitData?'Откройте приложение через Telegram':'Синхронизация не настроена');
  const payload={action,initData:tgInitData};
  if(data!==undefined)payload.data=data;
  if(expectedRevision!==undefined)payload.expectedRevision=expectedRevision;
- const r=await fetch(cloudEndpoint(),{method:'POST',headers:{'Content-Type':'application/json','apikey':cloudCfg.supabaseAnonKey},body:JSON.stringify(payload)});
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
+ let r;try{r=await fetch(cloudEndpoint(),{method:'POST',headers:{'Content-Type':'application/json','apikey':cloudCfg.supabaseAnonKey},body:JSON.stringify(payload),signal:controller.signal})}finally{clearTimeout(timeout)}
  const j=await r.json().catch(()=>({}));
  if(r.status===409&&j.conflict)return j;
  if(!r.ok||j.error)throw new Error(j.error||('Ошибка синхронизации: '+r.status));
  return j;
 }
 function setCloudConflict(remote,revision){
- try{localStorage.setItem(cloudConflictKey,JSON.stringify(S))}catch(_){}
+ try{localStorage.setItem(cloudConflictKey,JSON.stringify(S));cloudConflictBackupAvailable=true}catch(_){}
  cloudRemoteData=remote;cloudRevision=Number(revision)||0;cloudConflict=true;cloudDirty=false;
  cloudStatus='Изменения отличаются от облачной версии. Локальная копия сохранена: выберите, какую версию оставить.';
 }
@@ -354,8 +355,12 @@ async function initCloud(){
   if(result.data){
    const remoteSnapshot=JSON.stringify(result.data),localSnapshot=JSON.stringify(S);
    let lastSynced='';try{lastSynced=localStorage.getItem(cloudBaseKey)||''}catch(_){}
-   if(hadLocalProfile&&localSnapshot!==remoteSnapshot&&localSnapshot!==lastSynced){
+   const knownRevision=Number(localStorage.getItem(cloudRevisionKey)||0);
+   if(hadLocalProfile&&localSnapshot!==remoteSnapshot&&localSnapshot!==lastSynced&&knownRevision!==cloudRevision){
     setCloudConflict(result.data,cloudRevision);cloudReady=true;render();return;
+   }
+   if(hadLocalProfile&&localSnapshot!==remoteSnapshot&&localSnapshot!==lastSynced&&knownRevision===cloudRevision){
+    cloudReady=true;cloudDirty=true;await cloudPush();render();return;
    }
    S=result.data;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
    localStorage.setItem(localStoreKey,JSON.stringify(S));setCloudBase(remoteSnapshot,cloudRevision);
@@ -538,7 +543,7 @@ function vMore(){
  const open=k=>moreOpen.has(k)?'open':'';
  return head('Ещё','Инструменты и настройки приложения')+
  `<section class="more-section"><div class="study-section-head"><div><h2>Инструменты</h2><p>Дополнительные разделы MYDAY</p></div></div><div class="more-tools-grid">${toolHtml}</div></section>`+
- `<section class="more-section settings-section"><div class="study-section-head"><div><h2>Настройки</h2><p>Меняйте внешний вид, напоминания и данные</p></div></div><div class="settings-group card" style="padding:16px;margin-bottom:12px"><b>Синхронизация MYDAY</b><div class="tag">${tgUserId?'Профиль Telegram: подключён':'Откройте приложение через меню Telegram для личного профиля'}</div><div class="tag" role="status" aria-live="polite">${e(cloudStatus)}</div>${tgInitData&&!cloudConflict?'<button class="btn g" style="margin-top:10px" onclick="retryCloud()">Проверить соединение</button>':''}${cloudConflict?'<div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn g grow" onclick="downloadCloudConflict()">Скачать мою копию</button><button class="btn g grow" onclick="acceptCloudRemote()">Загрузить облачную</button><button class="btn grow" onclick="keepLocalVersion()">Оставить мою</button></div><div class="tag">Сначала скачай локальную копию, если в ней есть нужные изменения. Загрузка облачной версии заменит текущие данные на этом устройстве.</div>':''}</div>`+
+ `<section class="more-section settings-section"><div class="study-section-head"><div><h2>Настройки</h2><p>Меняйте внешний вид, напоминания и данные</p></div></div><div class="settings-group card" style="padding:16px;margin-bottom:12px"><b>Синхронизация MYDAY</b><div class="tag">${tgUserId?'Профиль Telegram: подключён':'Откройте приложение через меню Telegram для личного профиля'}</div><div class="tag" role="status" aria-live="polite">${e(cloudStatus)}</div>${tgInitData&&!cloudConflict?'<button class="btn g" style="margin-top:10px" onclick="retryCloud()">Проверить соединение</button>':''}${cloudConflictBackupAvailable?'<button class="btn g" style="margin-top:10px" onclick="downloadCloudConflict()">Скачать сохранённую локальную копию</button>':''}${cloudConflict?'<div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn g grow" onclick="acceptCloudRemote()">Загрузить облачную</button><button class="btn grow" onclick="keepLocalVersion()">Оставить мою</button></div><div class="tag">Выбери, какую версию оставить. Локальная копия сохранена отдельно и доступна для скачивания.</div>':''}</div>`+
  `<details class="settings-group card" ${open('appearance')} ontoggle="this.open?moreOpen.add('appearance'):moreOpen.delete('appearance')"><summary><span class="settings-icon">◐</span><span class="settings-summary-copy"><b>Внешний вид</b><small>Тема и акцентный цвет</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Тема</label><select onchange="S.settings.theme=this.value;save();render()"><option value="dark" ${M.theme=='dark'?'selected':''}>Тёмная</option><option value="light" ${M.theme=='light'?'selected':''}>Светлая</option><option value="auto" ${M.theme=='auto'?'selected':''}>Как в системе</option></select><label>Акцентный цвет</label><div class="row settings-swatches">${AC.map((c,i)=>`<button onclick="S.settings.accent=${i};save();render()" aria-label="Цвет ${i+1}" aria-pressed="${(M.accent||0)==i}" style="--swatch-a:${c[0]};--swatch-b:${c[1]}"></button>`).join('')}</div></div></details>`+
  `<details class="settings-group card" ${open('week')} ontoggle="this.open?moreOpen.add('week'):moreOpen.delete('week')"><summary><span class="settings-icon">7</span><span class="settings-summary-copy"><b>Учебная неделя</b><small>${wkName(wk())}</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Тип текущей недели</label><select onchange="setWeekType(this.value)"><option value="odd" ${wk()=='odd'?'selected':''}>Нечётная (нижняя)</option><option value="even" ${wk()=='even'?'selected':''}>Чётная (верхняя)</option></select><div class="tag">Тип недели меняется каждый понедельник. Здесь можно скорректировать его вручную.</div></div></details>`+
  `<details class="settings-group card" ${open('notifications')} ontoggle="this.open?moreOpen.add('notifications'):moreOpen.delete('notifications')"><summary><span class="settings-icon">◷</span><span class="settings-summary-copy"><b>Напоминания</b><small>Утренний план и домашние задания</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Утреннее расписание</label><input type="time" value="${M.morning}" onchange="S.settings.morning=this.value;save()"><label>Спросить про домашку через (мин) после последней пары</label><input type="number" min="0" value="${M.hwDelay}" onchange="S.settings.hwDelay=+this.value;save()"><button class="btn" onclick="askNotif()">Разрешить уведомления</button><div class="tag settings-help">Статус: ${'Notification' in window?Notification.permission:'не поддерживается'}. Напоминания проверяются, пока MYDAY открыта; браузер может приостановить их в фоне.</div></div></details>`+
