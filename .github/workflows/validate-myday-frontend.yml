@@ -47,12 +47,11 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: sb_publishable_VBs7WXcOJs8Oh8qNQL2KIw_FBG1ae67
         run: |
           set -euo pipefail
-          response="$(curl -sS -w '\\n%{http_code}' -X POST "$SUPABASE_URL/functions/v1/myday-sync" \\
-            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \\
-            -H "Content-Type: application/json" \\
+          status="$(curl -sS -o /tmp/myday-smoke-body -w '%{http_code}' -X POST "$SUPABASE_URL/functions/v1/myday-sync" \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            -H "Content-Type: application/json" \
             --data '{"action":"load","initData":"invalid"}')"
-          status="${response##*\\n'}"
-          body="${response%\\n'*}"
+          body="$(cat /tmp/myday-smoke-body)"
           if [[ "$status" != "400" || "$body" != *"Некорректная подпись Telegram"* ]]; then
             echo "::error::Unexpected Edge Function response (HTTP $status): $body"
             exit 1
