@@ -18,7 +18,6 @@ A manual workflow is included at **Actions → Deploy MYDAY Supabase backend →
 |---|---|
 | `SUPABASE_ACCESS_TOKEN` | Personal access token created in Supabase Account → Access Tokens |
 | `SUPABASE_DB_PASSWORD` | Database password chosen when the Supabase project was created |
-| `SUPABASE_SERVICE_ROLE_KEY` | The project's server-side service-role key from Supabase API Keys |
 | `TELEGRAM_BOT_TOKEN` | Token for the MYDAY bot from BotFather |
 
 Enter each value directly into GitHub's secret form. Never commit them, put them in `backend-config.js`, or send them in chat.
@@ -26,7 +25,7 @@ Enter each value directly into GitHub's secret form. Never commit them, put them
 The workflow:
 1. Links the CLI to the MYDAY Supabase project.
 2. Applies `supabase/migrations/001_myday_profiles.sql`.
-3. Sets `TELEGRAM_BOT_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_URL` as server-side Edge Function secrets.
+3. Sets `TELEGRAM_BOT_TOKEN` as a server-side Edge Function secret. Supabase injects `SUPABASE_URL` and its server-side secret API key automatically.
 4. Deploys `myday-sync` with JWT verification enabled.
 
 If the workflow fails, inspect the Actions run log. Secret values are not printed by the workflow.
