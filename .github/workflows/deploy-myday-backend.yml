@@ -2,6 +2,12 @@ name: Deploy MYDAY Supabase backend
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/multi-user-myday
+    paths:
+      - '.github/workflows/deploy-myday-backend.yml'
+      - 'supabase/**'
 
 permissions:
   contents: read
