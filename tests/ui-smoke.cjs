@@ -50,11 +50,13 @@ const server = http.createServer((req,res) => {
         appRight:Math.round(document.querySelector('#app').getBoundingClientRect().right),
         navLeft:Math.round(document.querySelector('#nav').getBoundingClientRect().left),
         navRight:Math.round(document.querySelector('#nav').getBoundingClientRect().right),
-        navHeight:Math.round(document.querySelector('#nav').getBoundingClientRect().height)
+        navHeight:Math.round(document.querySelector('#nav').getBoundingClientRect().height),
+        navWidth:Math.round(document.querySelector('#nav').getBoundingClientRect().width),
+        navRadius:parseFloat(getComputedStyle(document.querySelector('#nav')).borderBottomLeftRadius)
       }));
       layout.push(m);
       if(m.document>width || m.body>width) throw new Error('Horizontal overflow at '+width+'px: '+JSON.stringify(m));
-      if(m.navLeft<0 || m.navRight>width || m.navHeight<48) throw new Error('Navigation outside viewport at '+width+'px: '+JSON.stringify(m));
+      if(m.navLeft<8 || m.navRight>width-8 || m.navWidth>width-16 || m.navHeight<48 || m.navRadius<16) throw new Error('Floating navigation is not inset or pill-shaped at '+width+'px: '+JSON.stringify(m));
     }
     await page.setViewportSize({width:390,height:844});
     const nav=page.locator('#nav button');
