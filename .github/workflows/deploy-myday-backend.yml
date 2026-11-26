@@ -51,6 +51,22 @@ jobs:
             fi
           done
 
+      - name: Verify Telegram bot token identity
+        shell: bash
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const token = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
+          const response = await fetch('https://api.telegram.org/bot' + token + '/getMe');
+          const result = await response.json();
+          if (!response.ok || !result.ok || result.result?.username?.toLowerCase() !== 'mayday20_bot') {
+            throw new Error('TELEGRAM_BOT_TOKEN must belong to @mayday20_bot; Telegram getMe did not confirm the expected bot.');
+          }
+          console.log('Verified Telegram bot: @' + result.result.username + ' (id ' + result.result.id + ')');
+          NODE
+
       - name: Link Supabase project
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
 
