@@ -438,7 +438,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px;box-shad
 #toast .toast-undo{color:var(--accent);font-weight:700}
 @media(min-width:700px){.sheet{border:1px solid var(--line);border-radius:25px}.ov{align-items:center;padding:20px}}
 @media(min-width:960px){
- #app{width:calc(100% - 270px);max-width:var(--content);margin:0 0 0 270px;padding:34px clamp(28px,4vw,54px) 70px}
+ #app{width:calc(100% - 270px);max-width:1240px;margin:0 0 0 270px;padding:34px clamp(28px,4vw,54px) 70px}
  #nav{border-radius:24px;background:color-mix(in srgb,var(--surface) 88%,transparent)}
  #nav button{min-height:52px;font-size:12px}
 }
