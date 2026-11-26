@@ -72,6 +72,7 @@ const server = http.createServer((req,res) => {
     await page.locator('#nav button').nth(4).click();
     await page.getByRole('button',{name:/Идеи и заметки/}).click();
     await page.locator('#app .page-title').waitFor();
+    await page.locator('#nav button').nth(4).click();
 
     const themeButtons=page.locator('.theme-options button');
     if(await themeButtons.count()!==3) throw new Error('Expected Light, Dark and System theme controls');
