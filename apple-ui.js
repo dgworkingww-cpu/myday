@@ -159,10 +159,11 @@ window.calView=function(){
  (chosenTasks.length?'<div class="task-list" style="margin-top:10px">'+chosenTasks.map(mydayTask).join('')+'</div>':'')+'</section></main>';
 };
 window.vMore=function(){
+ if(st==='uni'){const u=S.uni;return '<main class="page">'+mydayHeader('Университет','Ссылки, контакты и полезная информация')+'<section class="surface-panel"><label for="u1">Название университета</label><input id="u1" value="'+e(u.name)+'"><label for="u2">Личный кабинет · ссылка</label><input id="u2" value="'+e(u.url)+'" inputmode="url"><label for="u3">Логин</label><input id="u3" value="'+e(u.login)+'"><p class="page-sub">Пароль здесь не хранится. Используй менеджер паролей iPhone.</p><label for="u4">Полезные ссылки</label><textarea id="u4">'+e(u.links)+'</textarea><label for="u5">Контакты преподавателей</label><textarea id="u5">'+e(u.teachers)+'</textarea><label for="u6">Заметки</label><textarea id="u6">'+e(u.notes)+'</textarea><button class="btn" style="width:100%" onclick="saveUni()">Сохранить</button><button class="btn g" style="width:100%;margin-top:8px" onclick="saveUni();openUni()">Открыть сайт университета</button><button class="btn g" style="width:100%;margin-top:8px" onclick="st=null;render()">Назад</button></section></main>'}
+ if(st==='inbox')return '<main class="page">'+mydayHeader('Идеи и заметки','Сохраняй мысли, не превращая их в обязательства')+(S.inbox.length?'<div class="task-list">'+S.inbox.map((n,i)=>'<div class="task-item"><span class="subject-icon">'+mydayIcon('inbox',18)+'</span><span class="task-main"><b class="task-title">'+e(n.text)+'</b><small class="task-meta">'+e(n.d||'')+'</small></span><button class="btn g" onclick="toTask('+i+')">В задачу</button><button class="icon-btn" aria-label="Удалить заметку" onclick="S.inbox.splice('+i+',1);save();render()">'+mydayIcon('close',16)+'</button></div>').join('')+'</div>':mydayEmpty('Пока пусто','Добавь мысль через кнопку быстрой записи.'))+'<button class="btn g" style="width:100%;margin-top:12px" onclick="st=null;render()">Назад</button></main>';
  if(st==='stats')return statsView();
  if(st==='cal')return calView();
  if(st==='week')return weekView();
- if(st==='uni'||st==='inbox')return MYDAY_LEGACY_MORE();
  const M=S.settings;
  const tools=[
   ['uni','Университет','Ссылки, контакты, заметки'],
