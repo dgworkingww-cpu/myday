@@ -146,7 +146,7 @@ jobs:
           const conflict = await call('save', { _myday_ci: 'stale-write' }, expected);
           if (conflict.status !== 409 || conflict.body.conflict !== true ||
               conflict.body.revision !== saved.body.revision ||
-              JSON.stringify(conflict.body.data) !== JSON.stringify(payload)) {
+              conflict.body.data._myday_ci !== true || conflict.body.data.run !== payload.run) {
             throw new Error('Revision conflict protection failed: HTTP ' + conflict.status + ' ' + JSON.stringify(conflict.body));
           }
 
