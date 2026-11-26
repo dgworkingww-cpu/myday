@@ -269,6 +269,7 @@ function queueCloudSave(delay=900){
 }
 async function cloudPull(){
  if(!cloudReady||!cloudConfigured||!tgInitData||cloudDirty||cloudSyncing)return false;
+ if(document.querySelector('.sheet')||(document.activeElement&&/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)))return false;
  try{
   const result=await cloudRequest('load');
   if(cloudDirty||cloudSyncing)return false;
