@@ -114,6 +114,50 @@ window.vStudy=function(){
  '<div class="chip-row">'+[['open','Активные',active.length],['soon','7 дней',soon.length],['done','Готово',done.length],['all','Все',all.length]].map(([k,l,n])=>'<button class="chip '+(studyFilter===k?'on':'')+'" onclick="studyFilter=\''+k+'\';render()">'+l+' · '+n+'</button>').join('')+'</div>'+
  (visible.length?'<div class="task-list">'+visible.slice().sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')).map(h=>mydayTask({...h,k:'h',title:subj(h.subj)+': '+h.title})).join('')+'</div>':mydayEmpty('Нет заданий в этом списке','Здесь появятся задания по выбранному фильтру.'))+'</section></main>';
 };
+
+window.statsView=function(){
+ const days=[...Array(7)].map((_,i)=>addDays(today(),i-6));
+ const all=[...S.tasks,...S.hw],count=d=>all.filter(x=>x.doneAt===d).length;
+ const max=Math.max(1,...days.map(count)),weekTotal=days.reduce((n,d)=>n+count(d),0);
+ const monthTotal=all.filter(x=>x.doneAt&&x.doneAt.slice(0,7)===today().slice(0,7)).length;
+ const overdue=allOpen().filter(x=>x.due&&x.due<today()).length;
+ const focus=(S.focus||[]).filter(x=>x.d>=days[0]).reduce((n,x)=>n+(Number(x.m)||0),0);
+ return '<main class="page">'+mydayHeader('Статистика','Спокойный обзор прогресса без лишней геймификации')+
+ '<div class="metric-grid"><div class="metric-tile"><span class="metric-label">За 7 дней</span><b class="metric-value">'+weekTotal+'</b></div><div class="metric-tile"><span class="metric-label">За месяц</span><b class="metric-value">'+monthTotal+'</b></div><div class="metric-tile"><span class="metric-label">Просрочено</span><b class="metric-value '+(overdue?'danger':'')+'">'+overdue+'</b></div></div>'+
+ '<section class="section surface-panel">'+mydaySection('Выполнено за неделю','Количество закрытых задач по дням')+
+ '<div class="stats-bars">'+days.map((d,i)=>'<div class="stats-bar-col"><b>'+count(d)+'</b><span class="stats-bar-track"><i style="height:'+Math.max(4,count(d)/max*100)+'%"></i></span><small>'+['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][((new Date(d+'T12:00').getDay()+6)%7)]+'</small></div>').join('')+'</div></section>'+
+ '<section class="section">'+mydaySection('Фокус','Время, отмеченное в таймере')+'<div class="surface-panel"><b class="metric-value">'+Math.floor(focus/60)+' ч '+(focus%60)+' мин</b><p class="page-sub">За последние семь дней</p></div></section>'+
+ '<section class="section">'+mydaySection('Прогресс по предметам','Выполненные задания')+S.subjects.filter(s=>!s.closed).map(s=>{const H=S.hw.filter(h=>h.subj===s.id),d=H.filter(h=>h.status===2).length,p=H.length?Math.round(d/H.length*100):0;return '<div class="surface-panel" style="margin-bottom:9px"><div class="row"><b class="grow">'+e(s.name)+'</b><span class="tag">'+d+'/'+H.length+'</span></div><div class="progress-track"><div class="progress-fill" style="width:'+p+'%"></div></div></div>'}).join('')+'</section>'+
+ '<button class="btn g" style="width:100%" onclick="st=null;render()">Готово</button></main>';
+};
+window.weekView=function(){
+ const w=wk(),bucket=scheduleBucket('study',w),start=new Date(today()+'T12:00:00');start.setDate(start.getDate()-((start.getDay()+6)%7));
+ const days=[1,2,3,4,5,6].map(d=>{const date=ds(new Date(start.getFullYear(),start.getMonth(),start.getDate()+d-1,12));return {d,date,lessons:(bucket[d]||[]).slice().sort((a,b)=>a.s.localeCompare(b.s)),tasks:allOpen().filter(x=>x.due===date)}});
+ const total=days.reduce((n,x)=>n+x.lessons.length,0);
+ return '<main class="page">'+mydayHeader('План недели','Учебная неделя · '+wkName(w))+
+ '<div class="metric-grid"><div class="metric-tile"><span class="metric-label">Занятия</span><b class="metric-value">'+total+'</b></div><div class="metric-tile"><span class="metric-label">Дедлайны</span><b class="metric-value">'+days.reduce((n,x)=>n+x.tasks.length,0)+'</b></div><div class="metric-tile"><span class="metric-label">Дней</span><b class="metric-value">'+days.filter(x=>x.lessons.length||x.tasks.length).length+'</b></div></div>'+
+ '<div class="week-list">'+days.map(x=>'<button class="week-day-card" onclick="schedSpace=\'study\';sd='+x.d+';st=\''+w+'\';tab=\'sched\';render()"><span class="week-day-date"><b>'+['','Пн','Вт','Ср','Чт','Пт','Сб'][x.d]+'</b><small>'+fmt(x.date)+'</small></span><span class="week-day-summary"><b>'+x.lessons.length+' '+ruCount(x.lessons.length,'пара','пары','пар')+'</b><small>'+x.tasks.length+' задач · '+(x.lessons[0]?x.lessons[0].s+' первая':'свободно')+'</small></span><span class="week-day-arrow">›</span></button>').join('')+'</div></main>';
+};
+window.mydayChangeMonth=function(delta){
+ const d=new Date((cdsel||today())+'T12:00:00');d.setDate(1);d.setMonth(d.getMonth()+delta);cdsel=ds(d);render();
+};
+window.calView=function(){
+ const selected=cdsel||today(),current=new Date(selected+'T12:00:00'),year=current.getFullYear(),month=current.getMonth();
+ const first=new Date(year,month,1,12),offset=(first.getDay()+6)%7,daysInMonth=new Date(year,month+1,0).getDate();
+ const events=S.events||[],all=allOpen(),cells=[];
+ for(let i=0;i<42;i++){
+  const num=i-offset+1,d=new Date(year,month,num,12),key=ds(d),inside=d.getMonth()===month;
+  const eventCount=events.filter(x=>x.date===key).length,taskCount=all.filter(x=>x.due===key).length;
+  cells.push('<button class="cal-day '+(inside?'':'outside')+' '+(key===selected?'selected':'')+' '+(key===today()?'is-today':'')+'" aria-label="'+fmt(key)+', '+eventCount+' событий, '+taskCount+' задач" onclick="cdsel=\''+key+'\';render()"><b>'+d.getDate()+'</b>'+(eventCount+taskCount?'<i></i>':'')+'</button>');
+ }
+ const chosenEvents=events.map((z,i)=>({z,i})).filter(x=>x.z.date===selected);
+ const chosenTasks=all.filter(x=>x.due===selected);
+ return '<main class="page">'+mydayHeader('Календарь','Дедлайны, экзамены и важные события')+
+ '<section class="surface-panel"><div class="calendar-heading"><button class="icon-btn" aria-label="Предыдущий месяц" onclick="mydayChangeMonth(-1)">'+mydayIcon('chevron',17)+'</button><h2>'+current.toLocaleDateString('ru-RU',{month:'long',year:'numeric'})+'</h2><button class="icon-btn" aria-label="Следующий месяц" onclick="mydayChangeMonth(1)">'+mydayIcon('chevron',17)+'</button></div><div class="calendar-grid calendar-weekdays">'+['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(x=>'<span>'+x+'</span>').join('')+'</div><div class="calendar-grid">'+cells.join('')+'</div><button class="text-link" style="margin-top:8px" onclick="cdsel=today();render()">Перейти к сегодня</button></section>'+
+ '<section class="section">'+mydaySection(fmt(selected),'События и задачи на выбранный день','<button class="text-link" onclick="evForm()">+ Событие</button>')+
+ (chosenEvents.length?'<div class="task-list">'+chosenEvents.map(({z,i})=>'<div class="task-item"><span class="subject-icon">'+mydayIcon('calendar',18)+'</span><span class="task-main"><b class="task-title">'+e(z.title)+'</b><small class="task-meta">'+e(z.type||'Событие')+'</small></span><button class="icon-btn" aria-label="Удалить событие" onclick="evDel('+i+')">'+mydayIcon('close',16)+'</button></div>').join('')+'</div>':mydayEmpty('Событий нет','Добавь экзамен, зачёт или важную дату.'))+
+ (chosenTasks.length?'<div class="task-list" style="margin-top:10px">'+chosenTasks.map(mydayTask).join('')+'</div>':'')+'</section></main>';
+};
 window.vMore=function(){
  if(st==='stats')return statsView();
  if(st==='cal')return calView();
