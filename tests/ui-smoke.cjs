@@ -33,6 +33,8 @@ const server = http.createServer((req,res) => {
   try {
     await page.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded'});
     await page.locator('#app .page-title').waitFor();
+    await page.locator('#app .hero-card').waitFor();
+    if(await page.locator('#nav button svg').count()!==5) throw new Error('New SVG navigation icons did not render');
     await page.waitForTimeout(150);
     const widths=[320,360,375,390,393,414,430],layout=[];
     for (const width of widths) {
