@@ -256,7 +256,7 @@ let cloudStatus=cloudConfigured?(tgInitData?'Подключение к обла�
 let cloudRevision=0,cloudRemoteData=null,cloudConflict=false,localMutationCounter=0,cloudConflictBackupAvailable=!!(cloudConflictKey&&localStorage.getItem(cloudConflictKey));
 function cloudEndpoint(){const u=cloudCfg.supabaseUrl;return (u.endsWith('/')?u.slice(0,-1):u)+'/functions/v1/'+cloudCfg.edgeFunctionName}
 async function cloudRequest(action,data,expectedRevision){
- if(!cloudConfigured||!tgInitData)throw new Error(!tgInitData?'Откройте приложение через Telegram':'Синхронизация не настроена');
+ if(!cloudConfigured||!tgInitData||!tgUserId)throw new Error(!tgInitData||!tgUserId?'Откройте приложение через меню Telegram':'Синхронизация не настроена');
  const payload={action,initData:tgInitData};
  if(data!==undefined)payload.data=data;
  if(expectedRevision!==undefined)payload.expectedRevision=expectedRevision;
@@ -347,7 +347,7 @@ async function importLegacyData(){
 function skipLegacyImport(){localStorage.setItem('myday2:import-skipped:'+tgUserId,'1');cloudReady=true;cloudStatus='Личный профиль создан';save();close_();render()}
 async function initCloud(){
  const mutationAtStart=localMutationCounter;
- if(!tgInitData){render();return}
+ if(!tgInitData||!tgUserId){render();return}
  if(!cloudConfigured){if(legacyStore&&!localStorage.getItem('myday2:import-skipped:'+tgUserId)){sheet('<h1>Перенести старые данные?</h1><p class="sub">На устройстве найдены ранее сохранённые расписание, предметы и задания. Перенести их в личный профиль этого Telegram-аккаунта? Исходная копия останется на устройстве.</p><div class="row"><button class="btn g grow" onclick="skipLegacyImport()">Начать с нуля</button><button class="btn grow" onclick="importLegacyData()">Перенести</button></div>')}else render();return}
  try{
   const result=await cloudRequest('load');
