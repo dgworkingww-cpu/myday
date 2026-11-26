@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: myday-validation
+  cancel-in-progress: true
+
 jobs:
   checks:
     runs-on: ubuntu-latest
