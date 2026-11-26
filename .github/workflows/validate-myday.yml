@@ -1,0 +1,59 @@
+name: Validate MYDAY full checks
+
+on:
+  push:
+    branches:
+      - feature/multi-user-myday
+    paths:
+      - 'index.html'
+      - 'backend-config.js'
+      - 'sw.js'
+      - '.github/workflows/validate-myday.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check frontend JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+            .filter(([, attrs, body]) => !/\bsrc\s*=/.test(attrs) && body.trim())
+            .map(([, , body]) => body);
+          if (!scripts.length) throw new Error('No inline JavaScript found in index.html');
+          fs.writeFileSync('/tmp/myday-inline.js', scripts.join('\n;\n'));
+          NODE
+          node --check /tmp/myday-inline.js
+          node --check backend-config.js
+          node --check sw.js
+      - name: Smoke-test deployed Telegram authentication gate
+        shell: bash
+        env:
+          SUPABASE_URL: https://rzgsctbvgzerqizfjhuq.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_VBs7WXcOJs8Oh8qNQL2KIw_FBG1ae67
+        run: |
+          set -euo pipefail
+          status="$(curl -sS -o /tmp/myday-smoke-body -w '%{http_code}' -X POST "$SUPABASE_URL/functions/v1/myday-sync" \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"load","initData":"invalid"}')"
+          body="$(cat /tmp/myday-smoke-body)"
+          if [[ "$status" != "400" || "$body" != *"Некорректная подпись Telegram"* ]]; then
+            echo "::error::Unexpected Edge Function response (HTTP $status): $body"
+            exit 1
+          fi
+          echo "Edge Function is live, server secrets are available, and invalid Telegram signatures are rejected."
