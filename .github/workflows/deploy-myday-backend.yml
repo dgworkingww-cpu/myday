@@ -151,11 +151,12 @@ jobs:
 
           const userTwo = signedInitData(4000000000000001);
           const secondLoad = await call(userTwo, 'load');
-          if (secondLoad.status !== 200 || secondLoad.body.data !== null || secondLoad.body.revision !== 0) {
-            throw new Error('Telegram account isolation failed: second user saw another profile or unexpected data');
+          if (secondLoad.status !== 200 || !Number.isSafeInteger(secondLoad.body.revision) ||
+              (secondLoad.body.data !== null && secondLoad.body.data._myday_ci !== 'second-user')) {
+            throw new Error('Telegram account isolation failed: second user saw another profile');
           }
           const secondPayload = { _myday_ci: 'second-user', run: process.env.GITHUB_RUN_ID };
-          const secondSave = await call(userTwo, 'save', secondPayload, 0);
+          const secondSave = await call(userTwo, 'save', secondPayload, secondLoad.body.revision);
           if (secondSave.status !== 200) throw new Error('Second Telegram profile save failed: ' + JSON.stringify(secondSave.body));
 
           const firstReload = await call(userOne, 'load');
