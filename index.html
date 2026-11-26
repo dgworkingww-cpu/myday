@@ -249,7 +249,7 @@ let mem=false,cloudReady=false,cloudSyncTimer=null,cloudSyncing=false,cloudDirty
 const cloudCfg=window.MYDAY_CONFIG||{};
 const cloudConfigured=!!(cloudCfg.supabaseUrl&&cloudCfg.supabaseAnonKey&&cloudCfg.edgeFunctionName);
 let cloudStatus=cloudConfigured?(tgInitData?'Подключение к облаку…':'Откройте MYDAY через Telegram'):'Облачная синхронизация пока не настроена';
-function cloudEndpoint(){return cloudCfg.supabaseUrl.replace(/\\/$/,'')+'/functions/v1/'+cloudCfg.edgeFunctionName}
+function cloudEndpoint(){const u=cloudCfg.supabaseUrl;return (u.endsWith('/')?u.slice(0,-1):u)+'/functions/v1/'+cloudCfg.edgeFunctionName}
 async function cloudRequest(action,data){
  if(!cloudConfigured||!tgInitData)throw new Error(!tgInitData?'Откройте приложение через Telegram':'Синхронизация не настроена');
  const r=await fetch(cloudEndpoint(),{method:'POST',headers:{'Content-Type':'application/json','apikey':cloudCfg.supabaseAnonKey,'Authorization':'Bearer '+cloudCfg.supabaseAnonKey},body:JSON.stringify({action,initData:tgInitData,data})});
