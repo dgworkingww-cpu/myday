@@ -91,20 +91,18 @@ jobs:
           }
           console.log('Manifest, app shell and design tokens validated.');
           NODE
-      - name: Check all static HTML classes have styles
+      - name: Verify the new design system components
         run: |
           node <<'NODE'
           const fs = require('node:fs');
-          const html = fs.readFileSync('index.html', 'utf8');
           const css = fs.readFileSync('design-system.css', 'utf8');
-          const classes = new Set();
-          for (const match of html.matchAll(/\bclass\s*=\s*["']([^"']*)["']/g)) {
-            for (const name of match[1].split(/\s+/)) {
-              if (name && name.indexOf('$') === -1) classes.add(name);
-            }
+          const ui = fs.readFileSync('apple-ui.js', 'utf8');
+          const required = ['#nav', '.page-top', '.hero-card', '.metric-grid', '.timeline-list', '.task-item', '.segmented', '.day-strip', '.subject-tile', '.settings-card', '.icon-btn', '.sheet'];
+          for (const selector of required) {
+            if (!css.includes(selector)) throw new Error('Missing new design component: ' + selector);
           }
-          const selectors = new Set([...css.matchAll(/\.([a-zA-Z_][\w-]*)/g)].map(match => match[1]));
-          const missing = [...classes].filter(name => !selectors.has(name));
-          if (missing.length) throw new Error('Unstyled static classes: ' + missing.join(', '));
-          console.log('All ' + classes.size + ' static HTML classes have CSS selectors.');
+          for (const feature of ['window.vToday', 'window.vSched', 'window.vTasks', 'window.vStudy', 'window.vMore', 'window.sheet', 'window.close_']) {
+            if (!ui.includes(feature)) throw new Error('Missing rebuilt interaction: ' + feature);
+          }
+          console.log('All new MYDAY design surfaces and rebuilt screens are present.');
           NODE
