@@ -166,4 +166,5 @@ window.sheet=function(h){
 window.close_=function(){
  const o=document.querySelector('#ov');if(!o)return;o.classList.add('bye');setTimeout(()=>{o.remove();document.body.style.overflow=window._dialogOverflow||'';const t=window._dialogTrigger;window._dialogTrigger=null;if(t&&t.isConnected)t.focus({preventScroll:true})},190);
 };
+window.MYDAY_APPLE_UI_PENDING=false;
 window.render();
