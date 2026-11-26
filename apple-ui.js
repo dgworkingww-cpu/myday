@@ -211,5 +211,12 @@ window.sheet=function(h){
 window.close_=function(){
  const o=document.querySelector('#ov');if(!o)return;o.classList.add('bye');setTimeout(()=>{o.remove();document.body.style.overflow=window._dialogOverflow||'';const t=window._dialogTrigger;window._dialogTrigger=null;if(t&&t.isConnected)t.focus({preventScroll:true})},190);
 };
+
+MYDAY_ICONS.mic='<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-4 0h8"/>';
+window.capture=function(){
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ const voiceButton=SR?'<button class="btn g" onclick="voice()">'+mydayIcon('mic',16)+' Голос</button>':'';
+ sheet('<h1>Быстрая запись</h1><p class="page-sub">Сохрани мысль сейчас, а разберёшь её позже.</p><textarea id="cq" oninput="capHint()" placeholder="Задача, идея или заметка…"></textarea><div id="chint" style="min-height:24px;margin-bottom:8px"></div><div id="tpl" style="margin-bottom:10px">'+tplHtml()+'</div><label for="cd">Срок · необязательно</label><input type="date" id="cd">'+dch('cd')+'<label for="ck">Сохранить как</label><select id="ck"><option value="t">Задача</option><option value="i">Идея / заметка</option></select><div class="row">'+voiceButton+'<button class="btn grow" onclick="capSave()">'+mydayIcon('check',16)+' Сохранить</button></div><label style="display:flex;align-items:center;margin-top:12px"><input type="checkbox" id="cs" onchange="capHint()"> Разбить на отдельные задачи</label>');
+};
 window.MYDAY_APPLE_UI_PENDING=false;
 window.render();
