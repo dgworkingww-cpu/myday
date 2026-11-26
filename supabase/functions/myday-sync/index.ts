@@ -40,7 +40,7 @@ async function validateTelegramInitData(initData: string, botToken: string): Pro
     .map(([key, value]) => key + "=" + value)
     .join("\n");
 
-  const secretKey = new Uint8Array(await hmac(encoder.encode("WebAppData"), botToken));
+  const secretKey = new Uint8Array(await hmac(encoder.encode(botToken), "WebAppData"));
   const calculatedHash = hex(await hmac(secretKey, checkString));
   if (!safeEqual(calculatedHash, receivedHash.toLowerCase())) throw new Error("Не удалось подтвердить Telegram-пользователя");
 
