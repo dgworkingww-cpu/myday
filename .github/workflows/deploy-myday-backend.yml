@@ -100,22 +100,24 @@ jobs:
           import { createHmac } from 'node:crypto';
           const base = process.env.SUPABASE_URL.replace(/\/+$/, '');
           const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
-          const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+          const botToken = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
           if (!botToken) throw new Error('Missing TELEGRAM_BOT_TOKEN Actions secret');
 
-          const params = new URLSearchParams();
-          params.set('auth_date', String(Math.floor(Date.now() / 1000)));
-          params.set('user', JSON.stringify({ id: 4000000000000000, first_name: 'MYDAY CI' }));
-          const checkString = [...params.entries()]
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([key, value]) => key + '=' + value)
-            .join('\n');
-          const secret = createHmac('sha256', botToken).update('WebAppData').digest();
-          const hash = createHmac('sha256', secret).update(checkString).digest('hex');
-          params.set('hash', hash);
-          const initData = params.toString();
+          function signedInitData(userId) {
+            const params = new URLSearchParams();
+            params.set('auth_date', String(Math.floor(Date.now() / 1000)));
+            params.set('user', JSON.stringify({ id: userId, first_name: 'MYDAY CI' }));
+            const checkString = [...params.entries()]
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([key, value]) => key + '=' + value)
+              .join('\n');
+            const secret = createHmac('sha256', botToken).update('WebAppData').digest();
+            const hash = createHmac('sha256', secret).update(checkString).digest('hex');
+            params.set('hash', hash);
+            return params.toString();
+          }
 
-          async function call(action, data, expectedRevision) {
+          async function call(initData, action, data, expectedRevision) {
             const response = await fetch(base + '/functions/v1/myday-sync', {
               method: 'POST',
               headers: { apikey: publishableKey, 'Content-Type': 'application/json' },
@@ -124,31 +126,43 @@ jobs:
             return { status: response.status, body: await response.json() };
           }
 
-          const invalid = await fetch(base + '/functions/v1/myday-sync', {
-            method: 'POST',
-            headers: { apikey: publishableKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'load', initData: 'invalid' })
-          });
+          const invalid = await call('invalid', 'load');
           if (invalid.status !== 401) throw new Error('Invalid Telegram signature was not rejected (HTTP ' + invalid.status + ')');
 
-          const loaded = await call('load');
+          const userOne = signedInitData(4000000000000000);
+          const loaded = await call(userOne, 'load');
           if (loaded.status !== 200 || !Number.isSafeInteger(loaded.body.revision)) {
             throw new Error('Signed profile load failed: HTTP ' + loaded.status + ' ' + JSON.stringify(loaded.body));
           }
 
           const expected = loaded.body.revision;
           const payload = { _myday_ci: true, run: process.env.GITHUB_RUN_ID };
-          const saved = await call('save', payload, expected);
+          const saved = await call(userOne, 'save', payload, expected);
           if (saved.status !== 200 || saved.body.revision !== expected + 1) {
             throw new Error('Signed profile save failed: HTTP ' + saved.status + ' ' + JSON.stringify(saved.body));
           }
 
-          const conflict = await call('save', { _myday_ci: 'stale-write' }, expected);
+          const conflict = await call(userOne, 'save', { _myday_ci: 'stale-write' }, expected);
           if (conflict.status !== 409 || conflict.body.conflict !== true ||
               conflict.body.revision !== saved.body.revision ||
               conflict.body.data._myday_ci !== true || conflict.body.data.run !== payload.run) {
             throw new Error('Revision conflict protection failed: HTTP ' + conflict.status + ' ' + JSON.stringify(conflict.body));
           }
 
-          console.log('Passed: invalid signatures rejected; signed Telegram identity accepted; database load/save works; stale writes return HTTP 409 without overwriting newer data.');
+          const userTwo = signedInitData(4000000000000001);
+          const secondLoad = await call(userTwo, 'load');
+          if (secondLoad.status !== 200 || secondLoad.body.data !== null || secondLoad.body.revision !== 0) {
+            throw new Error('Telegram account isolation failed: second user saw another profile or unexpected data');
+          }
+          const secondPayload = { _myday_ci: 'second-user', run: process.env.GITHUB_RUN_ID };
+          const secondSave = await call(userTwo, 'save', secondPayload, 0);
+          if (secondSave.status !== 200) throw new Error('Second Telegram profile save failed: ' + JSON.stringify(secondSave.body));
+
+          const firstReload = await call(userOne, 'load');
+          if (firstReload.status !== 200 || firstReload.body.data._myday_ci !== true ||
+              firstReload.body.data.run !== payload.run) {
+            throw new Error('Telegram account isolation failed: second user changed the first profile');
+          }
+
+          console.log('Passed: invalid signatures rejected; signed Telegram identities accepted; profile load/save works; stale writes are blocked; two Telegram accounts remain isolated.');
           NODE
