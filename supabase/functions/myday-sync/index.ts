@@ -5,7 +5,7 @@ const corsHeaders = {
 };
 
 const encoder = new TextEncoder();
-const MAX_BODY_BYTES = 1_100_000;
+const MAX_BODY_BYTES = 4_200_000;
 
 function hex(bytes: ArrayBuffer): string {
   return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -104,7 +104,7 @@ Deno.serve(async (req: Request) => {
     if (body.action === "save") {
       if (!body.data || typeof body.data !== "object" || Array.isArray(body.data)) return json({ error: "Некорректные данные профиля" }, 400);
       const serialized = JSON.stringify(body.data);
-      if (encoder.encode(serialized).length > 1_000_000) return json({ error: "Размер профиля превышает 1 МБ" }, 413);
+      if (encoder.encode(serialized).length > 4_000_000) return json({ error: "Размер профиля превышает 1 МБ" }, 413);
       const expectedRevision = Number(body.expectedRevision);
       if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) return json({ error: "Некорректная версия профиля" }, 400);
 
