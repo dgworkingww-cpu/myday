@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feature/multi-user-myday
+      - main
     paths:
       - '.github/workflows/deploy-myday-backend.yml'
       - 'supabase/**'
