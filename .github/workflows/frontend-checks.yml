@@ -55,7 +55,7 @@ jobs:
           const sw = fs.readFileSync('sw.js', 'utf8');
           const css = fs.readFileSync('design-system.css', 'utf8');
           if (manifest.short_name !== 'MYDAY') throw new Error('Unexpected PWA short name');
-          for (const asset of ['./design-system.css', './backend-config.js', './manifest.webmanifest']) {
+          for (const asset of ['./design-system.css', './backend-config.js', 'manifest.webmanifest']) {
             if (!html.includes(asset)) throw new Error('Missing app-shell reference: ' + asset);
           }
           if (!sw.includes("'./index.html'") || !sw.includes("'./design-system.css'")) {
