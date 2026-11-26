@@ -351,8 +351,8 @@ async function importLegacyData(){
  S=old;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
  localStorage.setItem(localStoreKey,JSON.stringify(S));localStorage.setItem('myday2:imported:'+tgUserId,'1');cloudReady=true;cloudDirty=true;
  const ok=await cloudPush();
- cloudRemoteData=null;
- cloudStatus=ok?'Старые данные перенесены в ваш Telegram-профиль':'Данные сохранены на устройстве; синхронизация повторится позже';
+ if(ok){cloudRemoteData=null;cloudStatus='Старые данные перенесены в ваш Telegram-профиль'}
+ else if(!cloudConflict)cloudStatus='Данные сохранены на устройстве; синхронизация повторится позже';
  close_();render();
 }
 async function skipLegacyImport(){
