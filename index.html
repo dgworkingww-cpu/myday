@@ -311,7 +311,8 @@ async function cloudPull(){
    const localSnapshot=JSON.stringify(S),remoteSnapshot=JSON.stringify(result.data);
    let lastSyncedHash='';try{lastSyncedHash=localStorage.getItem(cloudBaseKey)||''}catch(_){}
    const localHash=await snapshotHash(localSnapshot),remoteHash=await snapshotHash(remoteSnapshot);
-   if(localHash!==lastSyncedHash&&localHash!==remoteHash){
+   const knownRevision=Number(localStorage.getItem(cloudRevisionKey)||0);
+   if(localHash!==lastSyncedHash&&localHash!==remoteHash&&knownRevision!==cloudRevision){
     setCloudConflict(result.data,remoteRevision);render();return false;
    }
    S=result.data;S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
