@@ -218,7 +218,7 @@ window.render=function(){
  const th=resolvedTheme(),root=document.documentElement;root.dataset.theme=th;
  const palette=[['#087cff','#0067df'],['#8b6cff','#6c4ee6'],['#24a36b','#168452'],['#ed8a35','#cc6b1c'],['#e45d91','#c83d72']];
  const accent=palette[Math.max(0,Math.min(4,Number(S.settings.accent)||0))];
- root.style.setProperty('--accent',accent[0]);root.style.setProperty('--accent-2',accent[1]);root.style.setProperty('--accent-soft','color-mix(in srgb,'+accent[0]+' 12%,var(--surface))');
+ root.style.setProperty('--accent',accent[0]);root.style.setProperty('--accent-2',accent[1]);root.style.setProperty('--ac',accent[0]);root.style.setProperty('--ac2',accent[1]);root.style.setProperty('--accent-soft','color-mix(in srgb,'+accent[0]+' 12%,var(--surface))');
  const pageColor=th==='light'?'#f4f5f8':'#101217',meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.content=pageColor;
  try{tgApp&&tgApp.setHeaderColor&&tgApp.setHeaderColor(pageColor);tgApp&&tgApp.setBackgroundColor&&tgApp.setBackgroundColor(pageColor);tgApp&&tgApp.setBottomBarColor&&tgApp.setBottomBarColor(pageColor)}catch(_){}
  const tabs=[['today','today','День'],['sched','sched','План'],['tasks','tasks','Задачи'],['study','study','Учёба'],['more','more','Ещё']];
