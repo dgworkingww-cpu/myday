@@ -126,6 +126,11 @@ jobs:
             return { status: response.status, body: await response.json() };
           }
 
+          const directAccess = await fetch(base + '/rest/v1/myday_profiles?select=telegram_id&limit=1', {
+            headers: { apikey: publishableKey }
+          });
+          if (directAccess.ok) throw new Error('Private profile table is accessible with the public key');
+
           const invalid = await call('invalid', 'load');
           if (invalid.status !== 401) throw new Error('Invalid Telegram signature was not rejected (HTTP ' + invalid.status + ')');
 
