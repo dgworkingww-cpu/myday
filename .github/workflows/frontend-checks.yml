@@ -9,6 +9,7 @@ on:
       - 'manifest.webmanifest'
       - 'sw.js'
       - 'icon.svg'
+      - 'tests/**'
       - '.github/workflows/frontend-checks.yml'
   push:
     branches: [main, redesign/myday-fieldnotes-v3]
