@@ -24,7 +24,7 @@
   const shiftDate = (s,n) => { const d=fromIso(s); d.setDate(d.getDate()+n); return iso(d); };
   const mondayOf = s => { const d=fromIso(s); d.setDate(d.getDate()-((d.getDay()+6)%7)); return iso(d); };
   const dayDiff = (a,b) => Math.round((fromIso(a)-fromIso(b))/86400000);
-  const selectedDate = () => cfg().selectedDate || today();
+  const selectedDate = () => { const v=cfg().selectedDate || today(); return fromIso(v).getDay()===0 ? shiftDate(v,1) : v; };
   const setSelectedDate = s => { cfg().selectedDate=s; const d=fromIso(s); sd=d.getDay()||1; save(); };
   const id = () => Math.random().toString(36).slice(2,10);
 
@@ -117,14 +117,14 @@
       (mode==='cycle'?'<label for="lab-cycle">Длина цикла, недель</label><select id="lab-cycle" onchange="MYDAY_LAB.setCycleWeeks(this.value)">'+[2,3,4].map(n=>'<option value="'+n+'" '+(Number(c.cycleWeeks||2)===n?'selected':'')+'>'+n+' недели</option>').join('')+'</select><label for="lab-anchor">Первая неделя цикла начинается</label><input id="lab-anchor" type="date" value="'+esc(c.cycleAnchor||mondayOf(today()))+'" onchange="MYDAY_LAB.setCycleAnchor(this.value)"><p class="page-sub">Укажи понедельник первой недели. Дальше цикл будет повторяться автоматически.</p>':'')+
       (mode==='hybrid'?'<p class="page-sub">В разделе «План» появятся три слоя: постоянные занятия, нижняя неделя и верхняя неделя. Постоянные пары будут добавляться к выбранной неделе.</p>':'')+
       (mode==='dates'?'<p class="page-sub">Занятия по датам можно импортировать из файла или добавлять на выбранную дату. Если для даты нет записи, постоянный шаблон не подставляется.</p>':'')+
-      '<div class="schedule-actions"><button class="btn" type="button" onclick="go(\\'sched\\')">Открыть расписание</button><button class="btn g" type="button" onclick="st=\'schedule-import\';render()">Импортировать файл</button></div></section>'+
+      '<div class="schedule-actions"><button class="btn" type="button" onclick="go(\\'sched\\')">Открыть расписание</button><button class="btn g" type="button" onclick="go(\'more\');st=\'schedule-import\';render()">Импортировать файл</button></div></section>'+
       '<section class="section"><div class="section-head"><div><h2>Сохранность данных</h2><p class="section-caption">Переключение режима не удаляет старые пары.</p></div></div><div class="empty-state"><b>Ничего не стирается автоматически</b><span>Старые расписания остаются в профиле. Новый режим начинает использовать свой отдельный набор записей.</span></div></section>'+
       '<button class="btn g" type="button" style="width:100%" onclick="st=null;render()">Назад</button></main>';
   }
   function renderWorkWeeklyPage() {
     const date=selectedDate(),day=fromIso(date).getDay()||1,bucket=scheduleBucket('work','work'),list=(bucket[day]||[]).slice().sort((a,b)=>a.s.localeCompare(b.s));
     const dates=selectedWeekDates(date);
-    return '<main class="page">'+mydayHeader('Рабочее расписание','Повторяющийся график по дням недели.',true,true)+'<div class="row lab-date-row"><label for="lab-date">Дата просмотра</label><input id="lab-date" type="date" value="'+date+'" onchange="MYDAY_LAB.selectDate(this.value)"></div><section class="schedule-control"><div class="day-strip">'+dates.map(x=>{const n=fromIso(x).getDay();return '<button class="day-pill '+(n===day?'on ':'')+(x===today()?'today':'')+'" onclick="MYDAY_LAB.selectDate(\\''+x+'\\')"><strong>'+DAYS_SHORT[n]+'</strong><small>'+x.slice(8,10)+'</small></button>'}).join('')+'</div></section><div class="schedule-day-head"><div><div class="eyebrow">'+DAYS_SHORT[day].toUpperCase()+' · '+date+'</div><h2>'+DAYS_SHORT[day]+'</h2><p>'+list.length+' записей</p></div><button class="btn" onclick="lessonForm(\\'work\\')">'+mydayIcon('plus',16)+' Добавить</button></div>'+(list.length?'<section class="schedule-wrap">'+mydayLessons(list,null,l=>'lessonForm(\\'work\\',\\''+l.id+'\\')')+'</section>':mydayEmpty('На этот день записей нет','Добавь рабочее время, встречу или смену.'))+'<div class="schedule-actions"><button class="btn g" onclick="st=\\'work-shifts\\';go(\\'more\\');render()">Настроить смены</button><button class="btn g" onclick="st=\\'schedule-import\\';go(\\'more\\');render()">Импорт файла</button></div></main>';
+    return '<main class="page">'+mydayHeader('Рабочее расписание','Повторяющийся график по дням недели.',true,true)+'<div class="row lab-date-row"><label for="lab-date">Дата просмотра</label><input id="lab-date" type="date" value="'+date+'" onchange="MYDAY_LAB.selectDate(this.value)"></div><section class="schedule-control"><div class="day-strip">'+dates.map(x=>{const n=fromIso(x).getDay();return '<button class="day-pill '+(n===day?'on ':'')+(x===today()?'today':'')+'" onclick="MYDAY_LAB.selectDate(\\''+x+'\\')"><strong>'+DAYS_SHORT[n]+'</strong><small>'+x.slice(8,10)+'</small></button>'}).join('')+'</div></section><div class="schedule-day-head"><div><div class="eyebrow">'+DAYS_SHORT[day].toUpperCase()+' · '+date+'</div><h2>'+DAYS_SHORT[day]+'</h2><p>'+list.length+' записей</p></div><button class="btn" onclick="lessonForm(\\'work\\')">'+mydayIcon('plus',16)+' Добавить</button></div>'+(list.length?'<section class="schedule-wrap">'+mydayLessons(list,null,l=>'lessonForm(\\'work\\',\\''+l.id+'\\')')+'</section>':mydayEmpty('На этот день записей нет','Добавь рабочее время, встречу или смену.'))+'<div class="schedule-actions"><button class="btn g" onclick="go(\\'more\\');st=\\'work-shifts\\';render()">Настроить смены</button><button class="btn g" onclick="go(\\'more\\');st=\\'schedule-import\\';render()">Импорт файла</button></div></main>';
   }
 
   function renderSchedulePage() {
@@ -147,7 +147,7 @@
       layer+'<section class="schedule-control"><div class="day-strip">'+dayHtml+'</div></section>'+
       '<div class="schedule-day-head"><div><div class="eyebrow">'+DAYS_SHORT[day].toUpperCase()+' · '+date+'</div><h2>'+DAYS_SHORT[day]+'</h2><p>'+list.length+' '+ruCount(list.length,'занятие','занятия','занятий')+'</p></div><button class="btn" type="button" onclick="lessonForm(\\''+bucketKey+'\\')">'+mydayIcon('plus',16)+' Добавить</button></div>'+
       (list.length?'<section class="schedule-wrap">'+mydayLessons(list,null,l=>'lessonForm(\\''+bucketKey+'\\',\\''+l.id+'\\')')+'</section>':mydayEmpty('На эту дату записей нет','Добавь занятие вручную или загрузи файл с расписанием.'))+
-      '<div class="schedule-actions"><button class="btn g" type="button" onclick="st=\'schedule-import\';render()">'+mydayIcon('inbox',16)+' Импорт файла</button><button class="btn g" type="button" onclick="st=\'schedule-settings\';go(\\'more\\');render()">Тип расписания</button></div></main>';
+      '<div class="schedule-actions"><button class="btn g" type="button" onclick="go(\'more\');st=\'schedule-import\';render()">'+mydayIcon('inbox',16)+' Импорт файла</button><button class="btn g" type="button" onclick="go(\\'more\\');st=\'schedule-settings\';render()">Тип расписания</button></div></main>';
   }
 
   function renderWorkRotationPage() {
@@ -348,7 +348,7 @@
   function setDraft(key,value){if(importDraft)importDraft[key]=value}
   function editDraft(index) {
     const r=importDraft&&importDraft.records[index];if(!r)return;
-    sheet('<h1>Проверить занятие</h1><label for="di-subj">Предмет / название</label><input id="di-subj" value="'+esc(r.subj)+'"><label for="di-day">День недели</label><select id="di-day">'+[1,2,3,4,5,6].map(d=>'<option value="'+d+'" '+(Number(r.day)===d?'selected':'')+'>'+DAYS_SHORT[d]+'</option>').join('')+'</select><label for="di-week">Неделя</label><select id="di-week"><option value="" '+(!r.week?'selected':'')+'>По умолчанию</option><option value="odd" '+(r.week==='odd'?'selected':'')+'>Нижняя / нечётная</option><option value="even" '+(r.week==='even'?'selected':'')+'>Верхняя / чётная</option><option value="fixed" '+(r.week==='fixed'?'selected':'')+'>Постоянная</option></select><div class="row"><div class="grow"><label for="di-start">Начало</label><input id="di-start" type="time" value="'+esc(r.s)+'"></div><div class="grow"><label for="di-end">Конец</label><input id="di-end" type="time" value="'+esc(r.e)+'"></div></div><label for="di-room">Аудитория / место</label><input id="di-room" value="'+esc(r.room)+'"><label for="di-teacher">Преподаватель / заметка</label><input id="di-teacher" value="'+esc(r.teacher)+'"><label for="di-date">Конкретная дата (если есть)</label><input id="di-date" type="date" value="'+esc(r.date||'')+'"><div class="schedule-actions"><button class="btn" onclick="MYDAY_LAB.saveDraftItem('+index+')">Сохранить</button><button class="btn g" onclick="MYDAY_LAB.removeDraftItem('+index+')">Убрать строку</button></div>');
+    sheet('<h1>Проверить занятие</h1><label for="di-subj">Предмет / название</label><input id="di-subj" value="'+esc(r.subj)+'"><label for="di-day">День недели</label><select id="di-day"><option value="0" '+(r.day==null?'selected':'')+'>Выбрать день</option>'+[1,2,3,4,5,6].map(d=>'<option value="'+d+'" '+(Number(r.day)===d?'selected':'')+'>'+DAYS_SHORT[d]+'</option>').join('')+'</select><label for="di-week">Неделя</label><select id="di-week"><option value="" '+(!r.week?'selected':'')+'>По умолчанию</option><option value="odd" '+(r.week==='odd'?'selected':'')+'>Нижняя / нечётная</option><option value="even" '+(r.week==='even'?'selected':'')+'>Верхняя / чётная</option><option value="fixed" '+(r.week==='fixed'?'selected':'')+'>Постоянная</option></select><div class="row"><div class="grow"><label for="di-start">Начало</label><input id="di-start" type="time" value="'+esc(r.s)+'"></div><div class="grow"><label for="di-end">Конец</label><input id="di-end" type="time" value="'+esc(r.e)+'"></div></div><label for="di-room">Аудитория / место</label><input id="di-room" value="'+esc(r.room)+'"><label for="di-teacher">Преподаватель / заметка</label><input id="di-teacher" value="'+esc(r.teacher)+'"><label for="di-date">Конкретная дата (если есть)</label><input id="di-date" type="date" value="'+esc(r.date||'')+'"><div class="schedule-actions"><button class="btn" onclick="MYDAY_LAB.saveDraftItem('+index+')">Сохранить</button><button class="btn g" onclick="MYDAY_LAB.removeDraftItem('+index+')">Убрать строку</button></div>');
   }
   function saveDraftItem(i) {
     const r=importDraft.records[i];if(!r)return;
@@ -360,6 +360,7 @@
   function removeDraftItem(i){importDraft.records.splice(i,1);close_();render()}
   function applyImport() {
     const d=importDraft;if(!d||!d.records.length){alert('Сначала распознай файл.');return}
+    if(d.records.some(x=>!Number.isInteger(Number(x.day))||Number(x.day)<1||Number(x.day)>6)){alert('Укажи день недели для каждой распознанной записи. Нераспознанные строки не будут добавлены наугад.');return}
     const target=d.target||'study',mode=d.mode==='auto'?(d.records.some(x=>x.week)?'alternating':'fixed'):d.mode;
     if(target==='study'&&mode==='dates'&&d.records.some(x=>!x.date)){alert('В режиме конкретных дат у каждой записи должна быть дата. Открой строки без даты и укажи её.');return}
     if(target==='study')cfg().studyMode=mode;
@@ -389,7 +390,7 @@
   function setCycleWeeks(n){cfg().cycleWeeks=Math.max(2,Math.min(4,Number(n)||2));save();render()}
   function setCycleAnchor(d){if(d)cfg().cycleAnchor=mondayOf(d);save();render()}
   function setLayer(layer){st=layer;render()}
-  function selectDate(date){if(!date)return;cfg().selectedDate=date;const day=fromIso(date).getDay();sd=day||1;st=null;save();render()}
+  function selectDate(date){if(!date)return;const d=fromIso(date);cfg().selectedDate=d.getDay()===0?shiftDate(date,1):date;sd=fromIso(cfg().selectedDate).getDay()||1;st=null;save();render()}
   function setWorkMode(mode){S.workConfig.mode=mode==='rotation'?'rotation':'weekly';save();render()}
   function setWorkPreset(pattern){const c=S.workConfig;c.pattern=[...pattern].map(x=>x==='Р'?'work':'off');const el=document.querySelector('#work-pattern');if(el)el.value=pattern}
   function saveWorkSettings(){
