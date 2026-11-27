@@ -32,6 +32,9 @@ Deno.test("spoken half-hours and time-only follow-ups are recognized", () => {
   assertEquals(parseClock("полдвенадцатого"), "11:30");
   assertEquals(isDateOnlyReply("завтра"), true);
   assertEquals(isDateOnlyReply("в пятницу"), true);
+  assertEquals(isDateOnlyReply("в эту пятницу"), true);
+  assertEquals(isDateOnlyReply("через 2 недели"), true);
+  assertEquals(isDateOnlyReply("на выходных"), true);
   assertEquals(isDateOnlyReply("12.12"), true);
   assertEquals(isCancellation("отмена"), true);
 });
