@@ -166,8 +166,10 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   const secret = Deno.env.get("MYDAY_WEBHOOK_SECRET") || "";
   if (!secret || req.headers.get("x-telegram-bot-api-secret-token") !== secret) return json({ error: "Unauthorized" }, 401);
+  let fallbackChatId = 0;
   try {
     const update = await req.json();
+    fallbackChatId = Number(update.message?.chat?.id || update.callback_query?.message?.chat?.id || 0);
     if (Number.isSafeInteger(update.update_id)) {
       const fresh = await markUpdate(Number(update.update_id));
       if (!fresh) return json({ ok: true, duplicate: true });
@@ -201,6 +203,9 @@ Deno.serve(async (req: Request) => {
     return json({ ok: true });
   } catch (error) {
     console.error("MYDAY bot webhook error:", error);
+    if (fallbackChatId) {
+      try { await send(fallbackChatId, "Не получилось обработать сообщение. Проверь /tasks: если задача уже появилась, повторно отправлять её не нужно."); } catch { /* Telegram may be temporarily unavailable */ }
+    }
     return json({ ok: true });
   }
 });
