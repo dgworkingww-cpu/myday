@@ -1,6 +1,7 @@
 // MYDAY Telegram assistant webhook.
 // Receives private bot messages, writes into the same per-user profile as the Mini App.
 import { inferDate, inferTime, inferTimeRange, isCancellation, isDateOnlyReply, validDate, validTime } from "./language.ts";
+import { extractScheduleDocument } from "./document-parser.ts";
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type,x-telegram-bot-api-secret-token", "Access-Control-Allow-Methods": "POST,OPTIONS" };
 const enc = new TextEncoder();
 const TZ = "Europe/Moscow";
@@ -295,6 +296,101 @@ function guessEventTitle(text: string) {
   return "Событие";
 }
 function taskKeyboard(tasks: Array<[string, string]>) { return tasks.map(([id, title]) => [{ text: "✓ " + String(title).slice(0, 28), callback_data: "done:" + id }, { text: "Завтра", callback_data: "tomorrow:" + id }, { text: "Удалить", callback_data: "delete:" + id }]); }
+
+const SCHEDULE_DAYS: Record<string, number> = {
+  "воскресенье": 0, "вс": 0, "понедельник": 1, "пн": 1, "вторник": 2, "вт": 2,
+  "среда": 3, "ср": 3, "четверг": 4, "чт": 4, "пятница": 5, "пт": 5, "суббота": 6, "сб": 6
+};
+function normalizeScheduleEntries(raw: AnyRecord): { entries: AnyRecord[]; warnings: string[] } {
+  const warnings = Array.isArray(raw.warnings) ? raw.warnings.map((x: unknown) => String(x).slice(0, 220)).slice(0, 8) : [];
+  const source = Array.isArray(raw.entries) ? raw.entries : Array.isArray(raw.lessons) ? raw.lessons : [];
+  const entries: AnyRecord[] = [];
+  let rejected = 0;
+  for (const item of source.slice(0, 80)) {
+    if (!item || typeof item !== "object") { rejected++; continue; }
+    const dayRaw = String(item.weekday ?? item.day ?? "").toLocaleLowerCase("ru").replace(/ё/g, "е").trim();
+    const day = /^\d+$/.test(dayRaw) ? Number(dayRaw) : SCHEDULE_DAYS[dayRaw.replace(/[^а-яa-z]/g, "")];
+    const start = String(item.start ?? item.time ?? "").trim();
+    const end = String(item.end ?? item.endTime ?? "").trim();
+    const subject = String(item.subject ?? item.title ?? item.name ?? "").trim().slice(0, 180);
+    const room = String(item.room ?? item.classroom ?? "").trim().slice(0, 80);
+    const teacher = String(item.teacher ?? "").trim().slice(0, 120);
+    let weekType = String(item.weekType ?? item.week ?? "unknown").toLocaleLowerCase("ru").trim();
+    if (/нижн|нечет|нечёт|odd/.test(weekType)) weekType = "odd";
+    else if (/верхн|четн|чётн|even/.test(weekType)) weekType = "even";
+    else if (/обе|все|общ|кажд|both|all|fixed/.test(weekType)) weekType = "both";
+    else weekType = "unknown";
+    const confidence = Number.isFinite(Number(item.confidence)) ? Math.max(0, Math.min(1, Number(item.confidence))) : 0.75;
+    const validClock = (v: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
+    if (!Number.isInteger(day) || day < 1 || day > 6 || !validClock(start) || !validClock(end) || end <= start || !subject || confidence < 0.5) { rejected++; continue; }
+    entries.push({ weekday: day, start, end, subject, room, teacher, weekType, confidence });
+  }
+  if (rejected) warnings.push("Не включено строк с неполным или сомнительным временем/днём: " + rejected + ".");
+  if (source.length > 80) warnings.push("Для предварительного просмотра взяты первые 80 занятий.");
+  return { entries, warnings };
+}
+async function parseScheduleDocumentWithAI(documentText: string, today: string, userId: number): Promise<AnyRecord> {
+  const apiKey = Deno.env.get("GROQ_API_KEY");
+  if (!apiKey) throw new Error("Для разбора расписания из документов не настроен GROQ_API_KEY.");
+  if (!await consumeAiQuota(userId, today)) throw new Error("MYDAY_AI_DAILY_LIMIT");
+  const prompt = [
+    "Ты — модуль точного извлечения расписания занятий из документа для MYDAY. Сегодня " + today + ".",
+    "Верни только JSON: {entries:[{weekday,start,end,subject,room,teacher,weekType,confidence}],warnings:[...]}",
+    "weekday — число: 1 понедельник, 2 вторник, 3 среда, 4 четверг, 5 пятница, 6 суббота. Воскресенье не добавляй, если в документе оно не указано как учебный день.",
+    "start и end — строго HH:MM в 24-часовом формате. Если время не читается или неполное, не добавляй эту строку. Не выдумывай длительность пары.",
+    "subject — точное название дисциплины. room — аудитория, teacher — преподаватель. Не смешивай аудиторию и преподавателя с названием предмета.",
+    "weekType: odd для нижней/нечётной недели, even для верхней/чётной, both если занятие явно проходит каждую неделю или в документе одна общая сетка. Если определить нельзя — unknown. Не считай «верхняя» и «нижняя» неделя синонимами.",
+    "Если таблица содержит несколько пар в одной ячейке или объединённые ячейки, внимательно сопоставь день, неделю и время. Каждая пара — отдельная запись. Не дублируй одну пару из-за повторяющихся заголовков.",
+    "confidence — число от 0 до 1. В warnings перечисли неоднозначности, пропущенные части таблицы и сомнения. Не заполняй пропуски догадками. Если документ не содержит учебного расписания, верни entries: [].",
+    "ТЕКСТ ДОКУМЕНТА:\n" + documentText.slice(0, 42000)
+  ].join("\n");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 35000);
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST", signal: controller.signal,
+      headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: Deno.env.get("GROQ_CHAT_MODEL") || "openai/gpt-oss-120b", temperature: 0.1, response_format: { type: "json_object" }, messages: [{ role: "user", content: prompt }] })
+    });
+    if (!response.ok) throw new Error("Не удалось разобрать документ через AI (HTTP " + response.status + ").");
+    const result = await response.json();
+    return JSON.parse(result.choices?.[0]?.message?.content || "{}");
+  } finally { clearTimeout(timeout); }
+}
+function scheduleImportMessage(pending: AnyRecord): string {
+  const entries = Array.isArray(pending.entries) ? pending.entries : [];
+  const dayNames = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+  const lines = entries.slice(0, 35).map((x: AnyRecord, i: number) => {
+    const week = x.weekType === "odd" ? " · нижняя" : x.weekType === "even" ? " · верхняя" : x.weekType === "both" ? " · каждую неделю" : " · неделя ?";
+    return (i + 1) + ". " + dayNames[Number(x.weekday)] + " " + x.start + "–" + x.end + " · " + escapeHtml(x.subject) + (x.room ? " · ауд. " + escapeHtml(x.room) : "") + week + (Number(x.confidence) < 0.75 ? " ⚠️" : "");
+  });
+  const more = entries.length > 35 ? "\n…и ещё " + (entries.length - 35) + " занятий." : "";
+  const warnings = (pending.warnings || []).slice(0, 8).map((x: string) => "⚠️ " + escapeHtml(x)).join("\n");
+  return "<b>Проверь распознанное расписание</b> · " + entries.length + " занятий\nФайл: " + escapeHtml(pending.sourceName || "документ") + "\n\n" + lines.join("\n") + more + (warnings ? "\n\n" + warnings : "") + "\n\nПока ничего не добавлено. Нажми кнопку только после проверки.";
+}
+function applyScheduleImport(data: AnyRecord, entries: AnyRecord[]) {
+  data.sched = data.sched || {};
+  data.sched.odd = data.sched.odd || {};
+  data.sched.even = data.sched.even || {};
+  let added = 0, duplicates = 0, conflicts = 0;
+  for (const entry of entries) {
+    const targets = entry.weekType === "both" ? ["odd", "even"] : [entry.weekType];
+    for (const week of targets) {
+      if (week !== "odd" && week !== "even") continue;
+      const bucket = data.sched[week];
+      bucket[entry.weekday] = Array.isArray(bucket[entry.weekday]) ? bucket[entry.weekday] : [];
+      const day = bucket[entry.weekday] as AnyRecord[];
+      const duplicate = day.some((x: AnyRecord) => String(x.subj || "").toLocaleLowerCase("ru") === String(entry.subject).toLocaleLowerCase("ru") && String(x.s || "") === entry.start && String(x.e || "") === entry.end && String(x.room || "") === String(entry.room || ""));
+      if (duplicate) { duplicates++; continue; }
+      if (day.some((x: AnyRecord) => String(x.s || "") < entry.end && String(x.e || "") > entry.start)) conflicts++;
+      day.push({ id: uid(), subj: entry.subject, s: entry.start, e: entry.end, room: entry.room || "", teacher: entry.teacher || "" });
+      day.sort((a: AnyRecord, b: AnyRecord) => String(a.s).localeCompare(String(b.s)));
+      added++;
+    }
+  }
+  data.scheduleConfig = { ...(data.scheduleConfig || {}), studyMode: "alternating" };
+  return { added, duplicates, conflicts };
+}
 async function handleText(chatId: number, userId: number, text: string) {
   failureStage = "разбор команды";
   let cmd = text.trim();
@@ -697,6 +793,37 @@ async function handleCallback(q: AnyRecord) {
   if (data.startsWith("view:")) { await handleText(chatId, userId, "/" + data.slice(5)); return; }
   if (q.message?.chat?.type !== "private") return;
   const p = await getProfile(userId), parts = data.split(":"), action = parts[0], id = parts.slice(1).join(":");
+  if (action === "schedule_import_cancel" || action === "schedule_import_confirm" || action === "schedule_import_week") {
+    const pending = p.data.botState?.pending;
+    if (pending?.kind !== "schedule_import" || Date.now() - Number(pending.createdAt || 0) > 12 * 60 * 60 * 1000) {
+      await send(chatId, "Предварительный импорт уже истёк. Отправь файл ещё раз, чтобы распознать его заново.");
+      return;
+    }
+    if (action === "schedule_import_cancel") {
+      p.data.botState = { ...(p.data.botState || {}), pending: null };
+      await saveProfile(userId, p.data, p.baseData);
+      await send(chatId, "Импорт отменён. Расписание не менял.");
+      return;
+    }
+    if (action === "schedule_import_week") {
+      const selectedWeek = id === "odd" || id === "even" || id === "both" ? id : "";
+      if (!selectedWeek) { await send(chatId, "Не понял выбор недели. Отправь файл ещё раз."); return; }
+      pending.entries = (pending.entries || []).map((x: AnyRecord) => x.weekType === "unknown" ? { ...x, weekType: selectedWeek } : x);
+      pending.createdAt = Date.now();
+      p.data.botState = { ...(p.data.botState || {}), pending };
+      await saveProfile(userId, p.data, p.baseData);
+      await send(chatId, scheduleImportMessage(pending), [
+        [{ text: "Добавить в расписание", callback_data: "schedule_import_confirm" }],
+        [{ text: "Отмена", callback_data: "schedule_import_cancel" }]
+      ]);
+      return;
+    }
+    const result = applyScheduleImport(p.data, pending.entries || []);
+    p.data.botState = { ...(p.data.botState || {}), pending: null };
+    await saveProfile(userId, p.data, p.baseData);
+    await send(chatId, "Готово, расписание добавлено и синхронизировано с MYDAY.\nДобавлено: " + result.added + "\nУже было: " + result.duplicates + "\nПересечений по времени с существующими парами: " + result.conflicts + (result.conflicts ? "\nПроверь отмеченные дни: в них есть накладки." : ""));
+    return;
+  }
   if (action === "homework_delete_confirm" || action === "homework_delete_cancel") {
     const hw = (p.data.hw || []).find((x: AnyRecord) => String(x.id) === id);
     if (!hw) { await send(chatId, "Это домашнее задание уже не найдено."); return; }
@@ -766,12 +893,50 @@ Deno.serve(async (req: Request) => {
         text = extracted.join("; ");
       } else if (m.document) {
         const mime = String(m.document.mime_type || "");
-        if (/text\/(plain|csv)|application\/(json|pdf)/i.test(mime)) {
-          const { blob } = await telegramFile(m.document.file_id);
-          if (blob.size > 1_000_000) { await send(chatId, "Файл слишком большой для быстрой обработки в чате. Максимум 1 МБ."); return json({ ok: true }); }
-          if (/text\/(plain|csv)|application\/json/i.test(mime)) text = await blob.text();
-          else { await send(chatId, "PDF получил. Для точного импорта расписания открой Mini App → Расписание → Импорт. Прямой разбор PDF в чате добавим отдельным этапом."); return json({ ok: true }); }
-        } else { await send(chatId, "Файл получил. Для импорта Excel/DOCX пока используй раздел импорта внутри Mini App."); return json({ ok: true }); }
+        const filename = String(m.document.file_name || "schedule-document");
+        const declaredSize = Number(m.document.file_size || 0);
+        const maxFileSize = 20 * 1024 * 1024;
+        if (declaredSize > maxFileSize) {
+          await send(chatId, "Файл весит " + (declaredSize / 1024 / 1024).toFixed(1) + " МБ. Через Telegram Bot API сейчас можно скачать документ размером до 20 МБ. Раздели файл на части или отправь только страницы с расписанием.");
+          return json({ ok: true });
+        }
+        failureStage = "скачивание документа из Telegram";
+        const { blob } = await telegramFile(m.document.file_id);
+        if (blob.size > maxFileSize) {
+          await send(chatId, "Файл больше 20 МБ и не помещается в лимит загрузки Telegram Bot API. Отправь документ меньшего размера или раздели его на части.");
+          return json({ ok: true });
+        }
+        failureStage = "извлечение текста из документа";
+        const extracted = await extractScheduleDocument(new Uint8Array(await blob.arrayBuffer()), filename, mime);
+        failureStage = "распознавание расписания в документе";
+        const profile = await getProfile(userId);
+        const documentToday = isoToday(profile.data.settings?.timezone || TZ);
+        const parsed = await parseScheduleDocumentWithAI(extracted.text, documentToday, userId);
+        const normalized = normalizeScheduleEntries(parsed);
+        const entries = normalized.entries;
+        const warnings = [...extracted.warnings, ...normalized.warnings];
+        if (!entries.length) {
+          const details = warnings.length ? "\n" + warnings.map((x: string) => "• " + escapeHtml(x)).join("\n") : "";
+          await send(chatId, "Не нашёл в документе достаточно надёжных строк расписания. Проверь, что в файле есть дни недели, названия предметов и время начала/окончания." + details);
+          return json({ ok: true });
+        }
+        const unknownWeeks = entries.some((x: AnyRecord) => x.weekType === "unknown");
+        const pending = { kind: "schedule_import", entries, warnings, sourceName: filename.slice(0, 120), createdAt: Date.now() };
+        const latest = await getProfile(userId);
+        latest.data.botState = { ...(latest.data.botState || {}), pending };
+        await saveProfile(userId, latest.data, latest.baseData);
+        if (unknownWeeks) {
+          await send(chatId, scheduleImportMessage(pending) + "\n\nНе для всех пар удалось определить тип недели. Выбери, куда добавить такие пары:", [
+            [{ text: "Нижняя · нечётная", callback_data: "schedule_import_week:odd" }, { text: "Верхняя · чётная", callback_data: "schedule_import_week:even" }],
+            [{ text: "Обе недели", callback_data: "schedule_import_week:both" }, { text: "Отмена", callback_data: "schedule_import_cancel" }]
+          ]);
+        } else {
+          await send(chatId, scheduleImportMessage(pending), [
+            [{ text: "Добавить в расписание", callback_data: "schedule_import_confirm" }],
+            [{ text: "Отмена", callback_data: "schedule_import_cancel" }]
+          ]);
+        }
+        return json({ ok: true });
       }
       if (text) { failureStage = "обработка текстового сообщения"; await handleText(chatId, userId, text); }
       else if (!m.voice && !m.audio && !m.photo && !m.document) await send(chatId, "Напиши задачу, событие или домашнюю работу текстом либо отправь голосовое/фото. Команды: /today, /tomorrow, /day дата, /week, /tasks, /events, /homework, /app.");
