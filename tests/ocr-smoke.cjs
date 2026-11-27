@@ -118,8 +118,8 @@ function makePdf(lines) {
     await page.locator('#back').click();
     await page.locator('#app .page-title').waitFor({timeout:15000});
     await page.locator('#nav button').nth(4).click();
-    await page.locator('.more-tools-grid').waitFor({timeout:15000});
-    const documentTool=page.locator('.more-tool-card[aria-label="Разбор документов"]');
+    await page.locator('.settings-list').waitFor({timeout:15000});
+    const documentTool=page.locator('.settings-list .settings-card').filter({hasText:'Разбор документов'});
     if(await documentTool.count()!==1) throw new Error('Document analyzer shortcut is missing from the More menu');
     await documentTool.click();
     await page.locator('#file').waitFor({timeout:15000});
