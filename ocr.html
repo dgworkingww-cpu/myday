@@ -216,7 +216,7 @@ async function extractText(){
   const rawText=parts.join("\n\n").trim();
   const wasTruncated=rawText.length>42000;
   recognized=rawText.slice(0,42000);
-  if(recognized.length<20)throw new Error("Текст не найден. Возможно, PDF пустой, защищён паролем или качество изображения слишком низкое.");
+  if(recognized.trim().length<3)throw new Error("Текст не найден. Возможно, PDF пустой, защищён паролем или качество изображения слишком низкое.");
   $("output").value=recognized;$("textMeta").textContent="Извлечено символов: "+recognized.length+" · "+(worker?"с OCR":"текстовый слой PDF")+(wasTruncated?" · Для анализа взяты первые 42 000 символов":"");$("textPanel").classList.remove("hidden");
   progress(100,"Текст извлечён. Следующий шаг — анализ ИИ.","success");
  }catch(err){progress(0,err&&err.message||"Не удалось обработать документ.","error")}
