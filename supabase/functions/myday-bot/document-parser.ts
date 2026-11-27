@@ -75,6 +75,15 @@ function xlsxToText(bytes: Uint8Array): { text: string; warnings: string[] } {
   return { text: chunks.join("\n\n"), warnings };
 }
 
+function pptxToText(bytes: Uint8Array): string {
+  const files = unzipSync(bytes);
+  const slides = Object.keys(files).filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name)).sort((a, b) => Number(a.match(/slide(\d+)/)?.[1] || 0) - Number(b.match(/slide(\d+)/)?.[1] || 0));
+  return slides.slice(0, 100).map((path, i) => {
+    const xml = strFromU8(files[path]);
+    const text = [...xml.matchAll(/<a:t\b[^>]*>([\s\S]*?)<\/a:t>/g)].map((m) => decodeXml(m[1])).join(' ');
+    return text.trim() ? 'СЛАЙД ' + (i + 1) + '\n' + text.trim() : '';
+  }).filter(Boolean).join('\n\n');
+}
 function decodeText(bytes: Uint8Array): string {
   let value = new TextDecoder("utf-8").decode(bytes).replace(/^\uFEFF/, "");
   if ((value.match(/�/g) || []).length > 5) {
@@ -91,9 +100,9 @@ export async function extractScheduleDocument(
   const ext = (filename.split(".").pop() || "").toLowerCase();
   const warnings: string[] = [];
   if (bytes.byteLength === 0) throw new Error("Файл пустой.");
-  if (bytes.byteLength > 20 * 1024 * 1024) throw new Error("Файл больше 20 МБ. Telegram Bot API не позволяет скачать такой документ через обычного бота. Раздели его на части.");
+  if (bytes.byteLength > 20 * 1024 * 1024) throw new Error("Файл больше 20 МБ. Telegram Bot API не позволяет боту скачать его для автоматического сжатия. Отправь файл как фото/сжатый документ или раздели на части.");
 
-  if (["txt", "csv", "tsv", "json"].includes(ext) || /^text\/(plain|csv|tab-separated-values)/i.test(mime)) {
+  if (["txt", "csv", "tsv", "json", "md", "log", "yaml", "yml"].includes(ext) || /^text\/(plain|csv|tab-separated-values|markdown)/i.test(mime)) {
     const text = decodeText(bytes);
     if (!text.trim()) throw new Error("В текстовом файле нет содержимого.");
     return { text: text.slice(0, 45000), format: ext || "text", warnings };
@@ -103,6 +112,35 @@ export async function extractScheduleDocument(
     const workbook = xlsxToText(bytes);
     if (!workbook.text.trim()) throw new Error("В Excel-файле не найдены заполненные ячейки.");
     return { text: workbook.text.slice(0, 45000), format: "Excel", warnings: workbook.warnings };
+  }
+  if (ext === "pptx" || /presentationml\.presentation/i.test(mime)) {
+    const text = pptxToText(bytes);
+    if (!text.trim()) throw new Error("В презентации не найден текст на слайдах.");
+    return { text: text.slice(0, 45000), format: "PowerPoint", warnings: [] };
+  }
+  if (ext === "html" || ext === "htm" || /text\/html/i.test(mime)) {
+    const raw = decodeText(bytes).replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, " ").replace(/<\/(p|div|li|tr|h[1-6])\s*>/gi, "\n").replace(/<[^>]+>/g, " ");
+    const text = decodeXml(raw).replace(/&nbsp;/g, " ").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+    if (!text) throw new Error("В HTML-файле не найден текст.");
+    return { text: text.slice(0, 45000), format: "HTML", warnings: [] };
+  }
+  if (ext === "xml" || ext === "rtf") {
+    let text = decodeText(bytes);
+    if (ext === "rtf") text = text.replace(/\\\\'[0-9a-f]{2}/gi, " ").replace(/\\\\[a-z]+-?\d* ?/gi, " ").replace(/[{}]/g, " ");
+    else text = text.replace(/<[^>]+>/g, " ");
+    text = decodeXml(text).replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+    if (!text) throw new Error("В файле не найден читаемый текст.");
+    return { text: text.slice(0, 45000), format: ext.toUpperCase(), warnings: [] };
+  }
+  if (["jpg", "jpeg", "png", "webp", "tif", "tiff", "bmp"].includes(ext) || /^image\//i.test(mime)) {
+    const base = (Deno.env.get("SUPABASE_URL") || "").replace(/\/+$/, "");
+    const secret = Deno.env.get("MYDAY_WEBHOOK_SECRET") || "";
+    if (!base || !secret) throw new Error("Не настроен внутренний сервис распознавания изображений.");
+    const body = new ArrayBuffer(bytes.byteLength); new Uint8Array(body).set(bytes);
+    const response = await fetch(base + "/functions/v1/myday-pdf-parser", { method: "POST", headers: { "Content-Type": mime || "image/jpeg", "x-myday-internal-secret": secret, "x-myday-filename": encodeURIComponent(filename) }, body });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result?.text) throw new Error(String(result?.error || "Не удалось распознать изображение."));
+    return { text: String(result.text).slice(0, 45000), format: "Изображение/OCR", warnings: Array.isArray(result.warnings) ? result.warnings : [] };
   }
   if (ext === "xls" || ext === "xlsb") throw new Error("Старый формат Excel не поддерживается напрямую. Сохрани файл как XLSX и отправь ещё раз.");
 
@@ -142,5 +180,5 @@ export async function extractScheduleDocument(
   }
 
   if (ext === "doc") throw new Error("Старый формат DOC не поддерживается напрямую. Сохрани документ как DOCX или PDF и отправь ещё раз.");
-  throw new Error("Формат файла не поддерживается. Отправь PDF, DOCX, XLSX, XLSM, CSV, TSV, TXT, JSON или ODT. Старый XLS сначала сохрани как XLSX.");
+  throw new Error("Формат файла не поддерживается. Отправь PDF, DOCX, PPTX, XLSX, XLSM, CSV, TSV, TXT, MD, JSON, HTML, XML, RTF, ODT или изображение. Старый XLS сначала сохрани как XLSX.");
 }
