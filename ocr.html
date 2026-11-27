@@ -271,7 +271,7 @@ async function saveSelected(){
  try{
   const loaded=await postSync({action:"load"});const data=loaded.data||{tasks:[],hw:[],events:[],sched:{odd:{},even:{}}};const revision=Number(loaded.revision||0);
   data.tasks=Array.isArray(data.tasks)?data.tasks:[];data.hw=Array.isArray(data.hw)?data.hw:[];data.events=Array.isArray(data.events)?data.events:[];data.sched=data.sched||{};data.sched.odd=data.sched.odd||{};data.sched.even=data.sched.even||{};
-  let added=0,duplicates=0;
+  let added=0,duplicates=0,conflicts=0;
   for(const input of selected){
    const kind=input.dataset.kind,index=Number(input.dataset.index);
    if(kind==="tasks"){
@@ -299,14 +299,16 @@ async function saveSelected(){
      const day=String(x.weekday);data.sched[target][day]=Array.isArray(data.sched[target][day])?data.sched[target][day]:[];
      const duplicate=data.sched[target][day].some(l=>l.subj===x.subject&&l.s===x.start&&l.e===x.end);
      if(duplicate){duplicates++;continue}
+     const overlap=data.sched[target][day].some(l=>l.s&&l.e&&x.start<l.e&&x.end>l.s);
+     if(overlap){conflicts++;continue}
      data.sched[target][day].push({id:id(),subj:x.subject,s:x.start,e:x.end,room:x.room||"",teacher:x.teacher||""});added++;
     }
    }
   }
-  if(!added){$("saveStatus").textContent=duplicates?"Все выбранные записи уже есть в MYDAY.":"Не выбраны записи с достаточными данными.";$("save").disabled=false;return}
+  if(!added){$("saveStatus").textContent=conflicts?"Ничего не добавлено: обнаружено пересечение по времени ("+conflicts+").":"Не выбраны записи с достаточными данными.";$("save").disabled=false;return}
   const saved=await postSync({action:"save",data,expectedRevision:revision});
   await alignLocalCache(data,Number(saved.revision||revision+1));
-  $("saveStatus").textContent="Сохранено в MYDAY: "+added+". Уже было: "+duplicates+". Открой основное приложение заново, чтобы увидеть обновления.";
+  $("saveStatus").textContent="Сохранено в MYDAY: "+added+". Уже было: "+duplicates+". Пропущено из-за пересечений: "+conflicts+". Открой основное приложение заново, чтобы увидеть обновления.";
   $("saveStatus").className="status success";$("save").textContent="Сохранено";
   try{tg&&tg.showAlert&&tg.showAlert("Сохранено в MYDAY: "+added+" записей. Уже существовало: "+duplicates+".")}catch(_){}
  }catch(err){$("saveStatus").textContent=err&&err.message||"Не удалось сохранить. Данные не удалены, можно повторить попытку.";$("saveStatus").className="status error";$("save").disabled=false}
