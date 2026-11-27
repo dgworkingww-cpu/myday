@@ -334,7 +334,8 @@ async function saveSelected(){
  }catch(err){$("saveStatus").textContent=err&&err.message||"Не удалось сохранить. Данные не удалены, можно повторить попытку.";$("saveStatus").className="status error";$("save").disabled=false}
  finally{$("discard").disabled=false}
 }
-$("back").addEventListener("click",()=>{window.location.href="./index.html"});\n$("file").addEventListener("change",showFile);
+$("back").addEventListener("click",()=>{window.location.href="./index.html"});
+$("file").addEventListener("change",showFile);
 $("extract").addEventListener("click",extractText);
 $("cancel").addEventListener("click",()=>{cancelRequested=true;if(activeWorker){try{activeWorker.terminate()}catch(_){}}status("Останавливаю обработку…")});
 $("prev").addEventListener("click",async()=>{if(page>1){page--;try{await renderPdfPage()}catch(e){status("Не удалось отобразить страницу PDF.","error")}}});
