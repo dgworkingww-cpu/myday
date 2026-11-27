@@ -40,6 +40,51 @@ const server = http.createServer((req,res) => {
     await page.locator('#app .page-title').waitFor({timeout:5000});
     await page.locator('#app .hero-card').waitFor({timeout:5000});
     if(await page.locator('#nav button svg').count()!==5) throw new Error('New SVG navigation icons did not render');
+    await page.locator('#app .page-top').waitFor();
+    const quickCapture=page.locator('#app .page-top button[onclick="capture()"]');
+    if(await quickCapture.count()!==1) throw new Error('Today screen did not expose the quick-capture action: '+JSON.stringify(await page.locator('#app').innerText()));
+    await quickCapture.click();
+    const sheet=page.locator('#ov .sheet');
+    await sheet.waitFor();
+    await page.waitForTimeout(260);
+    const sheetBounds=await sheet.boundingBox();
+    const vh=await page.evaluate(()=>innerHeight);
+    if(!sheetBounds || sheetBounds.x<0 || sheetBounds.x+sheetBounds.width>390 || sheetBounds.y+sheetBounds.height>vh+1) throw new Error('Quick capture sheet exceeds phone viewport: '+JSON.stringify({sheetBounds,vh}));
+    await page.locator('#ov .sheet-close').click();
+    await page.locator('.ov').waitFor({state:'detached'});
+
+    // Arbitrary text is captured as an inbox note by default, without forcing a task category.
+    await page.locator('#app .page-top button[onclick="capture()"]').click();
+    await page.locator('#ov #cq').waitFor();
+    await page.locator('#ov #cq').fill('MYDAY freeform note with a link https://example.com');
+    const captureDefault=await page.locator('#ov #capture-kind').inputValue();
+    if(captureDefault!=='i') throw new Error('Freeform capture must default to the inbox; got '+JSON.stringify(captureDefault));
+    await page.getByRole('button',{name:'Сохранить'}).click();
+    await page.locator('.ov').waitFor({state:'detached'});
+    const inboxText=await page.evaluate(()=>JSON.parse(localStorage.getItem('myday2')).inbox[0].text);
+    if(inboxText!=='MYDAY freeform note with a link https://example.com') throw new Error('Freeform text was not preserved in the inbox');
+
+    // Search must find the note and let the user promote it to a task.
+    await page.evaluate(()=>search());
+    await page.locator('#ov #sq').fill('MYDAY freeform note');
+    await page.getByRole('button',{name:/MYDAY freeform note/}).waitFor();
+    await page.getByRole('button',{name:/MYDAY freeform note/}).click();
+    await page.getByText('MYDAY freeform note with a link https://example.com',{exact:true}).waitFor();
+
+    // Search events by date/time as well as title, and open the event details.
+    await page.evaluate(()=>{
+      const d='2026-12-09';
+      S.events.push({title:'MYDAY searchable event',date:d,time:'14:30',note:'Event detail smoke'});
+      save();
+      search();
+    });
+    await page.locator('#ov #sq').fill('14:30');
+    await page.getByRole('button',{name:/MYDAY searchable event/}).waitFor();
+    await page.getByRole('button',{name:/MYDAY searchable event/}).click();
+    await page.getByText('Event detail smoke',{exact:true}).waitFor();
+    await page.locator('#ov .sheet-close').click();
+    await page.locator('.ov').waitFor({state:'detached'});
+
     await page.waitForTimeout(150);
     const widths=[320,360,375,390,393,414,430],layout=[];
     for (const width of widths) {
@@ -92,17 +137,6 @@ const server = http.createServer((req,res) => {
     if(await page.locator('html').getAttribute('data-theme')!=='dark') throw new Error('Dark theme did not apply');
     await themeButtons.nth(2).click();
 
-    await page.locator('#nav button').nth(0).click();
-    await page.locator('button[aria-label="Быстрая запись"]').click();
-    const sheet=page.locator('#ov .sheet');
-    await sheet.waitFor();
-    await page.waitForTimeout(260);
-    const sheetBounds=await sheet.boundingBox();
-    const vh=await page.evaluate(()=>innerHeight);
-    if(!sheetBounds || sheetBounds.x<0 || sheetBounds.x+sheetBounds.width>390 || sheetBounds.y+sheetBounds.height>vh+1) throw new Error('Quick capture sheet exceeds phone viewport: '+JSON.stringify({sheetBounds,vh}));
-    await page.locator('#ov .sheet-close').click();
-    await page.locator('#ov').waitFor({state:'detached'});
-
     await page.locator('#nav button').nth(2).click();
     await page.getByRole('button',{name:/Новая задача/}).click();
     await sheet.waitFor();
@@ -111,7 +145,7 @@ const server = http.createServer((req,res) => {
     if(!taskBounds || taskBounds.x<0 || taskBounds.x+taskBounds.width>390 || taskBounds.y+taskBounds.height>vh+1) throw new Error('Task editor sheet exceeds phone viewport: '+JSON.stringify({taskBounds,vh}));
     await page.locator('#ov #f1').fill('MYDAY UI smoke task');
     await page.getByRole('button',{name:'Сохранить'}).click();
-    await page.locator('#ov').waitFor({state:'detached'});
+    await page.locator('.ov').waitFor({state:'detached'});
     await page.getByText('MYDAY UI smoke task',{exact:true}).waitFor();
 
     await page.locator('#nav button').nth(1).click();
@@ -120,8 +154,33 @@ const server = http.createServer((req,res) => {
     await page.locator('#ov #f2').fill('09:00');
     await page.locator('#ov #f3').fill('10:00');
     await page.getByRole('button',{name:'Сохранить'}).click();
-    await page.locator('#ov').waitFor({state:'detached'});
+    await page.locator('.ov').waitFor({state:'detached'});
     await page.getByText('MYDAY UI smoke class',{exact:true}).waitFor();
+
+    // Exercise the day -> night -> recovery -> off work rotation.
+    await page.locator('#nav button').nth(4).click();
+    await page.getByRole('button',{name:/Сменный график/}).click();
+    await page.locator('#work-mode').selectOption('rotation');
+    await page.locator('#work-pattern').fill('ДНОВ');
+    await page.locator('#work-anchor').fill('2026-11-28');
+    await page.locator('#work-day-start').fill('08:00');
+    await page.locator('#work-day-end').fill('20:00');
+    await page.locator('#work-night-start').fill('20:00');
+    await page.locator('#work-night-end').fill('08:00');
+    await page.getByRole('button',{name:'Сохранить цикл'}).click();
+    await page.locator('#nav button').nth(4).click();
+    await page.getByRole('button',{name:/Сменный график/}).click();
+    await page.getByRole('button',{name:/Открыть рабочий план/}).click();
+    await page.evaluate(()=>MYDAY_LAB.selectWorkDate('2026-11-28'));
+    await page.locator('.work-shift-card b').filter({hasText:'Дневная смена'}).waitFor();
+    await page.locator('.work-shift-card strong').filter({hasText:'08:00–20:00'}).waitFor();
+    await page.evaluate(()=>MYDAY_LAB.selectWorkDate('2026-11-29'));
+    await page.locator('.work-shift-card b').filter({hasText:'Ночная смена'}).waitFor();
+    await page.locator('.work-shift-card strong').filter({hasText:'20:00–08:00'}).waitFor();
+    await page.evaluate(()=>MYDAY_LAB.selectWorkDate('2026-11-30'));
+    await page.locator('.work-shift-card b').filter({hasText:'Отсыпной'}).waitFor();
+    await page.evaluate(()=>MYDAY_LAB.selectWorkDate('2026-12-01'));
+    await page.locator('.empty-state b').filter({hasText:'Выходной'}).first().waitFor();
 
     if(pageErrors.length) throw new Error('Page errors: '+pageErrors.join(' | '));
     if(consoleErrors.length) throw new Error('Console errors: '+consoleErrors.join(' | '));

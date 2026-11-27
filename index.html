@@ -44,8 +44,21 @@ function excReset(l,k){S.exc=(S.exc||[]).filter(z=>!(z.date==k&&z.lid==l));save(
 function addExtra(k){const i0='x'+id();S.exc=S.exc||[];S.exc.push({date:k,id:i0,type:'add',o:{s:'09:00',e:'10:30',room:'',subj:'Пара'}});save();lessonDay(i0,k)}
 function lessonDay(lid,k){const l=lessons(new Date(k+'T12:00')).find(x=>x.id==lid);if(!l)return;sheet(`<h1>${e(l.subj)}</h1><div class="sub">${fmt(k)} · только этот день, сетка не меняется</div><div class="row" style="margin:10px 0"><div class="grow"><label>Начало</label><input id="x1" type="time" value="${l.s}"></div><div class="grow"><label>Конец</label><input id="x2" type="time" value="${l.e}"></div></div><label>Аудитория</label><input id="x3" value="${e(l.room)}"><label>Предмет</label><input id="x4" value="${e(l.subj)}"><button class="btn" style="width:100%;margin-bottom:8px" onclick="excSave('${lid}','${k}')">Сохранить</button><div class="row"><button class="btn r grow" onclick="excCancel('${lid}','${k}')">Отменить пару</button>${l.chg&&!String(lid).startsWith('x')?`<button class="btn g grow" onclick="excReset('${lid}','${k}')">Как в сетке</button>`:''}</div>`)}
 function excRows(k){const n=new Date(k+'T12:00'),base=(scheduleBucket('study',wk(n))[n.getDay()]||[]);return (S.exc||[]).filter(z=>z.date==k&&z.type=='cancel').map(z=>{const l=base.find(b=>b.id==z.lid)||{subj:'Пара'};return `<div class="card row" style="padding:9px 14px;opacity:.6"><div class="grow tag" style="text-decoration:line-through">${e(l.subj)}</div><button class="btn g" style="padding:4px 12px" onclick="excReset('${z.lid}','${k}')">Вернуть</button></div>`}).join('')+`<button class="btn g" style="width:100%;margin-top:4px" onclick="addExtra('${k}')">+ Пара только на сегодня</button>`}
-function search(){sheet(`<input id="sq" aria-label="Поиск по задачам и заданиям" placeholder="Поиск по задачам и заданиям" oninput="doSearch()"><div id="sr" aria-live="polite"></div>`);setTimeout(()=>$('#sq').focus(),60)}
-function doSearch(){const q=$('#sq').value.trim().toLowerCase();if(!q){$('#sr').innerHTML='';return}const R=[...S.tasks.map(t=>({...t,k:'t'})),...S.hw.map(h=>({...h,k:'h',title:subj(h.subj)+': '+h.title}))].filter(x=>(x.title+' '+(x.desc||'')).toLowerCase().includes(q)).slice(0,30);$('#sr').innerHTML=R.length?R.map(x=>`<div class="card" onclick="detail('${x.k}','${x.id}')"><div class="${x.status==2?'t done':''}">${e(x.title)}</div><div class="tag">${x.due?fmt(x.due)+' · ':''}${ST[x.status]}</div></div>`).join(''):'<div class="sub">Ничего не найдено</div>'}
+function search(){sheet(`<h1>Поиск по MYDAY</h1><input id="sq" type="search" autocomplete="off" enterkeyhint="search" aria-label="Поиск по всему MYDAY" placeholder="Задачи, пары, заметки, события…" oninput="doSearch()"><div class="tag">Ищет по задачам, учебным заданиям, заметкам и событиям</div><div id="sr" aria-live="polite" aria-relevant="additions text"></div>`);setTimeout(()=>$('#sq')?.focus(),60)}
+function doSearch(){
+ const q=$('#sq').value.trim().toLocaleLowerCase('ru');if(!q){$('#sr').innerHTML='';return}
+ const R=[
+  ...S.tasks.map(x=>({kind:'Задача',title:x.title||'',desc:x.desc||'',date:x.due||'',status:x.status,k:'t',id:x.id})),
+  ...S.hw.map(x=>({kind:'Учёба',title:subj(x.subj)+': '+(x.title||''),desc:x.desc||'',date:x.due||'',status:x.status,k:'h',id:x.id})),
+  ...(S.inbox||[]).map((x,i)=>({kind:'Входящие',title:x.text||'',desc:'Заметка · '+(x.d||'без даты'),date:x.d||'',inboxIndex:i})),
+  ...(S.events||[]).map((x,i)=>({kind:'Событие',title:x.title||x.name||'',desc:x.note||'',date:x.date||'',time:x.time||'',eventIndex:i}))
+ ].filter(x=>(x.title+' '+x.desc+' '+x.kind+' '+x.date+' '+x.time).toLocaleLowerCase('ru').includes(q)).slice(0,40);
+ $('#sr').innerHTML=R.length?'<div class="tag">'+R.length+' результатов'+(R.length===40?' · показаны первые 40':'')+'</div>'+R.map(x=>x.inboxIndex!==undefined?`<button type="button" class="card search-result" onclick="toTask(${x.inboxIndex})"><span class="pill">${e(x.kind)}</span><b>${e(x.title)}</b><span class="tag">${e(x.desc)}</span></button>`:x.k?`<button type="button" class="card search-result" onclick="detail('${x.k}','${x.id}')"><span class="pill">${e(x.kind)}</span><b class="${x.status==2?'t done':''}">${e(x.title)}</b><span class="tag">${x.date?fmt(x.date)+' · ':''}${e(x.desc||ST[x.status]||'')}</span></button>`:x.eventIndex!==undefined?`<button type="button" class="card search-result" onclick="openSearchEvent(${x.eventIndex})"><span class="pill">${e(x.kind)}</span><b>${e(x.title)}</b><span class="tag">${x.date?fmt(x.date)+' · ':''}${e(x.time)} ${e(x.desc)}</span></button>`:`<div class="card search-result"><span class="pill">${e(x.kind)}</span><b>${e(x.title)}</b><span class="tag">${x.date?fmt(x.date)+' · ':''}${e(x.desc)}</span></div>`).join(''):'<div class="empty-state"><b>Ничего не найдено</b><span>Попробуй другое слово или добавь запись во «Входящие».</span></div>'
+}
+function openSearchEvent(i){
+ const x=(S.events||[])[i];if(!x)return;
+ sheet(`<h1>${e(x.title||x.name||'Событие')}</h1><div class="tag">${x.date?fmt(x.date):'Дата не указана'} ${e(x.time||'')}</div>${x.note?`<p style="white-space:pre-wrap;margin-top:12px">${e(x.note)}</p>`:''}<div class="row"><button class="btn g" onclick="close_()">Закрыть</button><button class="btn danger" onclick="evDel(${i});close_()">Удалить</button></div>`);
+}
 function calView(){const b=new Date();b.setDate(1);b.setMonth(b.getMonth()+cm);const y=b.getFullYear(),m=b.getMonth(),off=(b.getDay()+6)%7,dim=new Date(y,m+1,0).getDate(),all=[...S.tasks,...S.hw].filter(x=>x.due&&x.status!=2),cnt={};all.forEach(x=>cnt[x.due]=(cnt[x.due]||0)+1);(S.events||[]).forEach(z=>cnt[z.date]=(cnt[z.date]||0)+1);let c='';for(let i=0;i<off;i++)c+='<div></div>';for(let d=1;d<=dim;d++){const k=y+'-'+pad(m+1)+'-'+pad(d),n=cnt[k]||0,s=k==cdsel;c+=`<div onclick="cdsel='${k}';render()" style="text-align:center;padding:8px 0;border-radius:12px;${k==today()?'border:1px solid var(--ac);':''}${s?'background:var(--ac);color:#fff;':''}">${d}<div style="height:8px;font-size:8px;color:${s?'#fff':'var(--ac)'}">${'●'.repeat(Math.min(n,3))}</div></div>`}const sel=cdsel?all.filter(x=>x.due==cdsel):[];
  return `<header><button class="btn g" onclick="st=null;render()">‹ Назад</button></header><div class="row" style="justify-content:space-between"><button class="btn g" onclick="cm--;render()">‹</button><b>${b.toLocaleDateString('ru-RU',{month:'long',year:'numeric'})}</b><button class="btn g" onclick="cm++;render()">›</button></div><div class="card" style="margin-top:10px"><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(x=>`<div class="tag" style="text-align:center">${x}</div>`).join('')}${c}</div></div>`+(cdsel?`<h2>${fmt(cdsel)}</h2>`+(sel.length?sel.map(x=>row(x.subj?{...x,k:'h',title:subj(x.subj)+': '+x.title}:x)).join(''):'<div class="sub">Дедлайнов нет</div>')+evRows(cdsel):'')+`<button class="btn g" style="width:100%;margin-top:8px" onclick="evForm()">+ Зачёт / экзамен</button>`}
 function weekView(){const all=allOpen();return `<header><button class="btn g" onclick="st=null;render()">‹ Назад</button></header><h1>План недели</h1>`+[...Array(7)].map((_,i)=>addDays(today(),i)).map(k=>{const d=new Date(k+'T12:00'),L=lessons(d),T=all.filter(x=>x.due==k),ld=Math.min(100,L.length*14+T.length*18);return `<div class="card"><div class="row"><b class="grow">${DAYS[d.getDay()]}, ${fmt(k)}</b><span class="tag">${L.length} пар · ${T.length} дел</span></div><div class="bar" style="margin:8px 0"><i style="width:${ld}%;${ld>80?'background:var(--er)':''}"></i></div>${T.slice(0,3).map(x=>`<div class="tag">• ${e(x.title)}</div>`).join('')}</div>`}).join('')}
@@ -66,11 +79,11 @@ const AC=[['#315d49','#244b39'],['#466c7d','#31546b'],['#b56b52','#98513d'],['#a
 let tt,sd0=null;
 function toast(m,undo){const o=$('#toast');if(o)o.remove();clearTimeout(tt);const d=document.createElement('div');d.id='toast';d.className='toast';d.setAttribute('role','status');d.setAttribute('aria-live','polite');d.setAttribute('aria-atomic','true');d.innerHTML=`<span>${e(m)}</span>${undo?'<button class="toast-undo" type="button">Отменить</button>':''}`;if(undo)d.querySelector('button').onclick=()=>{undo();d.remove()};document.body.appendChild(d);tt=setTimeout(()=>d.remove(),4500)}
 function restoreBak(){const b=localStorage.getItem(localStoreKey+':session-bak')||localStorage.getItem('myday2_bak');if(!b)return alert('Автокопии пока нет');if(!confirm('Вернуть данные на момент начала последнего сеанса?'))return;try{S=JSON.parse(b);save();render()}catch(_){alert('Копия повреждена')}}
-const evRows=k=>(S.events||[]).map((z,i)=>({z,i})).filter(o=>o.z.date==k).map(o=>`<div class="card row"><span class="pill" style="background:var(--ac);color:#fff">${e(o.z.type)}</span><div class="grow">${e(o.z.title)}</div><button class="chk" style="border:0;color:var(--er)" onclick="evDel(${o.i})">×</button></div>`).join('');
-function evForm(){sheet(`<h1>Зачёт / экзамен</h1><label>Название</label><input id="v1" list="sl2" placeholder="Предмет"><datalist id="sl2">${S.subjects.map(s=>`<option value="${e(s.name)}">`).join('')}</datalist><label>Тип</label><select id="v2"><option>Экзамен</option><option>Зачёт</option><option>Консультация</option><option>Сдача работы</option></select><label>Дата</label><input id="v3" type="date" value="${cdsel||today()}"><button class="btn" style="width:100%" onclick="evSave()">Сохранить</button>`)}
-function evSave(){const t=$('#v1').value.trim(),d=$('#v3').value;if(!t){fieldError($('#v1'),'Введите название события');return}if(!d){fieldError($('#v3'),'Укажите дату события');return}(S.events=S.events||[]).push({id:id(),title:t,type:$('#v2').value,date:d});save();close_();render()}
+const evRows=k=>(S.events||[]).map((z,i)=>({z,i})).filter(o=>o.z.date==k).map(o=>`<div class="card row"><span class="pill" style="background:var(--ac);color:#fff">${e(o.z.type)}</span><div class="grow">${e(o.z.title)}${o.z.time?`<div class="tag">${e(o.z.time)}${o.z.endTime?'–'+e(o.z.endTime):''}</div>`:''}</div><button class="chk" style="border:0;color:var(--er)" onclick="evDel(${o.i})">×</button></div>`).join('');
+function evForm(){sheet(`<h1>Событие календаря</h1><label>Название</label><input id="v1" list="sl2" placeholder="Предмет или событие"><datalist id="sl2">${S.subjects.map(s=>`<option value="${e(s.name)}">`).join('')}</datalist><label>Тип</label><select id="v2"><option>Событие</option><option>Экзамен</option><option>Зачёт</option><option>Консультация</option><option>Сдача работы</option></select><label>Дата</label><input id="v3" type="date" value="${cdsel||today()}"><label>Время (необязательно)</label><input id="v4" type="time"><button class="btn" style="width:100%" onclick="evSave()">Сохранить</button>`)}
+function evSave(){const t=$('#v1').value.trim(),d=$('#v3').value,tm=$('#v4').value;if(!t){fieldError($('#v1'),'Введите название события');return}if(!d){fieldError($('#v3'),'Укажите дату события');return}(S.events=S.events||[]).push({id:id(),title:t,type:$('#v2').value,date:d,time:tm||''});save();close_();render()}
 function evDel(i){if(!confirm('Удалить событие?'))return;S.events.splice(i,1);save();render()}
-function evSoon(){const t=today(),a=(S.events||[]).filter(z=>z.date>=t&&z.date<=addDays(t,21)).sort((x,y)=>x.date.localeCompare(y.date));return a.length?`<h2>Скоро</h2>`+a.map(z=>{const n=Math.round((new Date(z.date+'T12:00')-new Date(t+'T12:00'))/864e5);return `<div class="card row"><span class="pill" style="background:var(--ac);color:#fff">${e(z.type)}</span><div class="grow">${e(z.title)}</div><span class="tag">${n==0?'сегодня':n==1?'завтра':'через '+n+' дн.'}</span></div>`}).join(''):''}
+function evSoon(){const t=today(),a=(S.events||[]).filter(z=>z.date>=t&&z.date<=addDays(t,21)).sort((x,y)=>x.date.localeCompare(y.date)||(x.time||'').localeCompare(y.time||''));return a.length?`<h2>Скоро</h2>`+a.map(z=>{const n=Math.round((new Date(z.date+'T12:00')-new Date(t+'T12:00'))/864e5);return `<div class="card row"><span class="pill" style="background:var(--ac);color:#fff">${e(z.type)}</span><div class="grow">${e(z.title)}${z.time?`<div class="tag">${e(z.time)}${z.endTime?'–'+e(z.endTime):''}</div>`:''}</div><span class="tag">${n==0?'сегодня':n==1?'завтра':'через '+n+' дн.'}</span></div>`}).join(''):''}
 document.addEventListener('touchstart',ev=>{const s=ev.target.closest&&ev.target.closest('.sheet');if(!s||ev.target.closest('input,textarea,select,button'))return;const t=ev.touches[0];if(t.clientY-s.getBoundingClientRect().top<56&&s.scrollTop==0)sd0={s,y:t.clientY,d:0}},{passive:true});
 document.addEventListener('touchmove',ev=>{if(!sd0)return;const d=ev.touches[0].clientY-sd0.y;if(d>0){sd0.d=d;sd0.s.style.transition='none';sd0.s.style.transform=`translateY(${d}px)`}},{passive:true});
 document.addEventListener('touchend',()=>{if(!sd0)return;const {s,d}=sd0;sd0=null;if(d>110)close_();else{s.style.transition='transform .2s';s.style.transform=''}});
@@ -93,8 +106,11 @@ const fmt=s=>s?new Date(s+'T12:00').toLocaleDateString('ru-RU',{day:'numeric',mo
 function isoWeek(d){d=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const n=d.getUTCDay()||7;d.setUTCDate(d.getUTCDate()+4-n);const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));return Math.ceil(((d-y)/864e5+1)/7)}
 const subjNames=['Основы взаимозаменяемости и технические изменения','Сельскохозяйственные машины','Тракторы и автомобили','Детали машин, основы конструирования и ПТМ','Теоретические основы подготовки трактористов-машинистов','Теплотехника','Повышение надежности сельскохозяйственных машин','Техническое оборудование для переработки сельскохозяйственной продукции','Электротехника и электроника','Машины и оборудование в животноводстве'];
 function seed(){
- return {v:2,settings:{theme:'auto',morning:'07:30',shift:0,notif:true,hwDelay:60},
- sched:{odd:{},even:{},work:{}},tasks:[],inbox:[],fired:{},done:[],
+ return {v:2,settings:{theme:'auto',morning:'07:30',shift:0,notif:true,hwDelay:60,notifications:{study:true,work:true,personal:true}},
+ sched:{odd:{},even:{},work:{},fixed:{},cycle:{},dates:{}},
+ scheduleConfig:{studyMode:'alternating',cycleWeeks:2,cycleAnchor:'',selectedDate:''},
+ workConfig:{mode:'weekly',pattern:['work','work','off','off'],anchorDate:'',start:'09:00',end:'18:00',title:'Рабочая смена',exceptions:{}},
+ habits:[],tasks:[],inbox:[],fired:{},done:[],
  uni:{name:'',url:'',login:'',notes:'',links:'',teachers:''},subjects:[],hw:[],exc:[],events:[]};
 }
 function normalizeProfile(data){
@@ -102,7 +118,10 @@ function normalizeProfile(data){
  return {...base,...d,
   settings:{...base.settings,...(d.settings&&typeof d.settings==='object'?d.settings:{})},
   uni:{...base.uni,...(d.uni&&typeof d.uni==='object'?d.uni:{})},
-  sched:{odd:d.sched&&d.sched.odd&&typeof d.sched.odd==='object'?d.sched.odd:{},even:d.sched&&d.sched.even&&typeof d.sched.even==='object'?d.sched.even:{},work:d.sched&&d.sched.work&&typeof d.sched.work==='object'?d.sched.work:{}},
+  sched:{odd:d.sched&&d.sched.odd&&typeof d.sched.odd==='object'?d.sched.odd:{},even:d.sched&&d.sched.even&&typeof d.sched.even==='object'?d.sched.even:{},work:d.sched&&d.sched.work&&typeof d.sched.work==='object'?d.sched.work:{},fixed:d.sched&&d.sched.fixed&&typeof d.sched.fixed==='object'?d.sched.fixed:{},cycle:d.sched&&d.sched.cycle&&typeof d.sched.cycle==='object'?d.sched.cycle:{},dates:d.sched&&d.sched.dates&&typeof d.sched.dates==='object'?d.sched.dates:{}},
+  scheduleConfig:{...base.scheduleConfig,...(d.scheduleConfig&&typeof d.scheduleConfig==='object'?d.scheduleConfig:{})},
+  workConfig:{...base.workConfig,...(d.workConfig&&typeof d.workConfig==='object'?d.workConfig:{})},
+  habits:Array.isArray(d.habits)?d.habits:[],
   tasks:Array.isArray(d.tasks)?d.tasks.map(t=>({...t,space:t.space||(t.cat==='Работа и проекты'?'work':t.cat==='Учёба'?'study':'personal')})):[],inbox:Array.isArray(d.inbox)?d.inbox:[],
   fired:d.fired&&typeof d.fired==='object'&&!Array.isArray(d.fired)?d.fired:{},
   done:Array.isArray(d.done)?d.done:[],subjects:Array.isArray(d.subjects)?d.subjects:[],
@@ -284,8 +303,29 @@ const weekStartKey=(d=new Date())=>{const x=new Date(d);x.setHours(12,0,0,0);x.s
 const wk=(d=new Date())=>{const anchor=S.settings.weekAnchor||weekStartKey(new Date()),base=S.settings.weekAnchorType||(((isoWeek(new Date())+(S.settings.shift||0))%2)==1?'odd':'even');const a=anchor.split('-').map(Number),b=weekStartKey(d).split('-').map(Number),weeks=Math.floor((Date.UTC(b[0],b[1]-1,b[2])-Date.UTC(a[0],a[1]-1,a[2]))/604800000);return ((base=='odd'?0:1)+weeks%2+2)%2==0?'odd':'even'};
 function setWeekType(type){if(type!='odd'&&type!='even')return;S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=type;S.settings.shift=0;save();render()}
 const wkName=t=>t=='odd'?'нечётная (нижняя)':'чётная (верхняя)';
-const scheduleBucket=(space='study',week=wk())=>{if(space==='work'){S.sched.work=S.sched.work||{};return S.sched.work}return S.sched[week]||(S.sched[week]={})};
-const lessons=(d=new Date(),t=wk(d))=>{const k=ds(d),X=S.exc||[];let L=((scheduleBucket('study',t)[d.getDay()]||[])).map(l=>{const z=X.find(z=>z.date==k&&z.lid==l.id);return z?(z.type=='cancel'?null:{...l,...z.o,chg:1}):l}).filter(Boolean);L=L.concat(X.filter(z=>z.date==k&&z.type=='add').map(z=>({id:z.id,...z.o,chg:1})));return L.sort((a,b)=>a.s.localeCompare(b.s))};
+function cycleIndexForDate(d){const cfg=S.scheduleConfig||{},anchor=cfg.cycleAnchor||S.settings.weekAnchor||weekStartKey(d),a=new Date(anchor+'T12:00:00'),b=new Date(weekStartKey(d)+'T12:00:00'),weeks=Math.floor((b-a)/604800000),n=Math.max(2,Math.min(4,Number(cfg.cycleWeeks)||2));return ((weeks%n)+n)%n}
+function scheduleBucket(space='study',week=wk()){
+ if(space==='work'){S.sched.work=S.sched.work||{};return S.sched.work}
+ S.sched.fixed=S.sched.fixed||{};S.sched.cycle=S.sched.cycle||{};S.sched.dates=S.sched.dates||{};
+ if(typeof week==='string'&&week.startsWith('date:'))return S.sched.dates[week.slice(5)]||(S.sched.dates[week.slice(5)]={});
+ if(week==='fixed')return S.sched.fixed;
+ if(typeof week==='string'&&week.startsWith('cycle:')){const i=Number(week.slice(6))||0;return S.sched.cycle[i]||(S.sched.cycle[i]={})}
+ const mode=(S.scheduleConfig&&S.scheduleConfig.studyMode)||'alternating';
+ if(mode==='fixed')return S.sched.fixed;
+ if(mode==='cycle'){const i=cycleIndexForDate(new Date((S.scheduleConfig.selectedDate||today())+'T12:00:00'));return S.sched.cycle[i]||(S.sched.cycle[i]={})}
+ if(mode==='dates'){const k=S.scheduleConfig.selectedDate||today();return S.sched.dates[k]||(S.sched.dates[k]={})}
+ const key=(week==='odd'||week==='even')?week:wk();return S.sched[key]||(S.sched[key]={});
+}
+function lessons(d=new Date(),t=wk(d)){
+ const k=ds(d),day=d.getDay(),X=S.exc||[],mode=(S.scheduleConfig&&S.scheduleConfig.studyMode)||'alternating';let base=[];
+ if(mode==='fixed')base=(S.sched.fixed&&S.sched.fixed[day]||[]).slice();
+ else if(mode==='cycle'){const i=cycleIndexForDate(d);base=((S.sched.cycle||{})[i]||{})[day]||[];base=base.slice()}
+ else if(mode==='dates'){const specific=(S.sched.dates||{})[k];base=(specific&&specific[day]||[]).slice()}
+ else if(mode==='hybrid'){base=[...((S.sched.fixed||{})[day]||[]),...((S.sched[t]||{})[day]||[])].map(x=>({...x}))}
+ else base=((S.sched[t]||{})[day]||[]).slice();
+ let L=base.map(l=>{const z=X.find(z=>z.date==k&&z.lid==l.id);return z?(z.type==='cancel'?null:{...l,...z.o,chg:1}):l}).filter(Boolean);
+ L=L.concat(X.filter(z=>z.date==k&&z.type==='add').map(z=>({id:z.id,...z.o,chg:1})));return L.sort((a,b)=>a.s.localeCompare(b.s));
+}
 const subj=i=>(S.subjects.find(s=>s.id==i)||{}).name||'—';
 const ruCount=(n,one,few,many)=>`${n} ${n%100>=11&&n%100<=14?many:n%10==1?one:n%10>=2&&n%10<=4?few:many}`;
 let tab='today',tf={cat:'',show:'open'},taskSpace='study',schedSpace='study',sd=new Date().getDay()||1,st=null,openSubj=null,studyFilter='open',moreOpen=new Set(['appearance']);
@@ -492,7 +532,7 @@ function normalizeBackup(d){
  if(d.sched!==undefined&&(!d.sched||typeof d.sched!='object'||!d.sched.odd||!d.sched.even||typeof d.sched.odd!='object'||typeof d.sched.even!='object'))throw 0;
  const time=/^([01]\d|2[0-3]):[0-5]\d$/;
  for(const week of ['odd','even'])for(const [day,lessons] of Object.entries(d.sched?.[week]||{})){if(!/^[1-6]$/.test(day)||!Array.isArray(lessons))throw 0;for(const l of lessons)if(!l||typeof l.id!='string'||!/^[A-Za-z0-9]{1,40}$/.test(l.id)||typeof l.subj!='string'||!time.test(l.s)||!time.test(l.e)||l.e<=l.s)throw 0}
- const base=seed(),out={...base,...d,settings:{...base.settings,...d.settings},uni:{...base.uni,...(d.uni||{})},sched:{odd:d.sched?.odd||{},even:d.sched?.even||{}},subjects:d.subjects||base.subjects,inbox:Array.isArray(d.inbox)?d.inbox:[],fired:d.fired&&typeof d.fired=='object'?d.fired:{},done:Array.isArray(d.done)?d.done:[],exc:Array.isArray(d.exc)?d.exc:[],focus:Array.isArray(d.focus)?d.focus:[]};
+ const base=seed(),out={...base,...d,settings:{...base.settings,...d.settings},uni:{...base.uni,...(d.uni||{})},sched:{odd:d.sched?.odd||{},even:d.sched?.even||{},work:d.sched?.work||{},fixed:d.sched?.fixed||{},cycle:d.sched?.cycle||{},dates:d.sched?.dates||{}},scheduleConfig:{...base.scheduleConfig,...(d.scheduleConfig||{})},workConfig:{...base.workConfig,...(d.workConfig||{})},habits:Array.isArray(d.habits)?d.habits:[],subjects:d.subjects||base.subjects,inbox:Array.isArray(d.inbox)?d.inbox:[],fired:d.fired&&typeof d.fired=='object'?d.fired:{},done:Array.isArray(d.done)?d.done:[],exc:Array.isArray(d.exc)?d.exc:[],focus:Array.isArray(d.focus)?d.focus:[]};
  const validDate=v=>{if(typeof v!='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;const z=new Date(v+'T12:00:00');return !Number.isNaN(z.getTime())&&z.getFullYear()+'-'+String(z.getMonth()+1).padStart(2,'0')+'-'+String(z.getDate()).padStart(2,'0')===v};
  const safeId=x=>{if(typeof x.id!='string'||!/^[A-Za-z0-9]{1,40}$/.test(x.id))throw 0;if(typeof x.desc!='string')x.desc='';if(!validDate(x.due))x.due='';if(!validDate(x.doneAt))x.doneAt='';if(!Number.isInteger(x.status)||x.status<0||x.status>2)x.status=0;if(!Number.isFinite(x.mins)||x.mins<0)x.mins=0;if(!Array.isArray(x.subs))x.subs=[];x.subs=x.subs.filter(s=>s&&typeof s.t=='string').map(s=>({t:s.t.slice(0,500),d:!!s.d}));if(!Array.isArray(x.photos))x.photos=[];if(!Array.isArray(x.files))x.files=[];if(x.photos.some(p=>typeof p!='string'||!/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=\r\n]+$/i.test(p)))throw 0;if(x.files.some(f=>!f||typeof f.name!='string'||f.name.length>120||typeof f.data!='string'||!/^data:(image\/(jpeg|png|webp|gif)|application\/(pdf|msword|vnd\.openxmlformats-officedocument\.wordprocessingml\.document|vnd\.oasis\.opendocument\.text|octet-stream)|text\/plain);base64,[A-Za-z0-9+/=\r\n]+$/i.test(f.data)))throw 0};
  for(const x of out.tasks){safeId(x);if(!CATS.includes(x.cat))x.cat='Другое';if(!Number.isInteger(x.prio)||x.prio<0||x.prio>2)x.prio=1;if(!['','d','w','m'].includes(x.repeat))x.repeat=''}
@@ -522,34 +562,59 @@ function sheet(h){const q=$('#ov'),replacing=!!q;if(q)q.remove();else{window._di
 function close_(){const o=$('#ov');if(o){o.id='';o.classList.add('bye');setTimeout(()=>{o.remove();document.body.style.overflow=window._dialogOverflow||'';const t=window._dialogTrigger;window._dialogTrigger=null;if(t&&t.isConnected)t.focus({preventScroll:true})},230)}}
 function capture(){
  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
- sheet(`<h1>Быстрая запись</h1><textarea id="cq" oninput="capHint()" placeholder="Мысль, задача, идея…"></textarea><div id="chint" style="min-height:26px;margin-bottom:6px"></div><div id="tpl" style="margin-bottom:6px">${tplHtml()}</div>
- <label>Срок (необязательно)</label><input type="date" id="cd">${dch('cd')}<label>Сохранить как</label><select id="ck"><option value="t">Задача</option><option value="i">Идея / заметка</option></select>
+ sheet(`<h1>Быстрая запись</h1><textarea id="cq" oninput="capHint()" placeholder="Напиши что угодно: мысль, просьбу, идею, ссылку, черновик…"></textarea><div id="chint" style="min-height:26px;margin-bottom:6px"></div><div id="tpl" style="margin-bottom:6px">${tplHtml()}</div>
+ <label>Срок (необязательно)</label><input type="date" id="cd">${dch('cd')}<label>Сохранить как</label><select id="capture-kind"><option value="i" selected>Входящие · любой текст</option><option value="t">Задача</option></select>
  <div class="row">${SR?'<button class="btn g" onclick="voice()">🎤 Голос</button>':''}<button class="btn g" onclick="tplAdd()">★</button><button class="btn grow" onclick="capSave()">Сохранить</button></div>
  ${SR?'':'<div class="tag">Голосовой ввод в браузере недоступен — используйте значок микрофона на клавиатуре iPhone.</div>'}
  <div class="tag">Если в тексте несколько дел через «и» / «;», можно разбить на отдельные задачи. Срок ставится, только если вы выбрали дату или написали «сегодня», «завтра», «послезавтра».</div>
- <label><input type="checkbox" id="cs" onchange="capHint()" style="width:auto"> Разбить на отдельные задачи</label>`)}
+ <label><input type="checkbox" id="cs" onchange="capHint()" style="width:auto"> Разбить на отдельные задачи</label>`);const kind=$('#capture-kind');if(kind)kind.value='i'}
 function voice(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition,r=new SR();r.lang='ru-RU';r.onresult=ev=>{$('#cq').value+=(ev.results[0][0].transcript)+' '};r.onerror=()=>alert('Не удалось распознать речь. Проверьте доступ к микрофону.');try{r.start()}catch(_){}}
-function capSave(){const v=$('#cq').value.trim();if(!v)return;const d=$('#cd').value;
- if($('#ck').value=='i')S.inbox.unshift({text:v,d:today()});else{const parts=$('#cs').checked?v.split(/;|\s+и\s+|\n/).map(s=>s.trim()).filter(Boolean):[v];parts.forEach(p=>S.tasks.push(mk({title:p,due:d||guess(p)||guess(v),cat:catGuess(p)||catGuess(v)||'Другое'})))}
- save();close_();render()}
+function capSave(){const v=$('#cq').value.trim();if(!v){toast('Напиши хотя бы пару слов, и я сохраню запись.');$('#cq').focus();return}const d=$('#cd').value;
+ const target=$('#capture-kind').value;
+ if(target==='i')S.inbox.unshift({text:v,d:today()});
+ else{const parts=$('#cs').checked?v.split(/;|\s+и\s+|\n/).map(s=>s.trim()).filter(Boolean):[v];parts.forEach(p=>S.tasks.push(mk({title:p,due:d||guess(p)||guess(v),cat:catGuess(p)||catGuess(v)||'Другое'})))}
+ if(!save()){toast('Не удалось сохранить. Запись осталась в форме, попробуй освободить память или экспортировать данные.');return}
+ close_();render()}
 
 function notify(title,body){try{if(!('Notification' in window)||Notification.permission!='granted')return false;const opts={body,tag:'myday-'+title,renotify:false};if('serviceWorker' in navigator&&navigator.serviceWorker.controller){navigator.serviceWorker.ready.then(reg=>reg.showNotification(title,opts)).catch(()=>{try{new Notification(title,opts)}catch(_){}})}else new Notification(title,opts);return true}catch(_){return false}}
 function tick(){
  const n=new Date(),t=today(),hm=pad(n.getHours())+':'+pad(n.getMinutes()),F=S.fired;
+ const N={study:true,work:true,personal:true,...(S.settings.notifications||{})};
+ const domain=x=>x.k==='h'||x.space==='study'?'study':x.space==='work'?'work':'personal';
+ const enabled=x=>N[domain(x)]!==false;
  Object.keys(F).forEach(k=>{if(!k.startsWith(t)&&!k.startsWith('x'))delete F[k]});
- const L=lessons(n);
- if(hm>=S.settings.morning&&!F[t+'m']){F[t+'m']=1;save();if(L.length){const txt='Сегодня '+DAYS[n.getDay()].toLowerCase()+', '+wkName(wk()).split(' ')[0]+' неделя.\n'+L.map(l=>l.s+' — '+l.subj).join('\n')+(allOpen().some(x=>x.due&&x.due<=t)?'\nЗадач на сегодня и просроченных: '+allOpen().filter(x=>x.due&&x.due<=t).length:'');if(!notify('Доброе утро!',txt))sheet(`<h1>Доброе утро!</h1><p style="white-space:pre-line">${e(txt)}</p><button class="btn" onclick="close_()">Ок</button>`)}}
- if(L.length){const last=L[L.length-1].e,[h,m]=last.split(':').map(Number),at=new Date(n);at.setHours(h,m+S.settings.hwDelay,0,0);
-  if(n>=at&&!F[t+'h']&&(!F[t+'s']||n.getTime()>F[t+'s'])&&!$('#ov')){hwPrompt()}}
- if(hm>='18:00'&&!F[t+'r']){F[t+'r']=1;const a=allOpen().filter(x=>x.due==addDays(t,1));if(a.length){save();rem('Завтра срок',a)}}
- if(hm>='15:00'&&!F[t+'q']){F[t+'q']=1;const a=allOpen().filter(x=>x.due==t);if(a.length){save();rem('Сегодня срок',a)}}
- const lv=$('#live');if(tab=='today'&&lv&&!$('#ov')){const h=liveHtml();if(lv.innerHTML!==h)lv.innerHTML=h}}
+ const L=N.study!==false?lessons(n):[];
+ if(hm>=S.settings.morning&&!F[t+'m']){
+  F[t+'m']=1;save();
+  const due=allOpen().filter(x=>x.due&&x.due<=t&&enabled(x));
+  const shift=N.work!==false&&window.MYDAY_LAB&&window.MYDAY_LAB.workShiftForDate?window.MYDAY_LAB.workShiftForDate(t):null;
+  if(L.length||due.length||shift){
+   const parts=[];
+   if(L.length)parts.push((S.scheduleConfig&&S.scheduleConfig.studyMode==='alternating'?wkName(wk()).split(' ')[0]+' неделя. ':'')+L.map(l=>l.s+' — '+l.subj).join('\n'));
+   if(shift)parts.push(shift._shiftKind==='recovery'?'Работа: отсыпной день':'Работа: '+shift.s+'–'+shift.e+' · '+shift.subj);
+   if(due.length)parts.push('Задачи: '+due.map(x=>x.title).slice(0,5).join(', '));
+   const txt='Сегодня '+DAYS[n.getDay()].toLowerCase()+'.\n'+parts.join('\n\n');
+   if(!notify('Доброе утро!',txt))sheet('<h1>Доброе утро!</h1><p style="white-space:pre-line">'+e(txt)+'</p><button class="btn" onclick="close_()">Ок</button>');
+  }
+ }
+ if(N.study!==false&&L.length){
+  const last=L[L.length-1].e,[h,m]=last.split(':').map(Number),at=new Date(n);at.setHours(h,m+S.settings.hwDelay,0,0);
+  if(n>=at&&!F[t+'h']&&(!F[t+'s']||n.getTime()>F[t+'s'])&&!$('#ov'))hwPrompt();
+ }
+ if(hm>='18:00'&&!F[t+'r']){
+  F[t+'r']=1;const a=allOpen().filter(x=>x.due==addDays(t,1)&&enabled(x));if(a.length){save();rem('Завтра срок',a)}
+ }
+ if(hm>='15:00'&&!F[t+'q']){
+  F[t+'q']=1;const a=allOpen().filter(x=>x.due==t&&enabled(x));if(a.length){save();rem('Сегодня срок',a)}
+ }
+ const lv=$('#live');if(tab=='today'&&lv&&!$('#ov')){const h=liveHtml();if(lv.innerHTML!==h)lv.innerHTML=h}
+}
 function hwPrompt(){S.fired[today()+'s']=Date.now()+18e5;save();notify('Занятия закончились','Какие задания тебе задали?');
  sheet(`<h1>Занятия на сегодня закончились</h1><div class="sub">Какие задания тебе задали?</div><label>Предмет</label><select id="hp">${S.subjects.filter(s=>!s.closed).map(s=>`<option value="${s.id}">${e(s.name)}</option>`).join('')}</select>
  <label>Задание</label><textarea id="ht"></textarea><label>Срок</label><input type="date" id="hd"><button class="btn" style="width:100%" onclick="hpSave()">Записать</button>
  <div class="row" style="margin-top:8px"><button class="btn g grow" onclick="S.fired[today()+'h']=1;save();close_()">Заданий нет</button><button class="btn g grow" onclick="S.fired[today()+'s']=Date.now()+18e5;save();close_()">Позже (30 мин)</button></div>`)}
 function hpSave(){const t=$('#ht').value.trim();if(!t)return fieldError($('#ht'),'Опишите задание');S.hw.push({id:id(),subj:$('#hp').value,title:t,desc:'',due:$('#hd').value,status:0,subs:[],photos:[]});S.fired[today()+'h']=1;save();close_();render()}
-function migrate(){S=normalizeProfile(S);if(!S.settings.weekAnchor){S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=((isoWeek(new Date())+(S.settings.shift||0))%2==1?'odd':'even')}S.sched=S.sched||{odd:{},even:{},work:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};S.sched.work=S.sched.work||{};S.subjects=S.subjects||[];S.hw=S.hw||[];S.exc=S.exc||[];S.events=S.events||[];save()}
+function migrate(){S=normalizeProfile(S);if(!S.settings.weekAnchor){S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=((isoWeek(new Date())+(S.settings.shift||0))%2==1?'odd':'even')}S.sched=S.sched||{odd:{},even:{},work:{},fixed:{},cycle:{},dates:{}};['odd','even','work','fixed','cycle','dates'].forEach(k=>S.sched[k]=S.sched[k]||{});S.scheduleConfig=S.scheduleConfig||{studyMode:'alternating',cycleWeeks:2,cycleAnchor:'',selectedDate:''};if(!['alternating','fixed','cycle','dates','hybrid'].includes(S.scheduleConfig.studyMode))S.scheduleConfig.studyMode='alternating';S.scheduleConfig.cycleWeeks=Math.max(2,Math.min(4,Number(S.scheduleConfig.cycleWeeks)||2));S.workConfig=S.workConfig||{mode:'weekly',pattern:['work','work','off','off'],anchorDate:'',start:'09:00',end:'18:00',title:'Рабочая смена',exceptions:{}};if(!['weekly','rotation'].includes(S.workConfig.mode))S.workConfig.mode='weekly';if(!Array.isArray(S.workConfig.pattern)||!S.workConfig.pattern.length)S.workConfig.pattern=['work','work','off','off'];S.workConfig.exceptions=S.workConfig.exceptions||{};S.habits=Array.isArray(S.habits)?S.habits:[];S.settings.notifications={study:true,work:true,personal:true,...(S.settings.notifications||{})};S.settings.dashboard=S.settings.dashboard||{workShift:true,habits:false,notes:false};S.settings.dashboardOrder=Array.isArray(S.settings.dashboardOrder)?S.settings.dashboardOrder:['workShift','habits','notes'];S.subjects=S.subjects||[];S.hw=S.hw||[];S.exc=S.exc||[];S.events=S.events||[];save()}
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}migrate();render();try{const mq=window.matchMedia('(prefers-color-scheme: light)');mq.addEventListener?mq.addEventListener('change',()=>{if(S.settings.theme==='auto'&&!(tgApp&&tgApp.colorScheme))render()}):mq.addListener&&mq.addListener(()=>{if(S.settings.theme==='auto'&&!(tgApp&&tgApp.colorScheme))render()});tgApp&&tgApp.onEvent&&tgApp.onEvent('themeChanged',()=>{if(S.settings.theme==='auto')render()})}catch(_){}initCloud();setTimeout(()=>tick(),400);setInterval(tick,30000);setInterval(()=>{if(!document.hidden)cloudPull()},20000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){tick();render();cloudPull()}});
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('./sw.js').catch(()=>{});
-</script><script src="./apple-ui.js" defer></script></body></html>
+</script><script src="./apple-ui.js" defer></script><script src="./schedule-lab.js" defer></script></body></html>

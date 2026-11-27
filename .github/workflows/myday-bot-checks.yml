@@ -1,0 +1,71 @@
+name: MYDAY Telegram assistant checks
+
+on:
+  pull_request:
+    branches: [main, test/myday-unified-schedule-v1, feature/multi-user-myday]
+    paths:
+      - 'supabase/functions/myday-bot/**'
+      - 'supabase/functions/myday-document-analyze/**'
+      - 'supabase/migrations/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/deploy-myday-backend.yml'
+      - '.github/workflows/myday-bot-checks.yml'
+  push:
+    branches: [feature/myday-telegram-assistant]
+    paths:
+      - 'supabase/functions/myday-bot/**'
+      - 'supabase/migrations/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/myday-bot-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check Telegram webhook
+        run: deno check supabase/functions/myday-bot/index.ts
+      - name: Type-check document analyzer
+        run: deno check supabase/functions/myday-document-analyze/index.ts
+      - name: Test Russian assistant date and time parsing
+        run: deno test tests/myday-bot-language.test.ts
+      - name: Validate bot deployment configuration
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const config = fs.readFileSync('supabase/config.toml', 'utf8');
+          const workflow = fs.readFileSync('.github/workflows/deploy-myday-backend.yml', 'utf8');
+          const bot = fs.readFileSync('supabase/functions/myday-bot/index.ts', 'utf8');
+          const documentAnalyzer = fs.readFileSync('supabase/functions/myday-document-analyze/index.ts', 'utf8');
+          const migration = fs.readFileSync('supabase/migrations/005_myday_bot_updates.sql', 'utf8');
+          const quotaMigration = fs.readFileSync('supabase/migrations/006_myday_bot_ai_quota.sql', 'utf8');
+          const retryMigration = fs.readFileSync('supabase/migrations/008_myday_bot_update_retry.sql', 'utf8');
+          for (const token of ['[functions.myday-bot]', '[functions.myday-document-analyze]', 'verify_jwt = false']) {
+            if (!config.includes(token)) throw new Error('Missing function config: ' + token);
+          }
+          for (const token of ['supabase functions deploy myday-bot', 'supabase functions deploy myday-document-analyze', 'setWebhook', 'MYDAY_WEBHOOK_SECRET', 'GROQ_API_KEY']) {
+            if (!workflow.includes(token)) throw new Error('Missing webhook deployment step: ' + token);
+          }
+          for (const token of ['x-telegram-bot-api-secret-token', 'myday_sync_profile', 'myday_bot_updates']) {
+            if (!bot.includes(token)) throw new Error('Missing bot security/sync feature: ' + token);
+          }
+          if (!migration.includes('update_id bigint primary key')) throw new Error('Missing Telegram update idempotency key');
+          if (!quotaMigration.includes('myday_consume_bot_ai')) throw new Error('Missing per-user AI quota migration');
+          if (!retryMigration.includes('grant delete on table public.myday_bot_updates to service_role')) throw new Error('Failed Telegram update retry permission is missing');
+          if (bot.includes('await releaseFailedUpdate(currentUpdateId)')) throw new Error('Webhook error handler must retain deduplication rows to prevent Telegram retry spam');
+          if (bot.includes('return json({ ok: false, retry: true }, 500)')) throw new Error('Webhook error handler must acknowledge failed updates after reporting the error');
+          if (!bot.includes('handled_error: true')) throw new Error('Webhook error handler must acknowledge a reported processing failure');
+          if (workflow.includes('OPENAI_API_KEY')) throw new Error('Deployment workflow still references the old OpenAI secret');
+          if (!bot.includes('https://api.groq.com/openai/v1/chat/completions') || !bot.includes('GROQ_API_KEY')) throw new Error('Groq chat API is not configured in the bot');
+          for (const token of ['validateTelegramInitData', 'myday_consume_bot_ai', 'response_format', 'MYDAY document analysis error']) {
+            if (!documentAnalyzer.includes(token)) throw new Error('Missing document analyzer security/AI feature: ' + token);
+          }
+          console.log('Telegram webhook config, deployment, profile sync and idempotency checks passed.');
+          NODE

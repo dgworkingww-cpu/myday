@@ -1,10 +1,7 @@
 name: Deploy and validate MYDAY backend
 
 on:
-  # Production backend deployment is managed from feature/myday-telegram-assistant.
-  # Keep this legacy workflow manual-only to avoid deploying stale migrations from the frontend branch.
   workflow_dispatch:
-
 permissions:
   contents: read
 
@@ -34,9 +31,10 @@ jobs:
         shell: bash
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           set -euo pipefail
-          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD TELEGRAM_BOT_TOKEN; do
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD TELEGRAM_BOT_TOKEN GROQ_API_KEY; do
             if [[ -z "${!name:-}" ]]; then
               echo "::error::Missing GitHub Actions secret: $name"
               exit 1
@@ -49,20 +47,63 @@ jobs:
       - name: Apply database migrations
         run: supabase db push --linked --yes
 
-      - name: Set Telegram bot token
+      - name: Set Telegram bot and assistant secrets
         shell: bash
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           set -euo pipefail
           umask 077
           secret_file="$RUNNER_TEMP/myday-function-secrets.env"
-          printf 'TELEGRAM_BOT_TOKEN=%s\n' "$TELEGRAM_BOT_TOKEN" > "$secret_file"
+          webhook_secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$webhook_secret"
+          {
+            printf 'TELEGRAM_BOT_TOKEN=%s\n' "$TELEGRAM_BOT_TOKEN"
+            printf 'MYDAY_WEBHOOK_SECRET=%s\n' "$webhook_secret"
+            if [[ -n "${GROQ_API_KEY:-}" ]]; then
+              printf 'GROQ_API_KEY=%s\n' "$GROQ_API_KEY"
+            fi
+          } > "$secret_file"
           supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$secret_file" --yes
           rm -f "$secret_file"
+          printf '%s' "$webhook_secret" > "$RUNNER_TEMP/myday-webhook-secret"
 
       - name: Deploy Telegram-authenticated sync function
         run: supabase functions deploy myday-sync --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Deploy isolated MYDAY PDF parser
+        run: supabase functions deploy myday-pdf-parser --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Deploy MYDAY Telegram assistant
+        run: supabase functions deploy myday-bot --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Deploy MYDAY document analyzer
+        run: supabase functions deploy myday-document-analyze --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Verify document analyzer authentication boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          (async () => {
+            const fs = require('node:fs');
+            const config = fs.readFileSync('backend-config.js', 'utf8');
+            const base = config.match(/supabaseUrl:\s*"([^"]+)"/)?.[1];
+            const anon = config.match(/supabaseAnonKey:\s*"([^"]+)"/)?.[1];
+            if (!base || !anon) throw new Error('Public MYDAY backend configuration is missing.');
+            const response = await fetch(base.replace(/\/+$/, '') + '/functions/v1/myday-document-analyze', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', apikey: anon },
+              body: JSON.stringify({ initData: 'invalid-test-signature', filename: 'smoke.pdf', text: 'This is a sufficiently long document text for an authentication smoke test.' })
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (response.status !== 401 || payload.code !== 'AUTH_REQUIRED') {
+              throw new Error('Document analyzer auth boundary failed: HTTP ' + response.status + ', code=' + (payload.code || 'none'));
+            }
+            console.log('Document analyzer is deployed and rejects unsigned Telegram sessions.');
+          })().catch(error => { console.error(error); process.exit(1); });
+          NODE
 
       - name: Verify Telegram bot token identity
         shell: bash
@@ -86,6 +127,31 @@ jobs:
             console.log('Verified Telegram bot: @' + actualUsername + ' (id ' + result.result.id + ')');
           })().catch(error => { console.error(error); process.exit(1); });
           NODE
+
+      - name: Register MYDAY Telegram webhook
+        shell: bash
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ env.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          webhook_secret="$(cat "$RUNNER_TEMP/myday-webhook-secret")"
+          response="$(curl --fail --silent --show-error \
+            -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+            -H 'Content-Type: application/json' \
+            --data "$(jq -n --arg url "https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/myday-bot" --arg secret "$webhook_secret" '{url:$url,secret_token:$secret,allowed_updates:["message","callback_query"],drop_pending_updates:false}')")"
+          echo "$response" | jq -e '.ok == true' >/dev/null
+          menu_response="$(curl --fail --silent --show-error \
+            -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setChatMenuButton" \
+            -H 'Content-Type: application/json' \
+            --data '{"menu_button":{"type":"web_app","text":"Открыть MYDAY","web_app":{"url":"https://dgworkingww-cpu.github.io/myday/"}}}')"
+          echo "$menu_response" | jq -e '.ok == true' >/dev/null
+          commands_response="$(curl --fail --silent --show-error \
+            -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setMyCommands" \
+            -H 'Content-Type: application/json' \
+            --data '{"commands":[{"command":"today","description":"План на сегодня"},{"command":"week","description":"План на 7 дней"},{"command":"tasks","description":"Все открытые задачи"},{"command":"app","description":"Открыть MYDAY"},{"command":"help","description":"Как пользоваться ботом"}]}')"
+          echo "$commands_response" | jq -e '.ok == true' >/dev/null
+          echo "MYDAY webhook, Mini App menu button and bot commands registered successfully."
 
       - name: Check frontend JavaScript syntax
         shell: bash
