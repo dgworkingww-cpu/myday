@@ -17,10 +17,9 @@ async function walk(dir) {
 }
 
 await walk(root);
-const htmlPath = join(root, "index.html");
-const html = await readFile(htmlPath, "utf8");
-const inlineScripts = [...html.matchAll(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script>/gi)]
-  .filter(([, attrs, body]) => !/\\bsrc\\s*=/.test(attrs) && body.trim())
+const html = await readFile(join(root, "index.html"), "utf8");
+const inlineScripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+  .filter(([, attrs, body]) => !/\bsrc\s*=/.test(attrs) && body.trim())
   .map(([, , body]) => body);
 
 if (!inlineScripts.length) {
@@ -28,21 +27,30 @@ if (!inlineScripts.length) {
   process.exit(1);
 }
 
-const checks = [
-  ...files.map((file) => ({ label: relative(root, file), source: await readFile(file, "utf8") })),
-  ...inlineScripts.map((source, index) => ({ label: `index.html inline script #${index + 1}`, source })),
-];
+const checks = await Promise.all([
+  ...files.map(async (file) => ({
+    label: relative(root, file),
+    source: await readFile(file, "utf8"),
+  })),
+  ...inlineScripts.map(async (source, index) => ({
+    label: \`index.html inline script #\${index + 1}\`,
+    source,
+  })),
+]);
 
 let failed = false;
 for (const check of checks) {
-  const result = spawnSync(process.execPath, ["--check"], { input: check.source, encoding: "utf8" });
+  const result = spawnSync(process.execPath, ["--check"], {
+    input: check.source,
+    encoding: "utf8",
+  });
   if (result.status !== 0) {
     failed = true;
-    console.error(`\\n[FAIL] ${check.label}\\n${result.stderr || result.stdout}`);
+    console.error(\`\n[FAIL] \${check.label}\n\${result.stderr || result.stdout}\`);
   } else {
-    console.log(`[PASS] ${check.label}`);
+    console.log(\`[PASS] \${check.label}\`);
   }
 }
 
 if (failed) process.exit(1);
-console.log(`\\nMYDAY quality gate passed: ${checks.length} JavaScript syntax checks.`);
+console.log(\`\nMYDAY quality gate passed: \${checks.length} JavaScript syntax checks.\`);
