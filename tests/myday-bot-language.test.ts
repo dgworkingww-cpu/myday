@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert";
+function assertEquals(actual: unknown, expected: unknown) { if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error("Expected " + JSON.stringify(expected) + ", got " + JSON.stringify(actual)); }
 import { inferDate, inferTimeRange, parseClock, isDateOnlyReply, isCancellation, validDate } from "../supabase/functions/myday-bot/language.ts";
 
 Deno.test("relative Russian dates resolve from the supplied local date", () => {
@@ -17,7 +17,7 @@ Deno.test("numeric dates are validated instead of silently accepted", () => {
 });
 
 Deno.test("spoken Russian time ranges preserve both endpoints", () => {
-  assertEquals(inferTimeRange("Работа завтра с 7 вечера до полдвенадцатого"), { start: "19:00", end: "11:30" });
+  assertEquals(inferTimeRange("Работа завтра с 7 вечера до полдвенадцатого"), { start: "19:00", end: "23:30" });
   assertEquals(inferTimeRange("Тренировка с 9 до 11 утра"), { start: "09:00", end: "11:00" });
   assertEquals(inferTimeRange("Смена с 8 вечера до 12 ночи"), { start: "20:00", end: "00:00" });
 });
