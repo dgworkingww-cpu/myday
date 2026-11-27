@@ -142,7 +142,7 @@ async function showFile(){
    pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer(),isEvalSupported:false}).promise;
    pageCount=pdf.numPages;page=1;$("pager").classList.remove("hidden");$("pdfCanvas").classList.remove("hidden");$("previewLabel").textContent="Предпросмотр PDF";await renderPdfPage();
    progress(0,"PDF открыт. Страниц: "+pageCount+". Можно листать и запускать извлечение.");
-  }catch(err){progress(0,"Не удалось открыть PDF: "+(err&&err.message||"файл повреждён или защищён паролем."),"error");}
+  }catch(err){$("extract").disabled=true;pdf=null;progress(0,"Не удалось открыть PDF: "+(err&&err.message||"файл повреждён или защищён паролем."),"error");return;}
  }else{
   imageUrl=URL.createObjectURL(file);$("imagePreview").src=imageUrl;$("imagePreview").classList.remove("hidden");$("previewLabel").textContent="Предпросмотр изображения";pageCount=1;
   progress(0,"Изображение готово к распознаванию.");
@@ -160,6 +160,7 @@ async function extractText(){
    const limit=Math.min(pageCount,60);let usedOcr=false;
    for(let n=1;n<=limit;n++){
     if(cancelRequested)throw new Error("Обработка остановлена пользователем.");
+    progress(2+Math.round((n-1)/limit*88),"Читаю страницу "+n+" из "+limit+"…");
     const p=await pdf.getPage(n),tc=await p.getTextContent();
     const digital=tc.items.map(x=>String(x.str||"")+(x.hasEOL?"\n":" ")).join("").trim();
     if(digital.length>=24){parts.push("СТРАНИЦА "+n+"\n"+digital)}
@@ -290,7 +291,7 @@ async function saveSelected(){
     }
    }
   }
-  if(!added){$("saveStatus").textContent=duplicates?"Все выбранные записи уже есть в MYDAY.":"Не выбраны записи с достаточными данными.";return}
+  if(!added){$("saveStatus").textContent=duplicates?"Все выбранные записи уже есть в MYDAY.":"Не выбраны записи с достаточными данными.";$("save").disabled=false;return}
   const saved=await postSync({action:"save",data,expectedRevision:revision});
   $("saveStatus").textContent="Сохранено в MYDAY: "+added+". Уже было: "+duplicates+". Открой основное приложение заново, чтобы увидеть обновления.";
   $("saveStatus").className="status success";$("save").textContent="Сохранено";
