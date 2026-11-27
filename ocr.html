@@ -1,90 +1,314 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#efeae2"><title>MYDAY · Распознавание документов</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#efeae2">
+<title>MYDAY · Документы</title>
 <link rel="stylesheet" href="./design-system.css">
 <style>
-body{margin:0;background:var(--bg,#efeae2);color:var(--text,#252522);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-.wrap{max-width:760px;margin:0 auto;padding:24px 16px 48px}.panel{background:var(--card,#fff);border:1px solid var(--line,#ddd);border-radius:22px;padding:20px;margin:14px 0}
-h1{font-size:26px;letter-spacing:-.7px;margin:8px 0}.muted{opacity:.68;font-size:14px;line-height:1.5}.btn{border:0;border-radius:14px;padding:14px 18px;font-weight:650;font-size:15px;background:#282824;color:white;width:100%;margin-top:10px}.btn:disabled{opacity:.4}
-input[type=file]{width:100%;padding:14px;border:1px dashed #aaa;border-radius:14px;background:transparent}
-.progress{height:8px;border-radius:8px;background:#ddd;overflow:hidden;margin:12px 0}.progress i{display:block;height:100%;width:0;background:#6c8d78;transition:width .2s}
-#output{width:100%;min-height:180px;box-sizing:border-box;border:1px solid var(--line,#ddd);border-radius:14px;padding:12px;background:transparent;color:inherit;font:13px/1.5 ui-monospace,monospace}
-.steps{padding-left:20px;line-height:1.6}.status{font-size:14px;min-height:22px;margin-top:8px}.tag{display:inline-block;border-radius:20px;padding:5px 10px;background:#6c8d781c;font-size:12px}
-</style></head>
-<body><main class="wrap">
-<div class="muted">MYDAY · ЛОКАЛЬНАЯ ОБРАБОТКА</div>
-<h1>Распознавание документа</h1>
-<p class="muted">Текст извлекается прямо на этом устройстве. Без OCR API, платных ключей и отправки исходного документа стороннему OCR-сервису. Первый запуск скачает языковую модель русского языка.</p>
+:root{color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg,#efeae2);color:var(--ink,#1c1915);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{width:min(760px,100%);margin:auto;padding:calc(18px + env(safe-area-inset-top)) 16px calc(34px + env(safe-area-inset-bottom))}
+.topline{font-size:11px;letter-spacing:.14em;color:var(--muted,#8a8175);font-weight:700}
+h1{font-size:30px;letter-spacing:-.8px;line-height:1.05;margin:10px 0}
+.lead{color:var(--ink-2,#5c554c);font-size:14px;line-height:1.55;margin:10px 0 20px}
+.panel{background:var(--surface,#fbf8f3);border:1px solid var(--line,rgba(28,25,21,.12));border-radius:22px;padding:18px;margin:12px 0;box-shadow:0 6px 24px rgba(28,25,21,.035)}
+.panel h2{font-size:17px;margin:0 0 12px;letter-spacing:-.2px}
+.muted{color:var(--muted,#8a8175);font-size:13px;line-height:1.5}
+.filebox{border:1.5px dashed var(--line,#bbb);border-radius:16px;padding:18px;text-align:center;background:var(--surface-2,#f3eee6)}
+.filebox input{width:100%;font-size:14px}
+.filemeta{font-size:13px;color:var(--ink-2);margin-top:10px;overflow-wrap:anywhere}
+button,select{font:inherit}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:48px;padding:12px 16px;border:0;border-radius:14px;background:var(--ink,#1c1915);color:white;font-size:15px;font-weight:650;margin-top:10px;cursor:pointer}
+.btn.secondary{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn:disabled{opacity:.42;cursor:not-allowed}
+.row{display:flex;gap:8px;align-items:center}
+.row .btn{flex:1}
+.preview{margin-top:14px;background:var(--surface-2);border-radius:16px;overflow:hidden;min-height:100px}
+.preview-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;font-size:13px}
+.preview canvas,.preview img{display:block;max-width:100%;max-height:420px;margin:auto;object-fit:contain}
+.preview img{width:auto;height:auto}
+.pager{display:flex;align-items:center;gap:8px}
+.pager button{width:38px;height:36px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
+.pager input{width:52px;padding:8px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);text-align:center}
+.progress{height:7px;border-radius:9px;background:var(--surface-3,#e9e2d6);overflow:hidden;margin:12px 0 7px}
+.progress i{display:block;width:0;height:100%;background:var(--ac,#718a72);transition:width .2s}
+.status{font-size:13px;line-height:1.45;min-height:20px;margin-top:8px;color:var(--ink-2)}
+.status.error{color:#a63e36}.status.success{color:#477653}
+textarea{width:100%;min-height:160px;padding:13px;border:1px solid var(--line);border-radius:14px;background:var(--surface-2);color:var(--ink);font:13px/1.5 ui-monospace,monospace;resize:vertical}
+.summary{font-size:14px;line-height:1.55;white-space:pre-wrap}
+.proposal{padding:12px 0;border-top:1px solid var(--line);display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.45}
+.proposal:first-child{border-top:0}
+.proposal input{width:18px;height:18px;flex:none;margin:2px 0 0;accent-color:var(--ac)}
+.proposal small{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+.proposal select{margin-top:6px;padding:6px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
+.hidden{display:none!important}
+.pill{display:inline-block;padding:5px 9px;border-radius:99px;background:var(--surface-3);font-size:11px;color:var(--ink-2)}
+.note{font-size:12px;line-height:1.5;color:var(--muted);margin:10px 0 0}
+@media(min-width:600px){main{padding-left:22px;padding-right:22px}.panel{padding:22px}}
+</style>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="./backend-config.js"></script>
+</head>
+<body>
+<main>
+<div class="topline">MYDAY · ДОКУМЕНТЫ</div>
+<h1>Разбор документов</h1>
+<p class="lead">Загрузи PDF или фото. MYDAY извлечёт текст, разберёт содержание с помощью ИИ и предложит, что добавить в расписание и задачи. Ничего не сохранится без твоего подтверждения.</p>
+
 <section class="panel">
-<b>1. Выбери PDF или изображение</b>
-<p class="muted">Поддерживаются PDF, JPG, PNG и WEBP. Большие файлы можно обрабатывать здесь, даже если Telegram-бот не может их скачать. На iPhone выбери документ через «Обзор» в приложении «Файлы».</p>
-<input id="file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/*">
-<label class="muted" style="display:block;margin-top:14px">Максимум страниц PDF: <b id="pageLimitLabel">20</b></label>
-<input id="pageLimit" type="range" min="1" max="40" value="20" style="width:100%">
-<button class="btn" id="start">Распознать на устройстве</button>
-<div class="progress"><i id="bar"></i></div><div class="status" id="status">Ожидаю файл.</div>
+<h2>1. Выбери документ</h2>
+<div class="filebox">
+<input id="file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,application/pdf,image/*">
+<div class="filemeta" id="fileMeta">PDF, JPG, PNG или WEBP · до 100 МБ</div>
+</div>
+<div class="preview hidden" id="preview">
+<div class="preview-head"><b id="previewLabel">Предпросмотр</b><div class="pager hidden" id="pager"><button id="prev" aria-label="Предыдущая страница">‹</button><input id="pageNo" type="number" min="1" value="1" aria-label="Номер страницы"><span id="pageTotal">/ 1</span><button id="next" aria-label="Следующая страница">›</button></div></div>
+<canvas id="pdfCanvas" class="hidden"></canvas><img id="imagePreview" class="hidden" alt="Предпросмотр выбранного изображения">
+</div>
+<div class="row">
+<button class="btn" id="extract" disabled>Извлечь текст</button>
+<button class="btn secondary hidden" id="cancel" type="button">Остановить</button>
+</div>
+<div class="progress"><i id="bar"></i></div>
+<div class="status" id="status" role="status" aria-live="polite">Выбери документ, чтобы начать.</div>
+<p class="note">Распознавание выполняется на устройстве. Для первого сканирования потребуется загрузить бесплатный движок и русскую языковую модель. Не закрывай окно до завершения.</p>
 </section>
-<section class="panel">
-<b>2. Проверь распознанный текст</b>
-<p class="muted">После распознавания скачай TXT-файл и отправь его этому боту. MYDAY обработает его как обычный документ и предложит импорт, не добавляя ничего без подтверждения.</p>
-<textarea id="output" placeholder="Здесь появится распознанный текст…" readonly></textarea>
-<button class="btn" id="download" disabled>Скачать распознанный TXT</button>
-<button class="btn" id="copy" disabled style="background:transparent;color:inherit;border:1px solid var(--line,#ccc)">Скопировать текст</button>
+
+<section class="panel hidden" id="textPanel">
+<h2>2. Извлечённый текст</h2>
+<div class="muted" id="textMeta"></div>
+<textarea id="output" readonly placeholder="Текст документа появится здесь."></textarea>
+<button class="btn" id="analyze" type="button">Проанализировать с ИИ</button>
+<div class="status" id="analysisStatus" role="status" aria-live="polite"></div>
 </section>
-<section class="panel muted">
-<b>Как это работает</b>
-<ol class="steps"><li>PDF открывается в браузере и разбивается на страницы.</li><li>Каждая страница распознаётся локальным движком Tesseract.</li><li>Результат собирается в TXT, который можно отправить боту.</li></ol>
-<p>Распознавание больших документов может занять несколько минут. Не закрывай эту страницу до завершения.</p>
+
+<section class="panel hidden" id="resultPanel">
+<h2>3. Результат анализа</h2>
+<div class="pill" id="docType">Документ</div>
+<h3 id="docTitle" style="font-size:20px;line-height:1.2;margin:12px 0 8px"></h3>
+<div class="summary" id="summary"></div>
+<div id="keyPoints"></div>
+<div id="warnings"></div>
+<div id="proposals"></div>
+<button class="btn" id="save" type="button">Сохранить выбранное в MYDAY</button>
+<button class="btn secondary" id="discard" type="button">Не сохранять</button>
+<div class="status" id="saveStatus" role="status" aria-live="polite"></div>
 </section>
 </main>
-<script type="module">
-import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs';
-import { createWorker } from 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js';
-pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+<script>
+(function(){
+"use strict";
 const $=id=>document.getElementById(id);
-let recognized='';
-$('pageLimit').addEventListener('input',()=> $('pageLimitLabel').textContent=$('pageLimit').value);
-function progress(p,msg){$('bar').style.width=Math.max(0,Math.min(100,p))+'%';$('status').textContent=msg}
-async function recognize(){
- const file=$('file').files?.[0];if(!file){progress(0,'Сначала выбери файл.');return}
- $('start').disabled=true;$('download').disabled=true;$('copy').disabled=true;recognized='';$('output').value='';
- let worker=null;
- try{
-  progress(2,'Загружаю бесплатный движок распознавания…');
-  worker=await createWorker('rus+eng',1,{logger:m=>{if(m.status==='recognizing text')progress(8+Math.round((m.progress||0)*85),'Распознаю страницу… '+Math.round((m.progress||0)*100)+'%')}});
-  const chunks=[];
-  if(file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf')){
-   progress(5,'Открываю PDF…');
-   const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer(),useSystemFonts:true,isEvalSupported:false}).promise;
-   const total=Math.min(pdf.numPages,Number($('pageLimit').value));
-   for(let n=1;n<=total;n++){
-    progress(5+(n-1)/total*90,'Обрабатываю страницу '+n+' из '+total+'…');
-    const page=await pdf.getPage(n),viewport=page.getViewport({scale:1.8});
-    const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
-    canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
-    await page.render({canvasContext:ctx,viewport}).promise;
-    const result=await worker.recognize(canvas);
-    const text=String(result.data.text||'').trim();if(text)chunks.push('СТРАНИЦА '+n+'\n'+text);
-    canvas.width=1;canvas.height=1;page.cleanup();
-   }
-   if(pdf.numPages>total)chunks.push('[ОБРЕЗАНО: обработаны первые '+total+' страниц из '+pdf.numPages+']');
-  }else{
-   progress(10,'Распознаю изображение…');
-   const result=await worker.recognize(file);chunks.push(String(result.data.text||'').trim());
-  }
-  recognized=chunks.join('\n\n').trim();
-  if(recognized.length<20)throw new Error('Не удалось уверенно распознать текст. Попробуй более чёткий скан.');
-  $('output').value=recognized;$('download').disabled=false;$('copy').disabled=false;
-  progress(100,'Готово. Распознано символов: '+recognized.length+'.');
- }catch(err){progress(0,'Ошибка: '+(err?.message||err))}
- finally{if(worker)try{await worker.terminate()}catch{}$('start').disabled=false}
+const tg=window.Telegram&&window.Telegram.WebApp;
+try{tg&&tg.ready();tg&&tg.expand()}catch(_){}
+const cfg=window.MYDAY_CONFIG||{};
+const apiBase=String(cfg.supabaseUrl||"").replace(/\/+$/,"");
+const anonKey=cfg.supabaseAnonKey||"";
+const initData=tg&&tg.initData||"";
+let file=null,pdf=null,page=1,pageCount=1,recognized="",analysis=null,busy=false,cancelRequested=false,activeWorker=null,imageUrl="";
+const allowed=/\.(pdf|jpe?g|png|webp|tiff?)$/i;
+function status(message,kind){$("status").textContent=message;$("status").className="status "+(kind||"")}
+function analysisStatus(message,kind){$("analysisStatus").textContent=message;$("analysisStatus").className="status "+(kind||"")}
+function progress(value,message,kind){$("bar").style.width=Math.max(0,Math.min(100,value))+"%";status(message,kind)}
+function escapeText(v){return String(v??"")}
+function setBusy(value){busy=value;$("extract").disabled=value||!file;$("cancel").classList.toggle("hidden",!value);$("file").disabled=value;$("prev").disabled=value;$("next").disabled=value}
+function cleanupPreview(){if(imageUrl){URL.revokeObjectURL(imageUrl);imageUrl=""}if(pdf){try{pdf.destroy()}catch(_){ }pdf=null}}
+async function renderPdfPage(){
+ if(!pdf)return;
+ const p=await pdf.getPage(page),hostWidth=Math.min($("preview").clientWidth||650,700),base=p.getViewport({scale:1}),scale=Math.min(1.7,Math.max(.7,(hostWidth-20)/base.width)),viewport=p.getViewport({scale});
+ const canvas=$("pdfCanvas"),ctx=canvas.getContext("2d",{alpha:false});
+ canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+ await p.render({canvasContext:ctx,viewport}).promise;
+ $("pageNo").value=String(page);$("pageTotal").textContent="/ "+pageCount;$("prev").disabled=busy||page<=1;$("next").disabled=busy||page>=pageCount;
 }
-$('start').addEventListener('click',recognize);
-$('download').addEventListener('click',()=>{
- const blob=new Blob(['\ufeff'+recognized],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
- a.href=url;a.download='MYDAY-распознанный-документ.txt';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
-});
-$('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(recognized);progress(100,'Текст скопирован.')}catch{ $('output').readOnly=false;$('output').focus();$('output').select();progress(100,'Выделил текст. Скопируй его вручную.');$('output').readOnly=true}});
-</script></body></html>
+async function showFile(){
+ cleanupPreview();recognized="";analysis=null;$("textPanel").classList.add("hidden");$("resultPanel").classList.add("hidden");$("preview").classList.add("hidden");$("pager").classList.add("hidden");$("pdfCanvas").classList.add("hidden");$("imagePreview").classList.add("hidden");$("bar").style.width="0%";
+ file=$("file").files&&$("file").files[0]||null;
+ if(!file){$("fileMeta").textContent="PDF, JPG, PNG или WEBP · до 100 МБ";$("extract").disabled=true;progress(0,"Выбери документ.");return}
+ if(!allowed.test(file.name)){file=null;$("file").value="";$("extract").disabled=true;progress(0,"Этот формат пока не поддерживается. Выбери PDF, JPG, PNG, WEBP или TIFF.","error");return}
+ if(!file.size){file=null;$("file").value="";$("extract").disabled=true;progress(0,"Файл пустой. Выбери другой документ.","error");return}
+ if(file.size>100*1024*1024){file=null;$("file").value="";$("extract").disabled=true;progress(0,"Файл больше 100 МБ. Уменьши его размер или раздели на части.","error");return}
+ $("fileMeta").textContent=file.name+" · "+(file.size/1024/1024).toFixed(2)+" МБ";
+ $("preview").classList.remove("hidden");
+ if(/\.pdf$/i.test(file.name)||file.type==="application/pdf"){
+  if(!window.pdfjsLib){progress(0,"Не загрузился модуль PDF. Проверь интернет и обнови страницу.","error");return}
+  try{
+   pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+   pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer(),isEvalSupported:false}).promise;
+   pageCount=pdf.numPages;page=1;$("pager").classList.remove("hidden");$("pdfCanvas").classList.remove("hidden");$("previewLabel").textContent="Предпросмотр PDF";await renderPdfPage();
+   progress(0,"PDF открыт. Страниц: "+pageCount+". Можно листать и запускать извлечение.");
+  }catch(err){progress(0,"Не удалось открыть PDF: "+(err&&err.message||"файл повреждён или защищён паролем."),"error");}
+ }else{
+  imageUrl=URL.createObjectURL(file);$("imagePreview").src=imageUrl;$("imagePreview").classList.remove("hidden");$("previewLabel").textContent="Предпросмотр изображения";pageCount=1;
+  progress(0,"Изображение готово к распознаванию.");
+ }
+ $("extract").disabled=false;
+}
+async function extractText(){
+ if(!file){progress(0,"Сначала выбери PDF или изображение.","error");return}
+ if(busy)return;
+ setBusy(true);cancelRequested=false;recognized="";$("output").value="";$("textPanel").classList.add("hidden");$("resultPanel").classList.add("hidden");
+ const parts=[];let worker=null;
+ try{
+  if(/\.pdf$/i.test(file.name)||file.type==="application/pdf"){
+   if(!pdf)throw new Error("PDF не открыт. Выбери файл ещё раз.");
+   const limit=Math.min(pageCount,60);let usedOcr=false;
+   for(let n=1;n<=limit;n++){
+    if(cancelRequested)throw new Error("Обработка остановлена пользователем.");
+    const p=await pdf.getPage(n),tc=await p.getTextContent();
+    const digital=tc.items.map(x=>String(x.str||"")+(x.hasEOL?"\n":" ")).join("").trim();
+    if(digital.length>=24){parts.push("СТРАНИЦА "+n+"\n"+digital)}
+    else{
+     usedOcr=true;
+     if(!window.Tesseract)throw new Error("Не загрузился бесплатный движок OCR. Проверь подключение к интернету и повтори попытку.");
+     if(!worker){
+      progress(2,"Подготавливаю бесплатный движок распознавания…");
+      worker=await Tesseract.createWorker("rus+eng",1,{logger:m=>{if(m.status==="recognizing text")progress(5+Math.round((m.progress||0)*80),"Распознаю страницу "+n+"… "+Math.round((m.progress||0)*100)+"%")}});
+      activeWorker=worker;
+     }
+     const vp=p.getViewport({scale:1.65}),canvas=document.createElement("canvas"),ctx=canvas.getContext("2d",{willReadFrequently:true});
+     canvas.width=Math.ceil(vp.width);canvas.height=Math.ceil(vp.height);
+     progress(5+Math.round((n-1)/limit*88),"Обрабатываю страницу "+n+" из "+limit+"…");
+     await p.render({canvasContext:ctx,viewport:vp}).promise;
+     const result=await worker.recognize(canvas);const txt=String(result.data.text||"").trim();
+     if(txt)parts.push("СТРАНИЦА "+n+"\n"+txt);
+     canvas.width=1;canvas.height=1;p.cleanup();
+    }
+   }
+   if(pageCount>limit)parts.push("[ПРЕДУПРЕЖДЕНИЕ: обработаны первые "+limit+" страниц из "+pageCount+"]");
+   if(!usedOcr)progress(95,"Текстовый слой PDF извлечён без OCR…");
+  }else{
+   if(!window.Tesseract)throw new Error("Не загрузился бесплатный движок OCR. Проверь подключение к интернету и повтори попытку.");
+   progress(3,"Загружаю бесплатную языковую модель…");
+   worker=await Tesseract.createWorker("rus+eng",1,{logger:m=>{if(m.status==="recognizing text")progress(10+Math.round((m.progress||0)*80),"Распознаю изображение… "+Math.round((m.progress||0)*100)+"%")}});
+   activeWorker=worker;const result=await worker.recognize(file);parts.push(String(result.data.text||"").trim());
+  }
+  if(cancelRequested)throw new Error("Обработка остановлена пользователем.");
+  recognized=parts.join("\n\n").trim();
+  if(recognized.length<20)throw new Error("Текст не найден. Возможно, PDF пустой, защищён паролем или качество изображения слишком низкое.");
+  $("output").value=recognized;$("textMeta").textContent="Извлечено символов: "+recognized.length+" · "+(worker?"с OCR":"текстовый слой PDF");$("textPanel").classList.remove("hidden");
+  progress(100,"Текст извлечён. Следующий шаг — анализ ИИ.","success");
+ }catch(err){progress(0,err&&err.message||"Не удалось обработать документ.","error")}
+ finally{if(worker){try{await worker.terminate()}catch(_){}}activeWorker=null;setBusy(false)}
+}
+function listItems(title,items,kind,format){
+ if(!items.length)return "";
+ const wrap=document.createElement("div"),h=document.createElement("h3");h.textContent=title;h.style.cssText="font-size:15px;margin:18px 0 4px";wrap.appendChild(h);
+ items.forEach((item,index)=>{
+  const label=document.createElement("label");label.className="proposal";
+  const check=document.createElement("input");check.type="checkbox";check.checked=true;check.dataset.kind=kind;check.dataset.index=String(index);
+  const body=document.createElement("div");const titleEl=document.createElement("b");titleEl.textContent=format(item);body.appendChild(titleEl);
+  const meta=[item.dueDate||item.date,item.time,item.endTime,item.subject,item.room,item.teacher].filter(Boolean).join(" · ");
+  if(meta){const small=document.createElement("small");small.textContent=meta;body.appendChild(small)}
+  if(kind==="schedule"&&item.weekType==="unknown"){
+   const select=document.createElement("select");select.dataset.weekIndex=String(index);
+   [["","Не добавлять: неделя не определена"],["odd","Нижняя / нечётная"],["even","Верхняя / чётная"],["both","Обе недели"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;select.appendChild(o)});
+   body.appendChild(select);
+  }
+  label.append(check,body);wrap.appendChild(label);
+ });
+ return wrap;
+}
+function renderAnalysis(a){
+ $("resultPanel").classList.remove("hidden");$("docType").textContent=a.documentType||"Документ";$("docTitle").textContent=a.title||"Разбор документа";$("summary").textContent=a.summary||"";
+ const points=$("keyPoints");points.replaceChildren();if(a.keyPoints&&a.keyPoints.length){const h=document.createElement("h3");h.textContent="Главное";h.style.cssText="font-size:15px;margin:16px 0 6px";points.appendChild(h);const ul=document.createElement("ul");ul.style.cssText="padding-left:20px;line-height:1.5;font-size:14px";a.keyPoints.forEach(x=>{const li=document.createElement("li");li.textContent=x;ul.appendChild(li)});points.appendChild(ul)}
+ const warnings=$("warnings");warnings.replaceChildren();if(a.warnings&&a.warnings.length){const box=document.createElement("p");box.className="note";box.textContent="Проверь: "+a.warnings.join(" · ");warnings.appendChild(box)}
+ const p=$("proposals");p.replaceChildren();
+ const groups=[
+  ["Задачи",a.proposals.tasks,"tasks",x=>x.title],
+  ["Домашние задания",a.proposals.homework,"homework",x=>(x.subject?x.subject+": ":"")+x.title],
+  ["События",a.proposals.events,"events",x=>x.title],
+  ["Занятия расписания",a.proposals.schedule,"schedule",x=>x.weekday+" · "+x.start+"–"+x.end+" · "+x.subject]
+ ];
+ let count=0;groups.forEach(([title,items,kind,format])=>{count+=items.length;p.appendChild(listItems(title,items,kind,format))});
+ if(!count){const msg=document.createElement("p");msg.className="muted";msg.textContent="Подходящих записей для импорта не найдено. Сам анализ документа доступен выше.";p.appendChild(msg);$("save").disabled=true}else $("save").disabled=false;
+ analysisStatus("Проверь предложения и сними отметки с того, что не нужно сохранять.");
+}
+async function postSync(payload){
+ if(!apiBase||!anonKey)throw new Error("Не настроено подключение к MYDAY. Обнови приложение или сообщи администратору.");
+ if(!initData)throw new Error("Открой распознавание через кнопку в Telegram, чтобы MYDAY мог безопасно сохранить данные.");
+ const response=await fetch(apiBase+"/functions/v1/myday-sync",{method:"POST",headers:{"Content-Type":"application/json","apikey":anonKey},body:JSON.stringify({...payload,initData})});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw new Error(data.error||"Ошибка облачной синхронизации ("+response.status+").");
+ return data;
+}
+async function analyzeDocument(){
+ if(!recognized||!recognized.trim()){analysisStatus("Сначала извлеки текст документа.","error");return}
+ $("analyze").disabled=true;analysisStatus("MYDAY анализирует документ…");
+ try{
+  const response=await fetch(apiBase+"/functions/v1/myday-document-analyze",{method:"POST",headers:{"Content-Type":"application/json","apikey":anonKey},body:JSON.stringify({initData,filename:file&&file.name||"Документ",text:recognized})});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||!data.ok)throw new Error(data.error||"Не удалось проанализировать документ.");
+  analysis=data.analysis;renderAnalysis(analysis);analysisStatus("Анализ готов. Ничего ещё не сохранено.","success");
+  $("resultPanel").scrollIntoView({behavior:"smooth",block:"start"});
+ }catch(err){analysisStatus(err&&err.message||"Ошибка анализа. Текст сохранён на экране, можно повторить.","error")}
+ finally{$("analyze").disabled=false}
+}
+function id(){return crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)}
+async function saveSelected(){
+ if(!analysis)return;
+ const selected=[...$("proposals").querySelectorAll('input[type="checkbox"]:checked')];
+ if(!selected.length){analysisStatus("Ничего не выбрано для сохранения.","error");return}
+ $("save").disabled=true;$("discard").disabled=true;$("saveStatus").textContent="Загружаю актуальные данные MYDAY…";
+ try{
+  const loaded=await postSync({action:"load"});const data=loaded.data||{tasks:[],hw:[],events:[],sched:{odd:{},even:{}}};const revision=Number(loaded.revision||0);
+  data.tasks=Array.isArray(data.tasks)?data.tasks:[];data.hw=Array.isArray(data.hw)?data.hw:[];data.events=Array.isArray(data.events)?data.events:[];data.sched=data.sched||{};data.sched.odd=data.sched.odd||{};data.sched.even=data.sched.even||{};
+  let added=0,duplicates=0;
+  for(const input of selected){
+   const kind=input.dataset.kind,index=Number(input.dataset.index);
+   if(kind==="tasks"){
+    const x=analysis.proposals.tasks[index];if(!x)continue;
+    const duplicate=data.tasks.some(t=>String(t.title||"").toLowerCase()===x.title.toLowerCase()&&String(t.due||"")===String(x.dueDate||""));
+    if(duplicate){duplicates++;continue}
+    data.tasks.push({id:id(),title:x.title,desc:x.description||"",cat:x.category||"Учёба",space:"study",due:x.dueDate||"",prio:x.priority==="high"?2:x.priority==="low"?0:1,status:0,subs:[],repeat:"",created:new Date().toISOString().slice(0,10)});added++;
+   }else if(kind==="homework"){
+    const x=analysis.proposals.homework[index];if(!x)continue;
+    const duplicate=data.hw.some(h=>String(h.title||"").toLowerCase()===x.title.toLowerCase()&&String(h.subj||"").toLowerCase()===x.subject.toLowerCase());
+    if(duplicate){duplicates++;continue}
+    data.hw.push({id:id(),subj:x.subject||"Не указан предмет",title:x.title,desc:x.description||"",due:x.dueDate||"",status:0,subs:[],photos:[]});added++;
+   }else if(kind==="events"){
+    const x=analysis.proposals.events[index];if(!x)continue;
+    const duplicate=data.events.some(e=>String(e.title||"").toLowerCase()===x.title.toLowerCase()&&e.date===x.date);
+    if(duplicate){duplicates++;continue}
+    data.events.push({id:id(),title:x.title,type:x.type||"Из документа",date:x.date,time:x.time||"",endTime:x.endTime||""});added++;
+   }else if(kind==="schedule"){
+    const x=analysis.proposals.schedule[index];if(!x)continue;
+    const select=$("proposals").querySelector('select[data-week-index="'+index+'"]');
+    const week=x.weekType==="unknown"?(select&&select.value||""):x.weekType;
+    if(!week)continue;
+    const targets=week==="both"?["odd","even"]:[week];
+    for(const target of targets){
+     const day=String(x.weekday);data.sched[target][day]=Array.isArray(data.sched[target][day])?data.sched[target][day]:[];
+     const duplicate=data.sched[target][day].some(l=>l.subj===x.subject&&l.s===x.start&&l.e===x.end);
+     if(duplicate){duplicates++;continue}
+     data.sched[target][day].push({id:id(),subj:x.subject,s:x.start,e:x.end,room:x.room||"",teacher:x.teacher||""});added++;
+    }
+   }
+  }
+  if(!added){$("saveStatus").textContent=duplicates?"Все выбранные записи уже есть в MYDAY.":"Не выбраны записи с достаточными данными.";return}
+  const saved=await postSync({action:"save",data,expectedRevision:revision});
+  $("saveStatus").textContent="Сохранено в MYDAY: "+added+". Уже было: "+duplicates+". Открой основное приложение заново, чтобы увидеть обновления.";
+  $("saveStatus").className="status success";$("save").textContent="Сохранено";
+  try{tg&&tg.showAlert&&tg.showAlert("Сохранено в MYDAY: "+added+" записей. Уже существовало: "+duplicates+".")}catch(_){}
+ }catch(err){$("saveStatus").textContent=err&&err.message||"Не удалось сохранить. Данные не удалены, можно повторить попытку.";$("saveStatus").className="status error";$("save").disabled=false}
+ finally{$("discard").disabled=false}
+}
+$("file").addEventListener("change",showFile);
+$("extract").addEventListener("click",extractText);
+$("cancel").addEventListener("click",()=>{cancelRequested=true;if(activeWorker){try{activeWorker.terminate()}catch(_){}}status("Останавливаю обработку…")});
+$("prev").addEventListener("click",async()=>{if(page>1){page--;try{await renderPdfPage()}catch(e){status("Не удалось отобразить страницу PDF.","error")}}});
+$("next").addEventListener("click",async()=>{if(page<pageCount){page++;try{await renderPdfPage()}catch(e){status("Не удалось отобразить страницу PDF.","error")}}});
+$("pageNo").addEventListener("change",async()=>{const n=Math.max(1,Math.min(pageCount,Number($("pageNo").value)||1));page=n;try{await renderPdfPage()}catch(e){status("Не удалось отобразить страницу PDF.","error")}});
+$("analyze").addEventListener("click",analyzeDocument);
+$("save").addEventListener("click",saveSelected);
+$("discard").addEventListener("click",()=>{$("resultPanel").classList.add("hidden");analysis=null;analysisStatus("Анализ закрыт. Ничего не сохранено.")});
+window.addEventListener("beforeunload",cleanupPreview);
+if(!initData){status("Открой эту страницу через кнопку MYDAY в Telegram, чтобы анализировать и сохранять документы.","error")}
+})();
+</script>
+</body></html>
