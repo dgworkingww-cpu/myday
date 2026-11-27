@@ -25,7 +25,7 @@ Deno.test("bot schedule lesson additions survive concurrent profile changes", ()
 });
 
 Deno.test("schedule imports in sched are persisted instead of silently discarded", () => {
-  const base = { sched: { odd: { 1: [] }, even: {} }, scheduleConfig: { studyMode: "alternating" } };
+  const base: any = { sched: { odd: { 1: [] }, even: {} }, scheduleConfig: { studyMode: "alternating" } };
   const incoming = structuredClone(base);
   incoming.sched.odd[1].push({ id: "lesson-1", subj: "Теплотехника", s: "11:00", e: "12:30" });
   const latest = structuredClone(base);
