@@ -73,9 +73,11 @@ Deno.serve(async (req: Request) => {
 
     // A missing PDF text layer means the pages are scans. Fall back to OCR rather than
     // asking the student to export every page as a separate photo.
+    if (pdf.numPages > 3) {
+      throw new Error("В бесплатном OCR можно распознать до 3 страниц за раз. Раздели PDF на части по 3 страницы и отправь их по очереди.");
+    }
     const ocr = await runOcrSpace(bytes);
     warnings.push(ocr.warning || "Текст распознан с помощью OCR.");
-    if (pdf.numPages > 3) warnings.push("Бесплатный OCR обрабатывает до 3 страниц за один запрос.");
     return json({ text: ocr.text.slice(0, 45000), warnings });
   } catch (error) {
     console.error("MYDAY PDF parser error:", error);
