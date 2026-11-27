@@ -501,7 +501,10 @@ async function handleText(chatId: number, userId: number, text: string) {
     if (candidates.length !== 1) { await send(chatId, candidates.length ? "Нашёл несколько похожих заданий: " + candidates.slice(0, 8).map((x: AnyRecord) => "«" + escapeHtml(x.title) + "»").join(", ") : "Не нашёл такое домашнее задание. Проверь /homework."); return; }
     const hw = candidates[0];
     if (payload.intent === "complete_homework") { hw.status = 2; await saveProfile(userId, p.data, p.baseData); await send(chatId, "✓ Отметил домашнюю работу выполненной: <b>" + escapeHtml(hw.title) + "</b>."); return; }
-    if (payload.intent === "delete_homework") { p.data.hw = items.filter((x: AnyRecord) => String(x.id) !== String(hw.id)); await saveProfile(userId, p.data, p.baseData); await send(chatId, "Удалил домашнее задание: <b>" + escapeHtml(hw.title) + "</b>."); return; }
+    if (payload.intent === "delete_homework") {
+      await send(chatId, "Удалить домашнее задание <b>" + escapeHtml(hw.title) + "</b>?", [[{ text: "Удалить задание", callback_data: "homework_delete_confirm:" + hw.id }, { text: "Отмена", callback_data: "homework_delete_cancel:" + hw.id }]]);
+      return;
+    }
     const due = validDate(payload.due) ? payload.due : inferDate(cmd, today);
     if (!due) { await send(chatId, "На какой срок перенести «" + escapeHtml(hw.title) + "»? Напиши дату или день недели."); return; }
     hw.due = due; await saveProfile(userId, p.data, p.baseData); await send(chatId, "Перенёс домашнее задание на " + due + ": <b>" + escapeHtml(hw.title) + "</b>."); return;
@@ -579,6 +582,16 @@ async function handleCallback(q: AnyRecord) {
   if (data.startsWith("view:")) { await handleText(chatId, userId, "/" + data.slice(5)); return; }
   if (q.message?.chat?.type !== "private") return;
   const p = await getProfile(userId), parts = data.split(":"), action = parts[0], id = parts.slice(1).join(":");
+  if (action === "homework_delete_confirm" || action === "homework_delete_cancel") {
+    const hw = (p.data.hw || []).find((x: AnyRecord) => String(x.id) === id);
+    if (!hw) { await send(chatId, "Это домашнее задание уже не найдено."); return; }
+    if (action === "homework_delete_confirm") {
+      p.data.hw = (p.data.hw || []).filter((x: AnyRecord) => String(x.id) !== id);
+      await saveProfile(userId, p.data, p.baseData);
+      await send(chatId, "Удалил домашнее задание: <b>" + escapeHtml(hw.title) + "</b>.");
+    } else await send(chatId, "Оставил домашнее задание без изменений.");
+    return;
+  }
   if (action === "event_delete_confirm" || action === "event_delete_cancel") {
     const event = (p.data.events || []).find((x: AnyRecord) => String(x.id) === id);
     if (!event) { await send(chatId, "Это событие уже не найдено."); return; }
