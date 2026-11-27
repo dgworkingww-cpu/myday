@@ -90,6 +90,9 @@ jobs:
       - name: Deploy MYDAY Telegram assistant
         run: supabase functions deploy myday-bot --project-ref "$SUPABASE_PROJECT_REF"
 
+      - name: Deploy MYDAY document analyzer
+        run: supabase functions deploy myday-document-analyze --project-ref "$SUPABASE_PROJECT_REF"
+
       - name: Verify Telegram bot token identity
         shell: bash
         env:
