@@ -576,6 +576,50 @@ async function handleText(chatId: number, userId: number, text: string) {
   else if (eventLike || hasSpokenTimeRange) fallbackPayload = { intent: "add_event", tasks: [], events: [{ title: guessEventTitle(cmd), type: guessEventTitle(cmd), date: inferDate(cmd, today), time: timeRange?.start || inferTime(cmd), endTime: timeRange?.end || "" }] };
   else if (/^(?:сдать|сделать|подготовить|купить|позвонить|отправить|оплатить|заказать|проверить|прочитать|написать|выполнить|закончить|повторить|переписать|переделать|доделать|решить|выучить|убрать|забрать|отнести|сходить|съездить)\b/i.test(cmd) || /\b(?:мне нужно|мне надо|надо не забыть|поставь задачу|добавь задачу)\b/i.test(cmd)) fallbackPayload = { intent: "add", tasks: [{ title: cmd, desc: inferTime(cmd) ? "Время дедлайна: " + inferTime(cmd) : "", space: fallbackSpace, cat: guessCategory(fallbackSpace), due: inferDate(cmd, today), prio: 1 }] };
   else fallbackPayload = { intent: "chat", reply: "Похоже, ты хочешь просто обсудить это, а не записать задачу. Сейчас ИИ временно недоступен, поэтому не буду ничего добавлять в MYDAY наугад. Попробуй ещё раз чуть позже." };
+  // Deterministic parser for rotating work shifts. This must run before generic event parsing:
+  // a 2/2 day-night-recovery-off cycle is a date-based schedule, not one calendar event.
+  const asksForRotation = /(?:2\s*[\/\- ]\s*2|день.{0,60}ночь.{0,60}отсыпной.{0,60}выходной)/i.test(cmd)
+    && /(?:работ|смен|график|простав|постав|добав|запиш)/i.test(cmd);
+  if (asksForRotation) {
+    const months = "января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря";
+    const anchorMatch = cmd.match(new RegExp("(?:с|начиная с|старт)\\s+(\\d{1,2}\\s+(?:" + months + "))", "i"));
+    const endMatch = cmd.match(new RegExp("до\\s+(\\d{1,2}\\s+(?:" + months + "))", "i"));
+    const anchorDate = anchorMatch ? inferDate(anchorMatch[1], today) : shiftDate(today, 1);
+    const endDate = endMatch ? inferDate(endMatch[1], today) : "";
+    if (!validDate(anchorDate) || !validDate(endDate) || endDate < anchorDate) {
+      await send(chatId, "Понял, что нужен цикл «день → ночь → отсыпной → выходной». Укажи дату первой дневной смены и дату окончания, например: «с 28 ноября по 15 декабря».");
+      return;
+    }
+    const workConfig = p.data.workConfig || {};
+    p.data.workConfig = {
+      ...workConfig,
+      mode: "rotation",
+      pattern: ["day", "night", "recovery", "off"],
+      anchorDate,
+      endDate,
+      selectedDate: anchorDate,
+      title: "Рабочая смена",
+      dayStart: "08:00",
+      dayEnd: "20:00",
+      nightStart: "20:00",
+      nightEnd: "08:00",
+      start: "08:00",
+      end: "20:00",
+      exceptions: {}
+    };
+    await saveProfile(userId, p.data, p.baseData);
+    const preview: string[] = [];
+    let day = anchorDate, count = 0;
+    while (day <= endDate && count < 40) {
+      const item = scheduleItemsForDate(p.data, day).find((x: AnyRecord) => x.kind === "Работа");
+      const dateLabel = day.slice(8, 10) + "." + day.slice(5, 7);
+      preview.push(item ? dateLabel + " · " + item.title + (item.start ? " · " + item.start + "–" + item.end : "") : dateLabel + " · Выходной");
+      day = shiftDate(day, 1); count++;
+    }
+    await send(chatId, "Сменный график сохранён в «Расписание → Работа» и синхронизирован с MYDAY.\n\n" + preview.join("\n") + "\n\nПериод: " + anchorDate + " — " + endDate + ". Ночная смена заканчивается на следующий день.", [[{ text: "Открыть рабочий график", web_app: { url: "https://dgworkingww-cpu.github.io/myday/" } }]]);
+    return;
+  }
+
   failureStage = "распознавание текста";
   const payload = await aiInterpret(cmd, today, userId, "text", profileContext, chatHistory) || fallbackPayload;
 
