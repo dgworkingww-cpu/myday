@@ -74,8 +74,10 @@ function makePdf(lines) {
     await page.getByText(/PDF открыт\. Страниц: 2/).waitFor({timeout:15000});
     if(await page.locator('#pageNo').inputValue()!=='1') throw new Error('PDF preview did not start at page 1');
     await page.locator('#next').click();
+    await page.waitForFunction(()=>document.querySelector('#pageNo').value==='2');
     if(await page.locator('#pageNo').inputValue()!=='2') throw new Error('Next page control did not work');
     await page.locator('#prev').click();
+    await page.waitForFunction(()=>document.querySelector('#pageNo').value==='1');
     if(await page.locator('#pageNo').inputValue()!=='1') throw new Error('Previous page control did not work');
     await page.locator('#extract').click();
     await page.locator('#textPanel').waitFor({state:'visible',timeout:20000});
