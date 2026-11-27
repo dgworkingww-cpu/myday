@@ -135,12 +135,20 @@ export function inferTimeRange(text: string): { start: string; end: string } | n
   const start = parseClock(startRaw);
   let end = parseClock(endRaw);
   if (!start || !end) return null;
-  const startHour = Number(start.slice(0, 2));
-  const endHour = Number(end.slice(0, 2));
-  // In an evening shift, an unqualified spoken half-hour such as "полдвенадцатого"
+  let startHour = Number(start.slice(0, 2));
+  let endHour = Number(end.slice(0, 2));
+  // Propagate an explicitly stated period to an otherwise ambiguous endpoint:
+  // "с 7 до 9 вечера" means 19:00–21:00, not 07:00–21:00.
+  // An explicit morning/night marker on the opposite endpoint stays authoritative.
+  if (/(?:вечера|дня)/.test(endRaw) && !/(?:утра|дня|вечера|ночи)/.test(startRaw) && startHour > 0 && startHour < 12) {
+    startHour += 12;
+    start = String(startHour).padStart(2, "0") + start.slice(2);
+  }
+  // In an evening shift, an unqualified spoken endpoint such as "полдвенадцатого"
   // normally means 23:30, not 11:30. Explicit "утра/ночи" remains authoritative.
   if (startHour >= 18 && endHour > 0 && endHour < 12 && !/утра|ночи/.test(endRaw)) {
-    end = String(endHour + 12).padStart(2, "0") + end.slice(2);
+    endHour += 12;
+    end = String(endHour).padStart(2, "0") + end.slice(2);
   }
   return { start, end };
 }
