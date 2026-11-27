@@ -1,0 +1,45 @@
+name: MYDAY Telegram assistant checks
+
+on:
+  pull_request:
+    branches: [main, test/myday-unified-schedule-v1]
+    paths:
+      - 'supabase/functions/myday-bot/**'
+      - 'supabase/migrations/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/myday-bot-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check Telegram webhook
+        run: deno check supabase/functions/myday-bot/index.ts
+      - name: Validate bot deployment configuration
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const config = fs.readFileSync('supabase/config.toml', 'utf8');
+          const workflow = fs.readFileSync('.github/workflows/deploy-myday-backend.yml', 'utf8');
+          const bot = fs.readFileSync('supabase/functions/myday-bot/index.ts', 'utf8');
+          const migration = fs.readFileSync('supabase/migrations/005_myday_bot_updates.sql', 'utf8');
+          for (const token of ['[functions.myday-bot]', 'verify_jwt = false']) {
+            if (!config.includes(token)) throw new Error('Missing function config: ' + token);
+          }
+          for (const token of ['supabase functions deploy myday-bot', 'setWebhook', 'MYDAY_WEBHOOK_SECRET']) {
+            if (!workflow.includes(token)) throw new Error('Missing webhook deployment step: ' + token);
+          }
+          for (const token of ['x-telegram-bot-api-secret-token', 'myday_sync_profile', 'myday_bot_updates']) {
+            if (!bot.includes(token)) throw new Error('Missing bot security/sync feature: ' + token);
+          }
+          if (!migration.includes('update_id bigint primary key')) throw new Error('Missing Telegram update idempotency key');
+          console.log('Telegram webhook config, deployment, profile sync and idempotency checks passed.');
+          NODE
