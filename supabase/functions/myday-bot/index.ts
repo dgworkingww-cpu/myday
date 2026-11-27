@@ -226,6 +226,12 @@ async function handleText(chatId: number, userId: number, text: string) {
   const payload = await aiInterpret(cmd, today, userId) || (eventLike
     ? { intent: "add_event", tasks: [], events: [{ title: cmd, type: /экзамен/i.test(cmd) ? "Экзамен" : /зач[её]т/i.test(cmd) ? "Зачёт" : "Событие", date: inferDate(cmd, today) }] }
     : { intent: "add", tasks: [{ title: cmd, desc: "", space: fallbackSpace, cat: guessCategory(fallbackSpace), due: inferDate(cmd, today), prio: 1 }] });
+  // A spoken time interval is a schedule entry, never a plain task.
+  const hasSpokenTimeRange = /\bс\s+.+\bдо\s+.+/i.test(cmd);
+  if (hasSpokenTimeRange && payload.intent === "add") {
+    payload.intent = "clarify";
+    payload.reply = "Я услышал интервал работы, но не дату. На какой день поставить эту запись? Отправь дату, например: «сегодня» или «завтра», вместе с интервалом ещё раз.";
+  }
   if (payload.intent === "clarify") { await send(chatId, escapeHtml(payload.reply || "Уточни, пожалуйста, дату или к какому разделу относится задача.")); return; }
   if (payload.intent === "list_today" || payload.intent === "list_tasks" || payload.intent === "list_week") {
     await handleText(chatId, userId, payload.intent === "list_today" ? "/today" : payload.intent === "list_week" ? "/week" : "/tasks");
