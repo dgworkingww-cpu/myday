@@ -176,22 +176,27 @@
   }
 
   function renderImportPage() {
-    if (!importDraft) importDraft={records:[],groups:[],selectedGroup:'',target:'study',mode:'auto',replace:false,filename:'',status:'Выбери файл. Исходное расписание пока не меняется.'};
+    if (!importDraft) importDraft={records:[],groups:[],selectedGroup:'',sourceType:'',target:'study',mode:'auto',replace:false,filename:'',status:'Выбери файл. Исходное расписание пока не меняется.'};
     const d=importDraft,records=d.records||[],groups=d.groups||[];
     const selected=groups.length?records.filter(r=>r.group===d.selectedGroup):records;
+    const canPreview=groups.length?!!d.selectedGroup:d.sourceType==='personal';
+    const sourcePicker=records.length&&!groups.length
+      ? '<section class="surface-panel"><label for="import-source-type">Что загружено?</label><select id="import-source-type" onchange="MYDAY_LAB.setDraft(\'sourceType\',this.value)"><option value="">Выбери тип расписания…</option><option value="personal" '+(d.sourceType==='personal'?'selected':'')+'>Моё личное расписание</option><option value="university" '+(d.sourceType==='university'?'selected':'')+'>Общее расписание университета</option></select><p class="page-sub">Если это общее расписание, но названия групп не распознаны, MYDAY не даст сохранить весь документ как личный. Сначала нужно корректно определить группу.</p></section>'
+      : '';
     const groupPicker=groups.length
       ? '<section class="surface-panel"><div class="section-head"><div><h2>Выбери свою группу</h2><p class="section-caption">В файле найдено групп: '+groups.length+'. В MYDAY попадут только занятия выбранной группы.</p></div></div><label for="import-group">Учебная группа</label><select id="import-group" onchange="MYDAY_LAB.setDraft(\'selectedGroup\',this.value)"><option value="">Выбрать группу…</option>'+groups.map(g=>'<option value="'+esc(g)+'" '+(d.selectedGroup===g?'selected':'')+'>'+esc(g)+'</option>').join('')+'</select></section>'
-      : (records.length?'<div class="empty-state"><b>Похоже, это личное расписание</b><span>Названия нескольких групп не обнаружены. Импортируются только распознанные строки этого файла.</span></div>':'');
+      : '';
     const formats='Excel XLSX/XLS · PDF · Word DOCX · CSV/TXT · JPG/PNG';
-    return '<main class="page">'+mydayHeader('Импорт расписания','Можно загрузить своё расписание или общее расписание университета и выбрать из него свою группу.',false,true)+
+    return '<main class="page">'+mydayHeader('Импорт расписания','Загрузи личный файл или общее расписание университета, выбери свою группу и проверь результат.',false,true)+
       '<section class="surface-panel"><div class="import-drop"><span class="settings-icon">'+mydayIcon('inbox',22)+'</span><b>Выбрать файл</b><span class="page-sub">'+formats+'</span><input id="schedule-file" type="file" accept=".xlsx,.xls,.pdf,.docx,.csv,.txt,.jpg,.jpeg,.png" onchange="MYDAY_LAB.readFile(this)"><a href="./sample-university-schedule.csv" download>Скачать пример общего расписания</a><button class="btn g" type="button" onclick="MYDAY_LAB.loadSample()">Загрузить тестовый пример</button></div>'+
       '<p class="page-sub" role="status" aria-live="polite">'+esc(d.status)+'</p><label for="import-target">Куда импортировать</label><select id="import-target" onchange="MYDAY_LAB.setDraft(\'target\',this.value)"><option value="study" '+(d.target==='study'?'selected':'')+'>Учебное расписание</option><option value="work" '+(d.target==='work'?'selected':'')+'>Рабочий график (неделя)</option></select>'+
       '<label for="import-mode">Тип учебного расписания</label><select id="import-mode" onchange="MYDAY_LAB.setDraft(\'mode\',this.value)"><option value="auto" '+(d.mode==='auto'?'selected':'')+'>Определить по файлу</option><option value="alternating" '+(d.mode==='alternating'?'selected':'')+'>Нечётная / чётная</option><option value="fixed" '+(d.mode==='fixed'?'selected':'')+'>Постоянное</option><option value="cycle" '+(d.mode==='cycle'?'selected':'')+'>Цикл 2–4 недели</option><option value="dates" '+(d.mode==='dates'?'selected':'')+'>Конкретные даты</option><option value="hybrid" '+(d.mode==='hybrid'?'selected':'')+'>Смешанное</option></select>'+
       '<label for="import-replace" class="lab-check"><input id="import-replace" type="checkbox" '+(d.replace?'checked':'')+' onchange="MYDAY_LAB.setDraft(\'replace\',this.checked)"> Заменить занятия в выбранных днях (вместо добавления)</label>'+
-      '<div class="page-sub">Сначала проверь выбранную группу и предпросмотр. Старое расписание не меняется до подтверждения.</div></section>'+
-      groupPicker+
+      '<div class="page-sub">Старое расписание не меняется до подтверждения. В общий календарь попадут только записи из выбранной группы.</div></section>'+
+      sourcePicker+groupPicker+
       (groups.length&&!d.selectedGroup?'<div class="empty-state"><b>Сначала выбери свою группу</b><span>Пока группа не выбрана, сохранить расписание нельзя.</span></div>':'')+
-      (selected.length?'<section class="section"><div class="section-head"><div><h2>Предпросмотр · '+selected.length+'</h2><p class="section-caption">'+(d.selectedGroup?'Группа '+esc(d.selectedGroup)+' · ':'')+'Нажми на строку, чтобы исправить распознавание.</p></div></div><div class="task-list">'+selected.map(r=>({r,i:records.indexOf(r)})).map(({r,i})=>'<button class="task-item import-row" onclick="MYDAY_LAB.editDraft('+i+')"><span class="settings-icon">'+mydayIcon('calendar',16)+'</span><span class="task-main"><span class="task-title">'+esc(r.subj||'Без названия')+'</span><span class="task-meta">'+esc(r.group?r.group+' · ':'')+esc(r.date||((r.day!=null?DAYS_SHORT[r.day]:'День не распознан')+' · '+(r.week||'неделя не указана'))) +' · '+esc((r.s||'--:--')+'–'+(r.e||'--:--'))+'</span></span><span class="task-chevron">›</span></button>').join('')+'</div><div class="schedule-actions"><button class="btn" onclick="MYDAY_LAB.applyImport()">Сохранить расписание</button><button class="btn g" onclick="MYDAY_LAB.clearDraft()">Очистить</button></div></section>':'<div class="empty-state"><b>Предпросмотр появится здесь</b><span>'+(groups.length?'Выбери группу, чтобы увидеть только её занятия.':'Ни одна запись не попадёт в календарь, пока ты не нажмёшь «Сохранить расписание».')+'</span></div>')+
+      (!groups.length&&d.sourceType==='university'?'<div class="empty-state"><b>Группы не распознаны</b><span>Импорт заблокирован, чтобы случайно не добавить расписание всего университета. Нужен файл, где названия групп находятся в заголовках столбцов, в колонке «Группа» или в названиях листов Excel.</span></div>':'')+
+      (canPreview&&selected.length?'<section class="section"><div class="section-head"><div><h2>Предпросмотр · '+selected.length+'</h2><p class="section-caption">'+(d.selectedGroup?'Группа '+esc(d.selectedGroup)+' · ':'Личное расписание · ')+'Нажми на строку, чтобы исправить распознавание.</p></div></div><div class="task-list">'+selected.map(r=>({r,i:records.indexOf(r)})).map(({r,i})=>'<button class="task-item import-row" onclick="MYDAY_LAB.editDraft('+i+')"><span class="settings-icon">'+mydayIcon('calendar',16)+'</span><span class="task-main"><span class="task-title">'+esc(r.subj||'Без названия')+'</span><span class="task-meta">'+esc(r.group?r.group+' · ':'')+esc(r.date||((r.day!=null?DAYS_SHORT[r.day]:'День не распознан')+' · '+(r.week||'неделя не указана'))) +' · '+esc((r.s||'--:--')+'–'+(r.e||'--:--'))+'</span></span><span class="task-chevron">›</span></button>').join('')+'</div><div class="schedule-actions"><button class="btn" onclick="MYDAY_LAB.applyImport()">Сохранить расписание</button><button class="btn g" onclick="MYDAY_LAB.clearDraft()">Очистить</button></div></section>':'<div class="empty-state"><b>Предпросмотр появится здесь</b><span>'+(groups.length?'Выбери группу, чтобы увидеть только её занятия.':d.sourceType==='personal'?'Проверь распознанные строки перед сохранением.':'Сначала укажи, личное это расписание или общее расписание университета.')+'</span></div>')+
       '<button class="btn g" style="width:100%" onclick="st=null;render()">Назад</button></main>';
   }
 
@@ -393,6 +398,26 @@
     m=v.match(/^(\d{1,2})[.](\d{1,2})[.](20\d{2})$/);
     return m?m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0'):'';
   }
+  function positionedItemsToRows(items) {
+    const clean=(items||[]).filter(x=>x&&String(x.text||'').trim()&&Number.isFinite(Number(x.x))&&Number.isFinite(Number(x.y))).map(x=>({x:Number(x.x),y:Number(x.y),w:Math.max(0,Number(x.width)||0),text:String(x.text).trim()}));
+    clean.sort((a,b)=>a.y-b.y||a.x-b.x);
+    const lines=[];
+    clean.forEach(item=>{
+      let line=lines.findLast?lines.findLast(x=>Math.abs(x.y-item.y)<=4):[...lines].reverse().find(x=>Math.abs(x.y-item.y)<=4);
+      if(!line){line={y:item.y,items:[]};lines.push(line)}
+      line.items.push(item);
+    });
+    return lines.map(line=>{
+      const cells=[];
+      line.items.sort((a,b)=>a.x-b.x).forEach(item=>{
+        const last=cells[cells.length-1];
+        if(!last||item.x-last.right>30)cells.push({text:item.text,right:item.x+item.w});
+        else {last.text+=' '+item.text;last.right=Math.max(last.right,item.x+item.w)}
+      });
+      return cells.map(x=>x.text.trim());
+    }).filter(row=>row.some(Boolean));
+  }
+
   async function extractFile(file) {
     const name=file.name||'schedule',ext=(name.split('.').pop()||'').toLowerCase();
     let records=[];
@@ -416,13 +441,20 @@
     } else if(ext==='pdf'){
       await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',()=>!!window.pdfjsLib);
       pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;let lines=[];
-      for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p),tc=await page.getTextContent();lines.push(tc.items.map(x=>x.str+(x.hasEOL?'\n':' ')).join('').split(/\r?\n/).filter(Boolean).join('\n'))}
-      records=parseRows(lines.map(x=>[x]));
+      const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;let rows=[],fallback=[];
+      for(let p=1;p<=pdf.numPages;p++){
+        const page=await pdf.getPage(p),tc=await page.getTextContent();
+        fallback.push(tc.items.map(x=>x.str+(x.hasEOL?'\n':' ')).join('').split(/\r?\n/).filter(Boolean).join('\n'));
+        rows.push(...positionedItemsToRows(tc.items.map(x=>({x:x.transform&&x.transform[4],y:x.transform&&x.transform[5],width:x.width,text:x.str}))));
+      }
+      records=parseRows(rows);
+      if(!records.length)records=parseRows(fallback.map(x=>[x]));
     } else if(['jpg','jpeg','png'].includes(ext)){
       await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',()=>!!window.Tesseract);
       const result=await Tesseract.recognize(file,'rus+eng',{logger:m=>{if(importDraft)importDraft.status=m.status==='recognizing text'?'Распознаю изображение…':'Подготавливаю распознавание…';}});
-      records=parseRows(result.data.text.split(/\r?\n/).map(x=>[x]));
+      const rows=positionedItemsToRows((result.data.words||[]).map(x=>({x:x.bbox&&x.bbox.x0,y:x.bbox&&x.bbox.y0,width:x.bbox?x.bbox.x1-x.bbox.x0:0,text:x.text})));
+      records=parseRows(rows);
+      if(!records.length)records=parseRows(result.data.text.split(/\r?\n/).map(x=>[x]));
     } else throw new Error('Формат файла не поддерживается.');
     const groups=[...new Set(records.map(r=>r.group).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
     return {records,groups};
@@ -441,6 +473,7 @@
       importDraft.records=result.records.slice(0,2000);
       importDraft.groups=result.groups;
       importDraft.selectedGroup='';
+      importDraft.sourceType=result.groups.length?'university':'';
       if(result.groups.length)importDraft.status='Найдено групп: '+result.groups.length+'. Выбери свою группу: чужие занятия в импорт не попадут.';
       else importDraft.status=result.records.length?'Группы не обнаружены. Похоже, файл содержит личное расписание. Проверь предпросмотр.':'Не удалось уверенно распознать расписание. Проверь формат файла или используй Excel/CSV с названиями групп в заголовках.';
       if(result.records.some(x=>x.week))importDraft.mode='alternating';
@@ -467,6 +500,7 @@
   function applyImport() {
     const d=importDraft;if(!d||!d.records.length){alert('Сначала распознай файл.');return}
     if(d.groups&&d.groups.length&&!d.selectedGroup){alert('Сначала выбери свою учебную группу.');return}
+    if((!d.groups||!d.groups.length)&&d.sourceType!=='personal'){alert('Сначала подтверди, что это личное расписание. Если это общее расписание университета, выбери тип «Общее» и загрузи файл с распознаваемыми группами.');return}
     const selectedRecords=d.groups&&d.groups.length?d.records.filter(r=>r.group===d.selectedGroup):d.records;
     if(!selectedRecords.length){alert('Для выбранной группы не найдено занятий. Выбери другую группу или проверь файл.');return}
     if(selectedRecords.some(x=>!Number.isInteger(Number(x.day))||Number(x.day)<1||Number(x.day)>6)){alert('Укажи день недели для каждой распознанной записи. Нераспознанные строки не будут добавлены наугад.');return}
