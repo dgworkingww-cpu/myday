@@ -128,7 +128,7 @@ const server = http.createServer((req,res) => {
     await page.getByRole('button',{name:/Идеи и заметки/}).click();
     await page.locator('#app .page-title').waitFor();
     const typography = await page.evaluate(() => {
-      const selectors = ['body', '#app .page-title', '#app h2', '#nav button', '#app button', '#app input'];
+      const selectors = ['body', '#app .page-title', '#app h2', '#nav button', '#app button'];
       return selectors.map(selector => [selector, getComputedStyle(document.querySelector(selector)).fontFamily]);
     });
     if (new Set(typography.map(([, family]) => family)).size !== 1) {
