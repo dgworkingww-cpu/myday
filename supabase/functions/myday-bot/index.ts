@@ -157,7 +157,7 @@ async function vision(fileId: string) {
   if (!r.ok) throw new Error("Не удалось разобрать фото: " + r.status);
   const d = await r.json(); try { return JSON.parse(d.choices?.[0]?.message?.content || "{}"); } catch { return ""; }
 }
-function taskKeyboard(tasks: Array<[string, string]>) { return tasks.map(([id, title]) => [{ text: "✓ " + String(title).slice(0, 35), callback_data: "done:" + id }, { text: "Завтра", callback_data: "tomorrow:" + id }]); }
+function taskKeyboard(tasks: Array<[string, string]>) { return tasks.map(([id, title]) => [{ text: "✓ " + String(title).slice(0, 28), callback_data: "done:" + id }, { text: "Завтра", callback_data: "tomorrow:" + id }, { text: "Удалить", callback_data: "delete:" + id }]); }
 async function handleText(chatId: number, userId: number, text: string) {
   const cmd = text.trim();
   if (/^\/(start|help)(\s|$)/i.test(cmd)) {
@@ -192,8 +192,36 @@ async function handleText(chatId: number, userId: number, text: string) {
     ? { intent: "add_event", tasks: [], events: [{ title: cmd, type: /экзамен/i.test(cmd) ? "Экзамен" : /зач[её]т/i.test(cmd) ? "Зачёт" : "Событие", date: inferDate(cmd, today) || today }] }
     : { intent: "add", tasks: [{ title: cmd, desc: "", space: fallbackSpace, cat: guessCategory(fallbackSpace), due: inferDate(cmd, today), prio: 1 }] });
   if (payload.intent === "clarify") { await send(chatId, escapeHtml(payload.reply || "Уточни, пожалуйста, дату или к какому разделу относится задача.")); return; }
-  if (payload.intent === "list_today" || payload.intent === "list_tasks" || payload.intent === "list_week") { await send(chatId, "Напиши /today, /week или /tasks."); return; }
+  if (payload.intent === "list_today" || payload.intent === "list_tasks" || payload.intent === "list_week") {
+    await handleText(chatId, userId, payload.intent === "list_today" ? "/today" : payload.intent === "list_week" ? "/week" : "/tasks");
+    return;
+  }
   if (payload.intent === "note") { p.data.inbox = Array.isArray(p.data.inbox) ? p.data.inbox : []; p.data.inbox.unshift({ text: String(payload.note || cmd), d: today }); await saveProfile(userId, p.data, p.baseData); await send(chatId, "Сохранил в заметки."); return; }
+  if (["complete", "delete", "reschedule"].includes(String(payload.intent))) {
+    const query = String(payload.task_query || "").trim().toLocaleLowerCase("ru");
+    if (!query) { await send(chatId, "Не понял, какую задачу изменить. Напиши её название."); return; }
+    const candidates = (Array.isArray(p.data.tasks) ? p.data.tasks : []).filter((x: AnyRecord) => Number(x.status || 0) !== 2 && String(x.title || "").toLocaleLowerCase("ru").includes(query));
+    if (!candidates.length) { await send(chatId, "Не нашёл открытую задачу по запросу «" + escapeHtml(payload.task_query) + "». Покажи список командой /tasks."); return; }
+    if (candidates.length > 1) {
+      const action = String(payload.intent);
+      const keyboard = candidates.slice(0, 8).map((x: AnyRecord) => [{ text: String(x.title).slice(0, 45), callback_data: action + ":" + x.id }]);
+      await send(chatId, "Нашёл несколько похожих задач. Выбери нужную:", keyboard);
+      return;
+    }
+    const task = candidates[0];
+    if (payload.intent === "complete") {
+      task.status = 2; await saveProfile(userId, p.data, p.baseData);
+      await send(chatId, "✓ Отметил выполненной: <b>" + escapeHtml(task.title) + "</b>"); return;
+    }
+    if (payload.intent === "delete") {
+      await send(chatId, "Удалить задачу <b>" + escapeHtml(task.title) + "</b>?", [[{ text: "Удалить задачу", callback_data: "delete_confirm:" + task.id }, { text: "Отмена", callback_data: "delete_cancel:" + task.id }]]);
+      return;
+    }
+    const due = String(payload.due || "");
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(due)) { await send(chatId, "На какую дату перенести «" + escapeHtml(task.title) + "»? Напиши, например: «на пятницу» или «на 12.12»."); return; }
+    task.due = due; await saveProfile(userId, p.data, p.baseData);
+    await send(chatId, "Перенёс <b>" + escapeHtml(task.title) + "</b> на " + due + "."); return;
+  }
   if (payload.intent === "add_event") {
     const incomingEvents = Array.isArray(payload.events) ? payload.events : [];
     if (!incomingEvents.length) { await send(chatId, "Не смог определить событие и дату. Напиши, например: «Экзамен по теплотехнике 12.12»."); return; }
@@ -225,11 +253,16 @@ async function handleCallback(q: AnyRecord) {
   if (!userId || !chatId) return;
   await tg("answerCallbackQuery", { callback_query_id: q.id });
   if (data.startsWith("view:")) { await handleText(chatId, userId, "/" + data.slice(5)); return; }
-  const p = await getProfile(userId), parts = data.split(":"), id = parts.slice(1).join(":");
+  if (q.message?.chat?.type !== "private") return;
+  const p = await getProfile(userId), parts = data.split(":"), action = parts[0], id = parts.slice(1).join(":");
   const task = (p.data.tasks || []).find((x: AnyRecord) => String(x.id) === id);
   if (!task) { await send(chatId, "Эта задача уже не найдена."); return; }
-  if (parts[0] === "done") { task.status = 2; await saveProfile(userId, p.data, p.baseData); await send(chatId, "✓ Выполнено: <b>" + escapeHtml(task.title) + "</b>"); }
-  else if (parts[0] === "tomorrow") { task.due = shiftDate(isoToday(p.data.settings?.timezone || TZ), 1); await saveProfile(userId, p.data, p.baseData); await send(chatId, "Перенёс на завтра: <b>" + escapeHtml(task.title) + "</b>"); }
+  if (action === "done" || action === "complete") { task.status = 2; await saveProfile(userId, p.data, p.baseData); await send(chatId, "✓ Выполнено: <b>" + escapeHtml(task.title) + "</b>"); }
+  else if (action === "tomorrow") { task.due = shiftDate(isoToday(p.data.settings?.timezone || TZ), 1); await saveProfile(userId, p.data, p.baseData); await send(chatId, "Перенёс на завтра: <b>" + escapeHtml(task.title) + "</b>"); }
+  else if (action === "delete") { await send(chatId, "Точно удалить <b>" + escapeHtml(task.title) + "</b>?", [[{ text: "Да, удалить", callback_data: "delete_confirm:" + id }, { text: "Не удалять", callback_data: "delete_cancel:" + id }]]); }
+  else if (action === "delete_confirm") { p.data.tasks = (p.data.tasks || []).filter((x: AnyRecord) => String(x.id) !== id); await saveProfile(userId, p.data, p.baseData); await send(chatId, "Удалил задачу: <b>" + escapeHtml(task.title) + "</b>"); }
+  else if (action === "delete_cancel") { await send(chatId, "Оставил задачу без изменений."); }
+  else if (action === "reschedule") { await send(chatId, "На какую дату перенести <b>" + escapeHtml(task.title) + "</b>? Напиши дату сообщением."); }
 }
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
