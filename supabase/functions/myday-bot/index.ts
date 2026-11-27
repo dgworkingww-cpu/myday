@@ -2,6 +2,7 @@
 // Receives private bot messages, writes into the same per-user profile as the Mini App.
 import { inferDate, inferTime, inferTimeRange, isCancellation, isDateOnlyReply, validDate, validTime } from "./language.ts";
 import { extractScheduleDocument } from "./document-parser.ts";
+import { mergeProfileChanges } from "./profile-merge.ts";
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type,x-telegram-bot-api-secret-token", "Access-Control-Allow-Methods": "POST,OPTIONS" };
 const enc = new TextEncoder();
 const TZ = "Europe/Moscow";
@@ -59,52 +60,7 @@ async function consumeAiQuota(telegramId: number, usageDate: string, limit = 100
   return response.json();
 }
 function mergeBotChanges(latest: AnyRecord, incoming: AnyRecord, base: AnyRecord) {
-  const merged = { ...latest };
-  // Merge the rotating work configuration only when this request changed it.
-  // This preserves unrelated settings changed concurrently in the Mini App.
-  if (JSON.stringify(base.workConfig ?? null) !== JSON.stringify(incoming.workConfig ?? null)) {
-    merged.workConfig = { ...(latest.workConfig || {}), ...(incoming.workConfig || {}) };
-  }
-  // Merge keyed collections by id so bot edits/deletions survive revision retries
-  // without overwriting unrelated changes made in the Mini App.
-  for (const key of ["tasks", "events", "hw"]) {
-    const latestItems = Array.isArray(latest[key]) ? [...latest[key]] : [];
-    const baseItems = Array.isArray(base[key]) ? base[key] : [];
-    const incomingItems = Array.isArray(incoming[key]) ? incoming[key] : [];
-    const baseById = new Map(baseItems.map((item: AnyRecord) => [String(item.id), item]));
-    const incomingById = new Map(incomingItems.map((item: AnyRecord) => [String(item.id), item]));
-    for (const item of incomingItems) {
-      const id = String(item.id || "");
-      if (!id) continue;
-      const before = baseById.get(id);
-      const index = latestItems.findIndex((x: AnyRecord) => String(x.id) === id);
-      if (!before) {
-        if (index < 0) latestItems.push(item);
-      } else if (index >= 0) {
-        const changes: AnyRecord = {};
-        for (const [field, value] of Object.entries(item)) {
-          if (JSON.stringify((before as AnyRecord)[field]) !== JSON.stringify(value)) changes[field] = value;
-        }
-        if (Object.keys(changes).length) latestItems[index] = { ...latestItems[index], ...changes };
-      }
-    }
-    // A missing item is a deliberate deletion only when it existed in the caller's base snapshot.
-    for (const before of baseItems) {
-      const id = String((before as AnyRecord).id || "");
-      if (id && !incomingById.has(id)) {
-        const index = latestItems.findIndex((x: AnyRecord) => String(x.id) === id);
-        if (index >= 0) latestItems.splice(index, 1);
-      }
-    }
-    merged[key] = latestItems;
-  }
-  const baseInbox = Array.isArray(base.inbox) ? base.inbox : [];
-  const incomingInbox = Array.isArray(incoming.inbox) ? incoming.inbox : [];
-  const latestInbox = Array.isArray(latest.inbox) ? latest.inbox : [];
-  const additions = incomingInbox.filter((item: AnyRecord) => !baseInbox.some((old: AnyRecord) => JSON.stringify(old) === JSON.stringify(item)) && !latestInbox.some((old: AnyRecord) => JSON.stringify(old) === JSON.stringify(item)));
-  merged.inbox = [...additions, ...latestInbox].slice(0, 300);
-  if (JSON.stringify(base.botState ?? null) !== JSON.stringify(incoming.botState ?? null)) merged.botState = incoming.botState ?? null;
-  return merged;
+  return mergeProfileChanges(latest, incoming, base);
 }
 async function saveProfile(telegramId: number, incoming: AnyRecord, baseData: AnyRecord) {
   failureStage = "сохранение задачи в Supabase";
@@ -115,7 +71,12 @@ async function saveProfile(telegramId: number, incoming: AnyRecord, baseData: An
     if (!r.ok) throw new Error("Profile save failed: " + r.status);
     const rows = await r.json();
     const result = Array.isArray(rows) ? rows[0] : rows;
-    if (result && !result.conflict) return;
+    if (result && !result.conflict) {
+      if (!result.data || Number(result.revision) <= current.revision) {
+        throw new Error("Supabase не подтвердил запись профиля новой ревизией.");
+      }
+      return;
+    }
   }
   throw new Error("Не удалось сохранить: профиль одновременно изменяется в приложении. Повторите действие.");
 }
