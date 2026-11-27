@@ -295,6 +295,13 @@ async function handleText(chatId: number, userId: number, text: string) {
     return;
   }
   if (payload.intent === "clarify") {
+    if (/домашн|лаборатор|курсов|реферат|задан/i.test(cmd) && !/по\s+[а-яё]/i.test(cmd)) {
+      p.data.botState = { pending: { kind: "homework_subject", raw: cmd, createdAt: Date.now() } };
+      await saveProfile(userId, p.data, p.baseData);
+      const names = subjects.length ? subjects.join("; ") : "предметы пока не добавлены в приложение";
+      await send(chatId, "Сохранил смысл запроса. По какому предмету записать? Твои дисциплины: " + escapeHtml(names) + ". Можно ответить одним названием.");
+      return;
+    }
     if (eventLike && (hasSpokenTimeRange || payload.intent === "clarify")) {
       p.data.botState = { pending: { kind: "event_date", raw: cmd, createdAt: Date.now() } };
       await saveProfile(userId, p.data, p.baseData);
@@ -326,7 +333,9 @@ async function handleText(chatId: number, userId: number, text: string) {
       const subjectQuery = String(item.subject || payload.subject || "").toLocaleLowerCase("ru").trim();
       const matches = availableSubjects.filter((s: AnyRecord) => subjectQuery && (String(s.name || "").toLocaleLowerCase("ru").includes(subjectQuery) || subjectQuery.includes(String(s.name || "").toLocaleLowerCase("ru"))));
       if (matches.length !== 1) {
-        await send(chatId, matches.length > 1 ? "Нашёл несколько похожих предметов: " + matches.map((s: AnyRecord) => escapeHtml(s.name)).join(", ") + ". Уточни точное название." : "Для какой дисциплины записать? Твои предметы: " + (availableSubjects.map((s: AnyRecord) => escapeHtml(s.name)).join("; ") || "список предметов пока пуст") + ".");
+        p.data.botState = { pending: { kind: "homework_subject", raw: cmd, createdAt: Date.now() } };
+        await saveProfile(userId, p.data, p.baseData);
+        await send(chatId, matches.length > 1 ? "Нашёл несколько похожих предметов: " + matches.map((s: AnyRecord) => escapeHtml(s.name)).join(", ") + ". Уточни точное название." : "Для какой дисциплины записать? Твои предметы: " + (availableSubjects.map((s: AnyRecord) => escapeHtml(s.name)).join("; ") || "список предметов пока пуст") + ". Можно ответить одним названием.");
         return;
       }
       const title = String(item.title || "").trim();
