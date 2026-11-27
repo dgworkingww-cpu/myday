@@ -7,7 +7,7 @@ function assertEquals(actual: unknown, expected: unknown) {
 }
 
 Deno.test("bot schedule lesson additions survive concurrent profile changes", () => {
-  const base = {
+  const base: any = {
     sched: { odd: { 1: [{ id: "old", title: "Математика" }] }, even: {} },
     exc: [],
     tasks: []
