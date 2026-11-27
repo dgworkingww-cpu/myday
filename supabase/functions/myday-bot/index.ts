@@ -398,7 +398,6 @@ async function handleText(chatId: number, userId: number, text: string) {
     return textLower.includes(normalized) || normalized.split(/\s+/).some((word: string) => word.length > 5 && textLower.includes(word.slice(0, 7)));
   });
   const fallbackHomework = !!fallbackSubject && /домашн|лаборатор|курсов|реферат|задан/i.test(cmd);
-  const lowerCmd = cmd.toLocaleLowerCase("ru");
   let fallbackPayload: AnyRecord;
   if (/^(?:что у меня сегодня|что сегодня|план на сегодня)/i.test(cmd)) fallbackPayload = { intent: "list_today" };
   else if (/^(?:что у меня завтра|какие пары завтра|расписание на завтра|покажи расписание на завтра)/i.test(cmd)) fallbackPayload = { intent: "list_date", due: inferDate(cmd, today) };
