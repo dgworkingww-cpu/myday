@@ -26,6 +26,8 @@ Deno.test("spoken Russian time ranges preserve both endpoints", () => {
   assertEquals(inferTimeRange("Работа с 8 до 10 вечера"), { start: "20:00", end: "22:00" });
   assertEquals(inferTimeRange("Смена с 8 вечера до 12 ночи"), { start: "20:00", end: "00:00" });
   assertEquals(inferTimeRange("добавь на завтра пару, 11:00 - 12:30 называется ебанина"), { start: "11:00", end: "12:30" });
+  assertEquals(inferTimeRange("12 до 13"), { start: "12:00", end: "13:00" });
+  assertEquals(inferTimeRange("с 12 до 13"), { start: "12:00", end: "13:00" });
   assertEquals(inferTimeRange("Работа с семи вечера по половины двенадцатого"), { start: "19:00", end: "23:30" });
   assertEquals(parseClock("полуночи"), "00:00");
 });
