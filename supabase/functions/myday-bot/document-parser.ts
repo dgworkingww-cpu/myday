@@ -1,4 +1,3 @@
-import * as XLSX from "npm:xlsx@0.18.5";
 import { strFromU8, unzipSync } from "npm:fflate@0.8.2";
 import * as pdfjs from "npm:pdfjs-dist@4.10.38/legacy/build/pdf.mjs";
 
@@ -28,6 +27,59 @@ function wordXmlToText(xml: string): string {
     .trim();
 }
 
+function xmlText(xml: string): string {
+  return decodeXml(xml.replace(/<[^>]+>/g, " ")).replace(/\\s+/g, " ").trim();
+}
+
+function xlsxToText(bytes: Uint8Array): { text: string; warnings: string[] } {
+  const files = unzipSync(bytes);
+  const warnings: string[] = [];
+  const sharedXml = files["xl/sharedStrings.xml"] ? strFromU8(files["xl/sharedStrings.xml"]) : "";
+  const sharedStrings = [...sharedXml.matchAll(/<si\\b[^>]*>([\\s\\S]*?)<\\/si>/g)].map((m) =>
+    [...m[1].matchAll(/<t\\b[^>]*>([\\s\\S]*?)<\\/t>/g)].map((x) => decodeXml(x[1])).join("")
+  );
+  const sheetPaths = Object.keys(files).filter((name) => /^xl\\/worksheets\\/sheet\\d+\\.xml$/.test(name)).sort((a, b) => {
+    const na = Number(a.match(/sheet(\\d+)/)?.[1] || 0), nb = Number(b.match(/sheet(\\d+)/)?.[1] || 0);
+    return na - nb;
+  });
+  const chunks: string[] = [];
+  for (const [sheetIndex, path] of sheetPaths.slice(0, 12).entries()) {
+    const xml = strFromU8(files[path]);
+    const rows: string[] = [];
+    for (const rowMatch of xml.matchAll(/<row\\b[^>]*>([\\s\\S]*?)<\\/row>/g)) {
+      const cells = new Map<number, string>();
+      for (const cellMatch of rowMatch[1].matchAll(/<c\\b([^>]*)>([\\s\\S]*?)<\\/c>|<c\\b([^>]*)\\/>/g)) {
+        const attrs = cellMatch[1] || cellMatch[3] || "";
+        const body = cellMatch[2] || "";
+        const ref = attrs.match(/\\br="([A-Z]+)\\d+"/i)?.[1] || "";
+        if (!ref) continue;
+        let column = 0;
+        for (const char of ref) column = column * 26 + char.charCodeAt(0) - 64;
+        column--;
+        const type = attrs.match(/\\bt="([^"]+)"/)?.[1] || "";
+        const value = body.match(/<v\\b[^>]*>([\\s\\S]*?)<\\/v>/)?.[1] ?? "";
+        let text = "";
+        if (type === "s" && value !== "") text = sharedStrings[Number(value)] || "";
+        else if (type === "inlineStr") text = [...body.matchAll(/<t\\b[^>]*>([\\s\\S]*?)<\\/t>/g)].map((x) => decodeXml(x[1])).join("");
+        else if (value !== "") {
+          const number = Number(value);
+          text = Number.isFinite(number) && number > 0 && number < 1 && /\\./.test(value)
+            ? (() => { const minutes = Math.round(number * 1440); return String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0"); })()
+            : decodeXml(value);
+        }
+        if (text) cells.set(column, text);
+      }
+      if (cells.size) {
+        const max = Math.max(...cells.keys());
+        rows.push(Array.from({ length: max + 1 }, (_, i) => cells.get(i) || "").join("\\t"));
+      }
+    }
+    if (rows.length) chunks.push("ЛИСТ " + (sheetIndex + 1) + "\\n" + rows.join("\\n"));
+  }
+  if (sheetPaths.length > 12) warnings.push("Обработаны первые 12 листов Excel.");
+  return { text: chunks.join("\\n\\n"), warnings };
+}
+
 function decodeText(bytes: Uint8Array): string {
   let value = new TextDecoder("utf-8").decode(bytes).replace(/^\uFEFF/, "");
   if ((value.match(/�/g) || []).length > 5) {
@@ -52,20 +104,12 @@ export async function extractScheduleDocument(
     return { text: text.slice(0, 45000), format: ext || "text", warnings };
   }
 
-  if (["xlsx", "xls", "xlsm", "xlsb"].includes(ext) || /spreadsheet|excel/i.test(mime)) {
-    const workbook = XLSX.read(bytes, { type: "array", cellDates: false });
-    const chunks: string[] = [];
-    for (const name of workbook.SheetNames.slice(0, 12)) {
-      const sheet = workbook.Sheets[name];
-      if (!sheet) continue;
-      const csv = XLSX.utils.sheet_to_csv(sheet, { FS: "\t", blankrows: false });
-      if (csv.trim()) chunks.push("ЛИСТ: " + name + "\n" + csv);
-    }
-    if (workbook.SheetNames.length > 12) warnings.push("Обработаны первые 12 листов Excel.");
-    const text = chunks.join("\n\n");
-    if (!text.trim()) throw new Error("В Excel-файле не найдены заполненные ячейки.");
-    return { text: text.slice(0, 45000), format: "Excel", warnings };
+  if (["xlsx", "xlsm"].includes(ext) || /spreadsheetml|excel.sheet/i.test(mime)) {
+    const workbook = xlsxToText(bytes);
+    if (!workbook.text.trim()) throw new Error("В Excel-файле не найдены заполненные ячейки.");
+    return { text: workbook.text.slice(0, 45000), format: "Excel", warnings: workbook.warnings };
   }
+  if (ext === "xls" || ext === "xlsb") throw new Error("Старый формат Excel не поддерживается напрямую. Сохрани файл как XLSX и отправь ещё раз.");
 
   if (ext === "docx" || /wordprocessingml\.document/i.test(mime)) {
     const files = unzipSync(bytes);
