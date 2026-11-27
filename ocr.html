@@ -144,7 +144,7 @@ async function showFile(){
    pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer(),isEvalSupported:false}).promise;
    pageCount=pdf.numPages;page=1;$("pager").classList.remove("hidden");$("pdfCanvas").classList.remove("hidden");$("previewLabel").textContent="Предпросмотр PDF";await renderPdfPage();
    progress(0,"PDF открыт. Страниц: "+pageCount+". Можно листать и запускать извлечение.");
-  }catch(err){$("extract").disabled=true;pdf=null;progress(0,"Не удалось открыть PDF: "+(err&&err.message||"файл повреждён или защищён паролем."),"error");return;}
+  }catch(err){$("extract").disabled=true;pdf=null;const detail=String(err&&err.message||"");const message=/password|парол/i.test(detail)?"PDF защищён паролем. Сохрани незапароленную копию и попробуй снова.":/worker|fetch|network|load/i.test(detail)?"Не удалось загрузить модуль PDF. Проверь интернет и открой документ ещё раз.":"Не удалось прочитать PDF. Возможно, файл повреждён или сохранён в неподдерживаемом формате.";progress(0,message,"error");return;}
  }else{
   imageUrl=URL.createObjectURL(file);$("imagePreview").src=imageUrl;$("imagePreview").classList.remove("hidden");$("previewLabel").textContent="Предпросмотр изображения";pageCount=1;
   progress(0,"Изображение готово к распознаванию.");
@@ -166,6 +166,11 @@ async function imageToCanvas(source){
   return canvas;
  }finally{URL.revokeObjectURL(url)}
 }
+async function createOcrWorker(logger){
+ if(!window.Tesseract)throw new Error("Не загрузился бесплатный движок OCR. Проверь подключение к интернету и повтори попытку.");
+ try{return await Tesseract.createWorker("rus+eng",1,{logger})}
+ catch(err){console.warn("MYDAY OCR worker initialization:",err);throw new Error("Не удалось запустить распознавание. Проверь интернет и повтори попытку. Исходный документ не изменён.")}
+}
 async function extractText(){
  if(!file){progress(0,"Сначала выбери PDF или изображение.","error");return}
  if(busy)return;
@@ -186,7 +191,7 @@ async function extractText(){
      if(!window.Tesseract)throw new Error("Не загрузился бесплатный движок OCR. Проверь подключение к интернету и повтори попытку.");
      if(!worker){
       progress(2,"Подготавливаю бесплатный движок распознавания…");
-      worker=await Tesseract.createWorker("rus+eng",1,{logger:m=>{if(m.status==="recognizing text")progress(5+Math.round((m.progress||0)*80),"Распознаю страницу "+n+"… "+Math.round((m.progress||0)*100)+"%")}});
+      worker=await createOcrWorker(m=>{if(m.status==="recognizing text")progress(5+Math.round((m.progress||0)*80),"Распознаю страницу "+n+"… "+Math.round((m.progress||0)*100)+"%")});
       activeWorker=worker;
      }
      if(cancelRequested)throw new Error("Обработка остановлена пользователем.");
@@ -204,7 +209,7 @@ async function extractText(){
   }else{
    if(!window.Tesseract)throw new Error("Не загрузился бесплатный движок OCR. Проверь подключение к интернету и повтори попытку.");
    progress(3,"Загружаю бесплатную языковую модель…");
-   worker=await Tesseract.createWorker("rus+eng",1,{logger:m=>{if(m.status==="recognizing text")progress(10+Math.round((m.progress||0)*80),"Распознаю изображение… "+Math.round((m.progress||0)*100)+"%")}});
+   worker=await createOcrWorker(m=>{if(m.status==="recognizing text")progress(10+Math.round((m.progress||0)*80),"Распознаю изображение… "+Math.round((m.progress||0)*100)+"%")});
    activeWorker=worker;if(cancelRequested)throw new Error("Обработка остановлена пользователем.");const canvas=await imageToCanvas(file);if(cancelRequested)throw new Error("Обработка остановлена пользователем.");const result=await worker.recognize(canvas);parts.push(String(result.data.text||"").trim());canvas.width=1;canvas.height=1;
   }
   if(cancelRequested)throw new Error("Обработка остановлена пользователем.");
