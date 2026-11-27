@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="ru"><head><!-- MYDAY 2.0 atelier: paper, ink, one accent --><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#efeae2">
+<meta name="description" content="MYDAY — расписание, задачи и учёба в одном месте.">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../icon-180.png">
+<title>MYDAY — твой день</title>
+<link rel="stylesheet" href="../design-system.css"></head><body>
+<div style="position:sticky;top:0;z-index:9999;padding:8px 14px;text-align:center;background:#8b5e3c;color:#fff;font:600 11px/1.35 system-ui;letter-spacing:.08em">ТЕСТОВАЯ СБОРКА MYDAY · ДАННЫЕ НЕ ЗАТРАГИВАЮТ ОСНОВНОЕ ПРИЛОЖЕНИЕ</div>
+<div id="app"></div>
+<nav id="nav" aria-label="Основная навигация"></nav>
+<script src="../backend-config.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>window.MYDAY_APPLE_UI_PENDING=true;setTimeout(function(){if(window.MYDAY_APPLE_UI_PENDING){window.MYDAY_APPLE_UI_PENDING=false;if(window.render)window.render();}},3500);</script>
+<script>
+const DAYS=['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+const CATS=['Учёба','Личные дела','Покупки','Автомобиль','Работа и проекты','Другое'];
+const PR=['Низкий','Средний','Высокий'],ST=['Не начато','В процессе','Выполнено'];
+const id=()=>Math.random().toString(36).slice(2,9);
+const TY={'Л':'#91ad91','ПЗ':'#cfaa73','ЛЗ':'#75a79a'};
+const tyP=l=>{const m=(l.room||'').split(' · ');return m.length>1&&TY[m[0]]?`<span class="pill" style="background:${TY[m[0]]}33;color:${TY[m[0]]}">${m[0]}</span>`:''};
+const roomOf=l=>(l.room||'').split(' · ').pop();
+const guess=s=>/(^|\s)послезавтра/i.test(s)?addDays(today(),2):/(^|\s)завтра/i.test(s)?addDays(today(),1):/(^|\s)сегодня/i.test(s)?today():'';
+function liveHtml(){const n=new Date(),L=lessons(n),m=n.getHours()*60+n.getMinutes(),mm=s=>+s.slice(0,2)*60+ +s.slice(3),cur=L.find(l=>mm(l.s)<=m&&m<mm(l.e));
+ if(cur)return `<div class="card hero"><div class="sub">Идёт сейчас · до конца ${mm(cur.e)-m} мин</div><div class="big" style="font-size:20px">${e(cur.subj)}</div><div class="sub">${cur.s}–${cur.e} · ${e(roomOf(cur))}</div><div class="bar" style="margin-top:10px"><i style="width:${(m-mm(cur.s))/(mm(cur.e)-mm(cur.s))*100}%"></i></div></div>`;
+ const nx=L.find(l=>mm(l.s)>m);if(!nx)return '';const d=mm(nx.s)-m;
+ return `<div class="card"><span class="tag">Следующая пара · через ${d>=60?Math.floor(d/60)+' ч '+d%60+' мин':d+' мин'}</span><div><b>${e(nx.subj)}</b></div><div class="tag">${tyP(nx)}${nx.s}–${nx.e} · ${e(roomOf(nx))}</div></div>`}
+const catGuess=s=>{s=s.toLowerCase();return /курсов|лаборатор|конспект|зач[её]т|экзамен|лекци|универ|домашк|реферат/.test(s)?'Учёба':/заправк|масл|шиномонт|шины|мойк|альмер|техосмотр|осаго|автомобил/.test(s)?'Автомобиль':/купить|куплю|магазин|продукт|заказать|аптек/.test(s)?'Покупки':/клиент|проект|заказчик|созвон|встреч|отч[её]т|работ/.test(s)?'Работа и проекты':''};
+function capHint(){const v=$('#cq').value.trim(),h=$('#chint');if(!v){h.innerHTML='';return}
+ const P=v.split(/;|\s+и\s+|\n/).map(s=>s.trim()).filter(Boolean),n=P.length,d=guess(v),cs=[...new Set(P.map(catGuess).filter(Boolean))],sp=$('#cs').checked;
+ h.innerHTML=(d?`<span class="pill">Срок: ${fmt(d)}</span>`:'')+cs.map(c=>`<span class="pill">${c}</span>`).join('')+(n>1&&!sp?`<button class="pill" style="border:0;color:var(--ac)" onclick="$('#cs').checked=true;capHint()">Разбить на ${n}</button>`:'')+(sp&&n>1?`<span class="pill">${n} задачи</span>`:'')}
+function dragStart(ev,tid){const h=ev.currentTarget,el=h.closest('.dr'),y0=ev.clientY;h.setPointerCapture(ev.pointerId);el.classList.add('drag');let z=null;
+ const mv=e2=>{el.style.transform=`translateY(${e2.clientY-y0}px) scale(1.02)`;z=document.elementsFromPoint(e2.clientX,e2.clientY).find(n=>n.classList&&n.classList.contains('zone'))||null;document.querySelectorAll('.zone').forEach(q=>q.classList.toggle('hot',q==z))};
+ const up=()=>{h.removeEventListener('pointermove',mv);h.removeEventListener('pointerup',up);h.removeEventListener('pointercancel',up);if(z){const t=S.tasks.find(x=>x.id==tid);if(t&&t.prio!=+z.dataset.p){t.prio=+z.dataset.p;save()}}render()};
+ h.addEventListener('pointermove',mv);h.addEventListener('pointerup',up);h.addEventListener('pointercancel',up)}
+let ft=null,cm=0,cdsel=null,sw=null;
+function excSet(lid,k,type,o){S.exc=S.exc||[];const a=S.exc.find(z=>z.date==k&&(z.lid==lid||z.id==lid));if(a){if(a.type=='add'){if(type=='cancel')S.exc=S.exc.filter(z=>z!=a);else a.o=o}else{a.type=type;a.o=o}}else S.exc.push({date:k,lid,type,o});save();close_();render()}
+const excSave=(l,k)=>excSet(l,k,'mod',{s:$('#x1').value,e:$('#x2').value,room:$('#x3').value,subj:$('#x4').value});
+const excCancel=(l,k)=>excSet(l,k,'cancel',{});
+function excReset(l,k){S.exc=(S.exc||[]).filter(z=>!(z.date==k&&z.lid==l));save();close_();render()}
+function addExtra(k){const i0='x'+id();S.exc=S.exc||[];S.exc.push({date:k,id:i0,type:'add',o:{s:'09:00',e:'10:30',room:'',subj:'Пара'}});save();lessonDay(i0,k)}
+function lessonDay(lid,k){const l=lessons(new Date(k+'T12:00')).find(x=>x.id==lid);if(!l)return;sheet(`<h1>${e(l.subj)}</h1><div class="sub">${fmt(k)} · только этот день, сетка не меняется</div><div class="row" style="margin:10px 0"><div class="grow"><label>Начало</label><input id="x1" type="time" value="${l.s}"></div><div class="grow"><label>Конец</label><input id="x2" type="time" value="${l.e}"></div></div><label>Аудитория</label><input id="x3" value="${e(l.room)}"><label>Предмет</label><input id="x4" value="${e(l.subj)}"><button class="btn" style="width:100%;margin-bottom:8px" onclick="excSave('${lid}','${k}')">Сохранить</button><div class="row"><button class="btn r grow" onclick="excCancel('${lid}','${k}')">Отменить пару</button>${l.chg&&!String(lid).startsWith('x')?`<button class="btn g grow" onclick="excReset('${lid}','${k}')">Как в сетке</button>`:''}</div>`)}
+function excRows(k){const n=new Date(k+'T12:00'),base=(scheduleBucket('study',wk(n))[n.getDay()]||[]);return (S.exc||[]).filter(z=>z.date==k&&z.type=='cancel').map(z=>{const l=base.find(b=>b.id==z.lid)||{subj:'Пара'};return `<div class="card row" style="padding:9px 14px;opacity:.6"><div class="grow tag" style="text-decoration:line-through">${e(l.subj)}</div><button class="btn g" style="padding:4px 12px" onclick="excReset('${z.lid}','${k}')">Вернуть</button></div>`}).join('')+`<button class="btn g" style="width:100%;margin-top:4px" onclick="addExtra('${k}')">+ Пара только на сегодня</button>`}
+function search(){sheet(`<input id="sq" aria-label="Поиск по задачам и заданиям" placeholder="Поиск по задачам и заданиям" oninput="doSearch()"><div id="sr" aria-live="polite"></div>`);setTimeout(()=>$('#sq').focus(),60)}
+function doSearch(){const q=$('#sq').value.trim().toLowerCase();if(!q){$('#sr').innerHTML='';return}const R=[...S.tasks.map(t=>({...t,k:'t'})),...S.hw.map(h=>({...h,k:'h',title:subj(h.subj)+': '+h.title}))].filter(x=>(x.title+' '+(x.desc||'')).toLowerCase().includes(q)).slice(0,30);$('#sr').innerHTML=R.length?R.map(x=>`<div class="card" onclick="detail('${x.k}','${x.id}')"><div class="${x.status==2?'t done':''}">${e(x.title)}</div><div class="tag">${x.due?fmt(x.due)+' · ':''}${ST[x.status]}</div></div>`).join(''):'<div class="sub">Ничего не найдено</div>'}
+function calView(){const b=new Date();b.setDate(1);b.setMonth(b.getMonth()+cm);const y=b.getFullYear(),m=b.getMonth(),off=(b.getDay()+6)%7,dim=new Date(y,m+1,0).getDate(),all=[...S.tasks,...S.hw].filter(x=>x.due&&x.status!=2),cnt={};all.forEach(x=>cnt[x.due]=(cnt[x.due]||0)+1);(S.events||[]).forEach(z=>cnt[z.date]=(cnt[z.date]||0)+1);let c='';for(let i=0;i<off;i++)c+='<div></div>';for(let d=1;d<=dim;d++){const k=y+'-'+pad(m+1)+'-'+pad(d),n=cnt[k]||0,s=k==cdsel;c+=`<div onclick="cdsel='${k}';render()" style="text-align:center;padding:8px 0;border-radius:12px;${k==today()?'border:1px solid var(--ac);':''}${s?'background:var(--ac);color:#fff;':''}">${d}<div style="height:8px;font-size:8px;color:${s?'#fff':'var(--ac)'}">${'●'.repeat(Math.min(n,3))}</div></div>`}const sel=cdsel?all.filter(x=>x.due==cdsel):[];
+ return `<header><button class="btn g" onclick="st=null;render()">‹ Назад</button></header><div class="row" style="justify-content:space-between"><button class="btn g" onclick="cm--;render()">‹</button><b>${b.toLocaleDateString('ru-RU',{month:'long',year:'numeric'})}</b><button class="btn g" onclick="cm++;render()">›</button></div><div class="card" style="margin-top:10px"><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(x=>`<div class="tag" style="text-align:center">${x}</div>`).join('')}${c}</div></div>`+(cdsel?`<h2>${fmt(cdsel)}</h2>`+(sel.length?sel.map(x=>row(x.subj?{...x,k:'h',title:subj(x.subj)+': '+x.title}:x)).join(''):'<div class="sub">Дедлайнов нет</div>')+evRows(cdsel):'')+`<button class="btn g" style="width:100%;margin-top:8px" onclick="evForm()">+ Зачёт / экзамен</button>`}
+function weekView(){const all=allOpen();return `<header><button class="btn g" onclick="st=null;render()">‹ Назад</button></header><h1>План недели</h1>`+[...Array(7)].map((_,i)=>addDays(today(),i)).map(k=>{const d=new Date(k+'T12:00'),L=lessons(d),T=all.filter(x=>x.due==k),ld=Math.min(100,L.length*14+T.length*18);return `<div class="card"><div class="row"><b class="grow">${DAYS[d.getDay()]}, ${fmt(k)}</b><span class="tag">${L.length} пар · ${T.length} дел</span></div><div class="bar" style="margin:8px 0"><i style="width:${ld}%;${ld>80?'background:var(--er)':''}"></i></div>${T.slice(0,3).map(x=>`<div class="tag">• ${e(x.title)}</div>`).join('')}</div>`}).join('')}
+const tplHtml=()=>(S.tpl||[]).map((t,i)=>`<span style="display:inline-flex;margin:0 6px 6px 0"><button class="btn g" style="padding:6px 12px;border-radius:99px 0 0 99px" onclick="tplUse(${i})">${e(t)}</button><button class="btn g" style="padding:6px 10px;border-radius:0 99px 99px 0;color:var(--er)" onclick="tplDel(${i})">×</button></span>`).join('');
+const tplUse=i=>{$('#cq').value=S.tpl[i];capHint()};
+function tplAdd(){const v=$('#cq').value.trim();if(!v)return;S.tpl=S.tpl||[];if(!S.tpl.includes(v))S.tpl.push(v);save();$('#tpl').innerHTML=tplHtml()}
+function tplDel(i){S.tpl.splice(i,1);save();$('#tpl').innerHTML=tplHtml()}
+function stages(i){const h=S.hw.find(y=>y.id==i);['Введение и постановка задач','Теоретическая часть','Расчёты','Графическая часть / чертежи','Оформление и список литературы','Подготовка к защите'].forEach(t=>h.subs.push({t,d:false}));save();detail('h',i);render()}
+function fcs(k,i){const x=(k=='t'?S.tasks:S.hw).find(y=>y.id==i);sheet(`<h1>Фокус</h1><div class="sub">${e(x.title)}</div><div class="big" id="fc" style="font-size:56px;text-align:center;margin:18px 0">25:00</div><div class="row"><button class="btn grow" id="fb" onclick="fToggle('${k}','${i}')">Старт</button><button class="btn g" onclick="close_()">Скрыть</button></div><div class="tag" style="margin-top:8px">Всего в фокусе: ${x.mins||0} мин. Таймер идёт, пока приложение открыто.</div>`);fShow()}
+function fShow(){const c=$('#fc');if(!c)return;const r=ft?Math.max(0,Math.round((ft.end-Date.now())/1000)):1500;c.textContent=pad(Math.floor(r/60))+':'+pad(r%60);const b=$('#fb');if(b)b.textContent=ft?'Стоп':'Старт'}
+function fToggle(k,i){if(ft)fEnd(false);else{ft={end:Date.now()+15e5,k,i,iv:setInterval(()=>{if(Date.now()>=ft.end)fEnd(true);else fShow()},1000)};fShow()}}
+function fEnd(done){clearInterval(ft.iv);const x=(ft.k=='t'?S.tasks:S.hw).find(y=>y.id==ft.i),m=done?25:Math.floor((15e5-(ft.end-Date.now()))/6e4);if(x&&m>0){x.mins=(x.mins||0)+m;(S.focus=S.focus||[]).push({d:today(),m});save()}ft=null;fShow();if(done)notify('Фокус завершён','25 минут прошло — делайте перерыв 5 минут')}
+function rem(h,a){const txt=a.slice(0,4).map(x=>x.title).join('\n');if(!notify(h,txt)&&!$('#ov'))sheet(`<h1>${h}</h1><p style="white-space:pre-line">${e(txt)}</p><button class="btn" onclick="close_()">Ок</button>`)}
+document.addEventListener('touchstart',ev=>{const c=ev.target.closest&&ev.target.closest('.card[data-id]');if(!c||ev.target.closest('.hd,.chk'))return;const t=ev.touches[0];sw={c,x:t.clientX,y:t.clientY,dx:0,lock:0}},{passive:true});
+document.addEventListener('touchmove',ev=>{if(!sw)return;const t=ev.touches[0],dx=t.clientX-sw.x,dy=t.clientY-sw.y;if(!sw.lock){if(Math.abs(dy)>10){sw=null;return}if(Math.abs(dx)>10)sw.lock=1}if(sw.lock){sw.dx=dx;sw.c.style.transition='none';sw.c.style.transform=`translateX(${dx}px)`;sw.c.style.background=dx>0?'color-mix(in srgb,var(--ok) 28%,var(--card))':'color-mix(in srgb,var(--ac) 28%,var(--card))'}},{passive:true});
+document.addEventListener('touchend',()=>{if(!sw)return;const {c,dx}=sw;sw=null;c.style.transition='transform .2s';if(Math.abs(dx)>90){const k=c.dataset.k,x=(k=='t'?S.tasks:S.hw).find(y=>y.id==c.dataset.id);if(!x){render();return}if(dx>0){if(x.status!=2){finish(k,x);save();c.classList.add('out');toast('Выполнено',()=>tog(k,x.id));setTimeout(render,300)}else render()}else{const od=x.due;x.due=addDays(today(),1);if(k=='h')x.needDue=0;save();render();toast('Перенесено на завтра',()=>{x.due=od;save();render()})}}else{c.style.transform='';c.style.background=''}});
+const AC=[['#315d49','#244b39'],['#466c7d','#31546b'],['#b56b52','#98513d'],['#a17b3d','#80602d'],['#85708e','#6b5876']];
+let tt,sd0=null;
+function toast(m,undo){const o=$('#toast');if(o)o.remove();clearTimeout(tt);const d=document.createElement('div');d.id='toast';d.className='toast';d.setAttribute('role','status');d.setAttribute('aria-live','polite');d.setAttribute('aria-atomic','true');d.innerHTML=`<span>${e(m)}</span>${undo?'<button class="toast-undo" type="button">Отменить</button>':''}`;if(undo)d.querySelector('button').onclick=()=>{undo();d.remove()};document.body.appendChild(d);tt=setTimeout(()=>d.remove(),4500)}
+function restoreBak(){const b=localStorage.getItem(localStoreKey+':session-bak')||localStorage.getItem('myday2_bak');if(!b)return alert('Автокопии пока нет');if(!confirm('Вернуть данные на момент начала последнего сеанса?'))return;try{S=JSON.parse(b);save();render()}catch(_){alert('Копия повреждена')}}
+const evRows=k=>(S.events||[]).map((z,i)=>({z,i})).filter(o=>o.z.date==k).map(o=>`<div class="card row"><span class="pill" style="background:var(--ac);color:#fff">${e(o.z.type)}</span><div class="grow">${e(o.z.title)}</div><button class="chk" style="border:0;color:var(--er)" onclick="evDel(${o.i})">×</button></div>`).join('');
+function evForm(){sheet(`<h1>Зачёт / экзамен</h1><label>Название</label><input id="v1" list="sl2" placeholder="Предмет"><datalist id="sl2">${S.subjects.map(s=>`<option value="${e(s.name)}">`).join('')}</datalist><label>Тип</label><select id="v2"><option>Экзамен</option><option>Зачёт</option><option>Консультация</option><option>Сдача работы</option></select><label>Дата</label><input id="v3" type="date" value="${cdsel||today()}"><button class="btn" style="width:100%" onclick="evSave()">Сохранить</button>`)}
+function evSave(){const t=$('#v1').value.trim(),d=$('#v3').value;if(!t){fieldError($('#v1'),'Введите название события');return}if(!d){fieldError($('#v3'),'Укажите дату события');return}(S.events=S.events||[]).push({id:id(),title:t,type:$('#v2').value,date:d});save();close_();render()}
+function evDel(i){if(!confirm('Удалить событие?'))return;S.events.splice(i,1);save();render()}
+function evSoon(){const t=today(),a=(S.events||[]).filter(z=>z.date>=t&&z.date<=addDays(t,21)).sort((x,y)=>x.date.localeCompare(y.date));return a.length?`<h2>Скоро</h2>`+a.map(z=>{const n=Math.round((new Date(z.date+'T12:00')-new Date(t+'T12:00'))/864e5);return `<div class="card row"><span class="pill" style="background:var(--ac);color:#fff">${e(z.type)}</span><div class="grow">${e(z.title)}</div><span class="tag">${n==0?'сегодня':n==1?'завтра':'через '+n+' дн.'}</span></div>`}).join(''):''}
+document.addEventListener('touchstart',ev=>{const s=ev.target.closest&&ev.target.closest('.sheet');if(!s||ev.target.closest('input,textarea,select,button'))return;const t=ev.touches[0];if(t.clientY-s.getBoundingClientRect().top<56&&s.scrollTop==0)sd0={s,y:t.clientY,d:0}},{passive:true});
+document.addEventListener('touchmove',ev=>{if(!sd0)return;const d=ev.touches[0].clientY-sd0.y;if(d>0){sd0.d=d;sd0.s.style.transition='none';sd0.s.style.transform=`translateY(${d}px)`}},{passive:true});
+document.addEventListener('touchend',()=>{if(!sd0)return;const {s,d}=sd0;sd0=null;if(d>110)close_();else{s.style.transition='transform .2s';s.style.transform=''}});
+const NI={today:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',sched:'<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/>',tasks:'<circle cx="12" cy="12" r="8"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>',study:'<path d="M4 6c3-1 6-1 8 1 2-2 5-2 8-1v12c-3-1-6-1-8 1-2-2-5-2-8-1z"/>',more:'<circle cx="6" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4"/>'};
+const dch=i=>`<div class="chips">${[['Сегодня',0],['Завтра',1],['+ неделя',7]].map(a=>`<button onclick="$('#${i}').value=addDays(today(),${a[1]})">${a[0]}</button>`).join('')}<button onclick="$('#${i}').value=''">Без срока</button></div>`;
+function tm(){const d=new Date();d.setDate(d.getDate()+1);const L=lessons(d);
+ if(!Object.values(scheduleBucket('study','odd')).flat().length&&!Object.values(scheduleBucket('study','even')).flat().length)return `<section class="today-mini" onclick="go('sched')"><h2>Заполните расписание</h2><span class="sub">Добавьте пары, чтобы видеть план недели и получать напоминания ›</span></section>`;
+ const up=allOpen().filter(x=>x.due>today()&&x.due<=addDays(today(),3)).sort((a,b)=>a.due.localeCompare(b.due)),bk=(!S.lastExport||Date.now()-S.lastExport>12096e5)&&(S.tasks.length+S.hw.length)?`<div class="card backup-card" role="note" onclick="go('more')"><b>Сделайте резервную копию</b><div class="tag">Данные хранятся только на этом устройстве · открыть настройки ›</div></div>`:'';return bk+evSoon()+(up.length?`<section class="today-mini"><h2>Ближайшие дедлайны</h2>${up.slice(0,3).map(row).join('')}</section>`:'')}
+function snz(k,i){const x=(k=='t'?S.tasks:S.hw).find(y=>y.id==i);x.due=addDays(today(),1);if(k=='h')x.needDue=0;save();close_();render()}
+function bulkForm(t){sheet(`<h1>Быстрый ввод · ${DAYS[sd]}</h1><div class="sub">Одна пара в строке:<br>09:00-10:30 Теплотехника, 214, Иванов И.И.<br>Аудитория и преподаватель — по желанию.</div><textarea id="bk" style="height:180px"></textarea><button class="btn" style="width:100%" onclick="saveBulk('${t}')">Добавить</button>`)}
+function saveBulk(t){const bucket=scheduleBucket(schedSpace,t),a=(bucket[sd]=bucket[sd]||[]),bad=[];$('#bk').value.split('\n').forEach(l=>{l=l.trim();if(!l)return;const m=l.match(/^(\d{1,2})[:.](\d{2})\s*[-–—]\s*(\d{1,2})[:.](\d{2})\s+(.+)$/);if(!m||+m[1]>23||+m[3]>23||+m[2]>59||+m[4]>59){bad.push(l);return}const s=pad(+m[1])+':'+m[2],f=pad(+m[3])+':'+m[4];if(f<=s){bad.push(l);return}const p=m[5].split(',').map(x=>x.trim());a.push({id:id(),subj:p[0],s,e:f,room:p[1]||'',teacher:p[2]||''})});save();close_();render();if(bad.length)alert('Не распознано:\n'+bad.join('\n'))}
+function copyForm(t){if(schedSpace!=='study')return;const o=t=='odd'?'even':'odd',n=o=='odd'?'нечётную':'чётную';sheet(`<h1>Копировать</h1><button class="btn g" style="width:100%;margin-bottom:8px" onclick="copyDay('${t}','${o}',0)">${DAYS[sd]} → на ${n} неделю</button><button class="btn g" style="width:100%" onclick="copyDay('${t}','${o}',1)">Всю неделю → на ${n}</button>`)}
+function copyDay(t,o,all){if(!confirm('Заменить занятия в целевой неделе?'))return;const from=scheduleBucket('study',t),to=scheduleBucket('study',o);(all?[1,2,3,4,5,6]:[sd]).forEach(d=>{to[d]=JSON.parse(JSON.stringify(from[d]||[])).map(l=>({...l,id:id()}))});save();close_();st=o;render()}
+const e=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const ds=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const today=()=>ds(new Date());
+const addDays=(s,n)=>{const d=new Date(s+'T12:00');d.setDate(d.getDate()+n);return ds(d)};
+const fmt=s=>s?new Date(s+'T12:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}):'';
+function isoWeek(d){d=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const n=d.getUTCDay()||7;d.setUTCDate(d.getUTCDate()+4-n);const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));return Math.ceil(((d-y)/864e5+1)/7)}
+const subjNames=['Основы взаимозаменяемости и технические изменения','Сельскохозяйственные машины','Тракторы и автомобили','Детали машин, основы конструирования и ПТМ','Теоретические основы подготовки трактористов-машинистов','Теплотехника','Повышение надежности сельскохозяйственных машин','Техническое оборудование для переработки сельскохозяйственной продукции','Электротехника и электроника','Машины и оборудование в животноводстве'];
+function seed(){
+ return {v:2,settings:{theme:'auto',morning:'07:30',shift:0,notif:true,hwDelay:60},
+ sched:{odd:{},even:{},work:{},fixed:{},cycle:{},dates:{}},
+ scheduleConfig:{studyMode:'alternating',cycleWeeks:2,cycleAnchor:'',selectedDate:''},
+ workConfig:{mode:'weekly',pattern:['work','work','off','off'],anchorDate:'',start:'09:00',end:'18:00',title:'Рабочая смена',exceptions:{}},
+ habits:[],tasks:[],inbox:[],fired:{},done:[],
+ uni:{name:'',url:'',login:'',notes:'',links:'',teachers:''},subjects:[],hw:[],exc:[],events:[]};
+}
+function normalizeProfile(data){
+ const base=seed(),d=data&&typeof data==='object'&&!Array.isArray(data)?data:{};
+ return {...base,...d,
+  settings:{...base.settings,...(d.settings&&typeof d.settings==='object'?d.settings:{})},
+  uni:{...base.uni,...(d.uni&&typeof d.uni==='object'?d.uni:{})},
+  sched:{odd:d.sched&&d.sched.odd&&typeof d.sched.odd==='object'?d.sched.odd:{},even:d.sched&&d.sched.even&&typeof d.sched.even==='object'?d.sched.even:{},work:d.sched&&d.sched.work&&typeof d.sched.work==='object'?d.sched.work:{},fixed:d.sched&&d.sched.fixed&&typeof d.sched.fixed==='object'?d.sched.fixed:{},cycle:d.sched&&d.sched.cycle&&typeof d.sched.cycle==='object'?d.sched.cycle:{},dates:d.sched&&d.sched.dates&&typeof d.sched.dates==='object'?d.sched.dates:{}},
+  scheduleConfig:{...base.scheduleConfig,...(d.scheduleConfig&&typeof d.scheduleConfig==='object'?d.scheduleConfig:{})},
+  workConfig:{...base.workConfig,...(d.workConfig&&typeof d.workConfig==='object'?d.workConfig:{})},
+  habits:Array.isArray(d.habits)?d.habits:[],
+  tasks:Array.isArray(d.tasks)?d.tasks.map(t=>({...t,space:t.space||(t.cat==='Работа и проекты'?'work':t.cat==='Учёба'?'study':'personal')})):[],inbox:Array.isArray(d.inbox)?d.inbox:[],
+  fired:d.fired&&typeof d.fired==='object'&&!Array.isArray(d.fired)?d.fired:{},
+  done:Array.isArray(d.done)?d.done:[],subjects:Array.isArray(d.subjects)?d.subjects:[],
+  hw:Array.isArray(d.hw)?d.hw:[],exc:Array.isArray(d.exc)?d.exc:[],events:Array.isArray(d.events)?d.events:[]
+ };
+}
+const tgApp=window.Telegram&&window.Telegram.WebApp;
+try{tgApp&&tgApp.ready();tgApp&&tgApp.expand()}catch(_){}
+const tgInitData=tgApp&&tgApp.initData||'';
+const tgUserId=tgApp&&tgApp.initDataUnsafe&&tgApp.initDataUnsafe.user&&String(tgApp.initDataUnsafe.user.id)||'';
+const isPreview=location.pathname.indexOf('/preview/')>=0;
+const localStoreKey=isPreview?(tgUserId?'myday2:test-preview:user:'+tgUserId:'myday2:test-preview'):(tgUserId?'myday2:user:'+tgUserId:'myday2');
+const legacyStore=isPreview?null:(tgUserId?localStorage.getItem('myday2'):null);
+const hadLocalProfile=!!localStorage.getItem(localStoreKey);
+let S;try{S=JSON.parse(localStorage.getItem(localStoreKey))}catch(_){}
+if(!S||!S.settings)S=seed();
+let mem=false,cloudReady=false,cloudSyncTimer=null,cloudSyncing=false,cloudDirty=false;
+const cloudCfg=window.MYDAY_CONFIG||{};
+const cloudConfigured=!isPreview&&!!(cloudCfg.supabaseUrl&&cloudCfg.supabaseAnonKey&&cloudCfg.edgeFunctionName);
+const cloudBaseKey=tgUserId?'myday2:sync-base:'+tgUserId:'';
+const cloudRevisionKey=tgUserId?'myday2:sync-revision:'+tgUserId:'';
+const cloudConflictKey=tgUserId?'myday2:sync-conflict:'+tgUserId:'';
+let cloudStatus=isPreview?'Тестовый режим: данные изолированы и сохраняются только на этом устройстве':(cloudConfigured?(tgInitData?'Подключение к облаку…':'Откройте MYDAY через Telegram'):'Облачная синхронизация пока не настроена');
+let cloudRevision=0,cloudRemoteData=null,cloudConflict=false,localMutationCounter=0,cloudConflictBackupAvailable=!!(cloudConflictKey&&localStorage.getItem(cloudConflictKey)),cloudConflictBackupPersisted=cloudConflictBackupAvailable,cloudConflictBackupDownloaded=false,cloudConflictLocalData=null;
+function updateCloudStatus(){const el=document.querySelector("[data-cloud-status]");if(el)el.textContent=cloudStatus}
+function cloudEndpoint(){const u=cloudCfg.supabaseUrl;return (u.endsWith('/')?u.slice(0,-1):u)+'/functions/v1/'+cloudCfg.edgeFunctionName}
+async function cloudRequest(action,data,expectedRevision){
+ if(!cloudConfigured||!tgInitData||!tgUserId)throw new Error(!tgInitData||!tgUserId?'Откройте приложение через меню Telegram':'Синхронизация не настроена');
+ const payload={action,initData:tgInitData};
+ if(data!==undefined)payload.data=data;
+ if(expectedRevision!==undefined)payload.expectedRevision=expectedRevision;
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
+ let r;try{r=await fetch(cloudEndpoint(),{method:'POST',headers:{'Content-Type':'application/json','apikey':cloudCfg.supabaseAnonKey},body:JSON.stringify(payload),signal:controller.signal})}finally{clearTimeout(timeout)}
+ const j=await r.json().catch(()=>({}));
+ if(r.status===409&&j.conflict)return j;
+ if(!r.ok||j.error)throw new Error(j.error||('Ошибка синхронизации: '+r.status));
+ return j;
+}
+function setCloudConflict(remote,revision){
+ cloudConflictLocalData=JSON.stringify(S);cloudConflictBackupPersisted=false;cloudConflictBackupDownloaded=false;
+ try{localStorage.setItem(cloudConflictKey,cloudConflictLocalData);cloudConflictBackupPersisted=true}catch(_){}
+ cloudConflictBackupAvailable=true;
+ cloudRemoteData=remote;cloudRevision=Number(revision)||0;cloudConflict=true;cloudDirty=false;
+ cloudStatus='Изменения отличаются от облачной версии. Локальная копия сохранена: выберите, какую версию оставить.';
+}
+async function snapshotHash(snapshot){
+ const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(snapshot));
+ return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function setCloudBase(snapshot,revision){
+ try{localStorage.setItem(cloudBaseKey,await snapshotHash(snapshot));localStorage.setItem(cloudRevisionKey,String(revision))}catch(err){console.warn('MYDAY sync metadata:',err)}
+}
+async function cloudPush(){
+ if(!cloudReady||!cloudConfigured||!tgInitData||cloudConflict)return false;
+ const snapshot=JSON.stringify(S);
+ try{
+  const result=await cloudRequest('save',JSON.parse(snapshot),cloudRevision);
+  if(result.conflict){setCloudConflict(result.data,result.revision);render();return false}
+  cloudRevision=Number(result.revision)||cloudRevision+1;
+  await setCloudBase(snapshot,cloudRevision);
+  if(JSON.stringify(S)===snapshot){cloudDirty=false;cloudStatus='Синхронизация включена'}
+  else{cloudDirty=true;cloudStatus='Сохраняю последние изменения…'}
+  updateCloudStatus();return true;
+ }catch(err){console.warn('MYDAY cloud save:',err);cloudDirty=true;cloudStatus='Ошибка синхронизации: '+err.message;updateCloudStatus();return false}
+}
+function queueCloudSave(delay=900){
+ if(!cloudReady||!cloudConfigured||!tgInitData||cloudConflict)return;
+ cloudDirty=true;clearTimeout(cloudSyncTimer);
+ cloudSyncTimer=setTimeout(()=>{if(!cloudSyncing&&!cloudConflict){cloudSyncing=true;cloudPush().finally(()=>{cloudSyncing=false;if(cloudDirty&&!cloudConflict)queueCloudSave(5000)})}},delay);
+}
+async function cloudPull(){
+ if(!cloudReady||!cloudConfigured||!tgInitData||cloudDirty||cloudSyncing||cloudConflict)return false;
+ if(document.querySelector('.sheet')||(document.activeElement&&/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)))return false;
+ try{
+  const result=await cloudRequest('load');
+  if(cloudDirty||cloudSyncing||cloudConflict)return false;
+  const remoteRevision=Number(result.revision)||0;
+  if(remoteRevision<=cloudRevision)return true;
+  if(result.data){
+   const localSnapshot=JSON.stringify(S),remoteSnapshot=JSON.stringify(result.data);
+   let lastSyncedHash='';try{lastSyncedHash=localStorage.getItem(cloudBaseKey)||''}catch(_){}
+   const localHash=await snapshotHash(localSnapshot),remoteHash=await snapshotHash(remoteSnapshot);
+   const knownRevision=Number(localStorage.getItem(cloudRevisionKey)||0);
+   if(localHash!==lastSyncedHash&&localHash!==remoteHash){
+    if(knownRevision!==remoteRevision){
+     setCloudConflict(result.data,remoteRevision);render();return false;
+    }
+    cloudRevision=remoteRevision;cloudDirty=true;await cloudPush();render();return false;
+   }
+   S=normalizeProfile(result.data);
+   localStorage.setItem(localStoreKey,JSON.stringify(S));cloudRevision=remoteRevision;await setCloudBase(JSON.stringify(S),cloudRevision);
+   cloudStatus='Синхронизация включена';render();
+  }
+  return true;
+ }catch(err){cloudStatus='Ошибка синхронизации: '+err.message;console.warn('MYDAY cloud load:',err);updateCloudStatus();return false}
+}
+function downloadCloudConflict(){
+ let raw='';try{raw=localStorage.getItem(cloudConflictKey)||cloudConflictLocalData||JSON.stringify(S,null,2)}catch(_){raw=cloudConflictLocalData||JSON.stringify(S,null,2)}
+ cloudConflictBackupDownloaded=true;
+ const blob=new Blob([raw],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download='myday-local-conflict-'+today()+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+async function keepLocalVersion(){
+ if(!cloudConflict)return;
+ if(!confirm('Заменить облачную версию текущими данными этого устройства? Локальная копия конфликта останется в резервной копии.'))return;
+ cloudConflict=false;cloudRemoteData=null;cloudReady=true;cloudDirty=true;cloudStatus='Сохраняю вашу версию в облако…';render();
+ await cloudPush();
+}
+async function acceptCloudRemote(){
+ if(!cloudConflict||!cloudRemoteData)return;
+ if(!cloudConflictBackupPersisted&&!cloudConflictBackupDownloaded){alert('Сначала скачайте локальную копию, затем загружайте облачную версию.');return}
+ S=normalizeProfile(cloudRemoteData);
+ localStorage.setItem(localStoreKey,JSON.stringify(S));try{localStorage.removeItem(cloudConflictKey)}catch(_){}
+ cloudConflict=false;cloudDirty=false;cloudRemoteData=null;await setCloudBase(JSON.stringify(S),cloudRevision);
+ cloudStatus='Облачная версия загружена. Локальная копия скачивается отдельно через кнопку резервной копии.';
+ render();
+}
+async function retryCloud(){if(!tgInitData){cloudStatus='Откройте MYDAY через меню Telegram';render();return}cloudStatus='Проверяю подключение…';render();await initCloud()}
+async function importLegacyData(){
+ let old;try{old=JSON.parse(legacyStore)}catch(_){}
+ if(!old||!old.settings){close_();return}
+ S=normalizeProfile(old);
+ localStorage.setItem(localStoreKey,JSON.stringify(S));localStorage.setItem('myday2:imported:'+tgUserId,'1');cloudReady=true;cloudDirty=true;
+ const ok=await cloudPush();
+ if(ok){cloudRemoteData=null;cloudStatus='Старые данные перенесены в ваш Telegram-профиль'}
+ else if(!cloudConflict)cloudStatus='Данные сохранены на устройстве; синхронизация повторится позже';
+ close_();render();
+}
+async function skipLegacyImport(){
+ localStorage.setItem('myday2:import-skipped:'+tgUserId,'1');
+ if(cloudRemoteData&&!cloudConflict){
+  S=normalizeProfile(cloudRemoteData);S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{},work:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};S.sched.work=S.sched.work||{};
+  localStorage.setItem(localStoreKey,JSON.stringify(S));cloudReady=true;cloudDirty=false;await setCloudBase(JSON.stringify(S),cloudRevision);
+  cloudRemoteData=null;cloudStatus='Облачный профиль загружен';close_();render();return;
+ }
+ cloudReady=true;cloudStatus='Личный профиль создан';save();close_();render();
+}
+async function initCloud(){
+ const mutationAtStart=localMutationCounter;
+ if(!tgInitData||!tgUserId){render();return}
+ if(!cloudConfigured){if(legacyStore&&!localStorage.getItem('myday2:import-skipped:'+tgUserId)){sheet('<h1>Перенести старые данные?</h1><p class="sub">На устройстве найдены ранее сохранённые расписание, предметы и задания. Перенести их в личный профиль этого Telegram-аккаунта? Исходная копия останется на устройстве.</p><div class="row"><button class="btn g grow" onclick="skipLegacyImport()">Начать с нуля</button><button class="btn grow" onclick="importLegacyData()">Перенести</button></div>')}else render();return}
+ try{
+  const result=await cloudRequest('load');
+  cloudRevision=Number(result.revision)||0;
+  if(localMutationCounter>mutationAtStart){cloudReady=true;cloudDirty=true;await cloudPush();render();return}
+  if(result.data){
+   if(!hadLocalProfile&&legacyStore&&!localStorage.getItem('myday2:imported:'+tgUserId)&&!localStorage.getItem('myday2:import-skipped:'+tgUserId)){
+    let legacySnapshot='';try{const old=JSON.parse(legacyStore);if(old&&old.settings)legacySnapshot=JSON.stringify(old)}catch(_){}
+    const remoteSnapshotForLegacy=JSON.stringify(result.data);
+    if(legacySnapshot&&legacySnapshot!==remoteSnapshotForLegacy){
+     cloudRemoteData=result.data;cloudReady=true;
+     sheet('<h1>Найдены две версии данных</h1><p class="sub">На этом устройстве есть старое расписание и задания, а в облаке уже есть профиль. Можно перенести старые данные поверх облачного профиля или оставить облачную версию. Исходная копия останется на устройстве.</p><div class="row"><button class="btn g grow" onclick="skipLegacyImport()">Оставить облачную</button><button class="btn grow" onclick="importLegacyData()">Перенести старые</button></div>');
+     return;
+    }
+    localStorage.setItem('myday2:imported:'+tgUserId,'1');
+   }
+   const remoteSnapshot=JSON.stringify(result.data),localSnapshot=JSON.stringify(S);
+   let lastSyncedHash='';try{lastSyncedHash=localStorage.getItem(cloudBaseKey)||''}catch(_){}
+   const localHash=await snapshotHash(localSnapshot),remoteHash=await snapshotHash(remoteSnapshot);
+   const knownRevision=Number(localStorage.getItem(cloudRevisionKey)||0);
+   if(hadLocalProfile&&localSnapshot!==remoteSnapshot&&localHash!==lastSyncedHash&&knownRevision!==cloudRevision){
+    setCloudConflict(result.data,cloudRevision);cloudReady=true;render();return;
+   }
+   if(hadLocalProfile&&localSnapshot!==remoteSnapshot&&localHash!==lastSyncedHash&&knownRevision===cloudRevision){
+    cloudReady=true;cloudDirty=true;await cloudPush();render();return;
+   }
+   S=normalizeProfile(result.data);S.subjects=S.subjects||[];S.hw=S.hw||[];S.sched=S.sched||{odd:{},even:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};
+   localStorage.setItem(localStoreKey,JSON.stringify(S));await setCloudBase(remoteSnapshot,cloudRevision);
+   cloudReady=true;cloudStatus='Синхронизация включена';render();return;
+  }
+  if(legacyStore&&!localStorage.getItem('myday2:imported:'+tgUserId)&&!localStorage.getItem('myday2:import-skipped:'+tgUserId)){
+   sheet('<h1>Перенести старые данные?</h1><p class="sub">На устройстве найдены ранее сохранённые расписание, предметы и задания. Перенести их в ваш Telegram-профиль? Исходная копия останется на устройстве.</p><div class="row"><button class="btn g grow" onclick="skipLegacyImport()">Начать с нуля</button><button class="btn grow" onclick="importLegacyData()">Перенести</button></div>');
+   return;
+  }
+  cloudReady=true;cloudDirty=true;await cloudPush();render();
+ }catch(err){cloudStatus='Ошибка подключения: '+err.message;console.error(err);render()}
+}
+function save(){try{localMutationCounter++;if(!window._bk){const previous=localStorage.getItem(localStoreKey);if(previous&&previous.length<350000&&!localStorage.getItem(localStoreKey+':session-bak')){try{localStorage.setItem(localStoreKey+':session-bak',previous)}catch(_){}}window._bk=1}localStorage.setItem(localStoreKey,JSON.stringify(S));queueCloudSave();return true}catch(x){if(!mem){mem=true;alert('Не удалось сохранить данные (память браузера недоступна или заполнена). Сделайте экспорт в разделе «Ещё».')}return false}}
+const weekStartKey=(d=new Date())=>{const x=new Date(d);x.setHours(12,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7));return ds(x)};
+const wk=(d=new Date())=>{const anchor=S.settings.weekAnchor||weekStartKey(new Date()),base=S.settings.weekAnchorType||(((isoWeek(new Date())+(S.settings.shift||0))%2)==1?'odd':'even');const a=anchor.split('-').map(Number),b=weekStartKey(d).split('-').map(Number),weeks=Math.floor((Date.UTC(b[0],b[1]-1,b[2])-Date.UTC(a[0],a[1]-1,a[2]))/604800000);return ((base=='odd'?0:1)+weeks%2+2)%2==0?'odd':'even'};
+function setWeekType(type){if(type!='odd'&&type!='even')return;S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=type;S.settings.shift=0;save();render()}
+const wkName=t=>t=='odd'?'нечётная (нижняя)':'чётная (верхняя)';
+function cycleIndexForDate(d){const cfg=S.scheduleConfig||{},anchor=cfg.cycleAnchor||S.settings.weekAnchor||weekStartKey(d),a=new Date(anchor+'T12:00:00'),b=new Date(weekStartKey(d)+'T12:00:00'),weeks=Math.floor((b-a)/604800000),n=Math.max(2,Math.min(4,Number(cfg.cycleWeeks)||2));return ((weeks%n)+n)%n}
+function scheduleBucket(space='study',week=wk()){
+ if(space==='work'){S.sched.work=S.sched.work||{};return S.sched.work}
+ S.sched.fixed=S.sched.fixed||{};S.sched.cycle=S.sched.cycle||{};S.sched.dates=S.sched.dates||{};
+ if(typeof week==='string'&&week.startsWith('date:'))return S.sched.dates[week.slice(5)]||(S.sched.dates[week.slice(5)]={});
+ if(week==='fixed')return S.sched.fixed;
+ if(typeof week==='string'&&week.startsWith('cycle:')){const i=Number(week.slice(6))||0;return S.sched.cycle[i]||(S.sched.cycle[i]={})}
+ const mode=(S.scheduleConfig&&S.scheduleConfig.studyMode)||'alternating';
+ if(mode==='fixed')return S.sched.fixed;
+ if(mode==='cycle'){const i=cycleIndexForDate(new Date((S.scheduleConfig.selectedDate||today())+'T12:00:00'));return S.sched.cycle[i]||(S.sched.cycle[i]={})}
+ if(mode==='dates'){const k=S.scheduleConfig.selectedDate||today();return S.sched.dates[k]||(S.sched.dates[k]={})}
+ const key=(week==='odd'||week==='even')?week:wk();return S.sched[key]||(S.sched[key]={});
+}
+function lessons(d=new Date(),t=wk(d)){
+ const k=ds(d),day=d.getDay(),X=S.exc||[],mode=(S.scheduleConfig&&S.scheduleConfig.studyMode)||'alternating';let base=[];
+ if(mode==='fixed')base=(S.sched.fixed&&S.sched.fixed[day]||[]).slice();
+ else if(mode==='cycle'){const i=cycleIndexForDate(d);base=((S.sched.cycle||{})[i]||{})[day]||[];base=base.slice()}
+ else if(mode==='dates'){const specific=(S.sched.dates||{})[k];base=(specific&&specific[day]||[]).slice()}
+ else if(mode==='hybrid'){base=[...((S.sched.fixed||{})[day]||[]),...((S.sched[t]||{})[day]||[])].map(x=>({...x}))}
+ else base=((S.sched[t]||{})[day]||[]).slice();
+ let L=base.map(l=>{const z=X.find(z=>z.date==k&&z.lid==l.id);return z?(z.type==='cancel'?null:{...l,...z.o,chg:1}):l}).filter(Boolean);
+ L=L.concat(X.filter(z=>z.date==k&&z.type==='add').map(z=>({id:z.id,...z.o,chg:1})));return L.sort((a,b)=>a.s.localeCompare(b.s));
+}
+const subj=i=>(S.subjects.find(s=>s.id==i)||{}).name||'—';
+const ruCount=(n,one,few,many)=>`${n} ${n%100>=11&&n%100<=14?many:n%10==1?one:n%10>=2&&n%10<=4?few:many}`;
+let tab='today',tf={cat:'',show:'open'},taskSpace='study',schedSpace='study',sd=new Date().getDay()||1,st=null,openSubj=null,studyFilter='open',moreOpen=new Set(['appearance']);
+
+function resolvedTheme(){const mode=S.settings.theme||'dark';if(mode!=='auto')return mode;const tgScheme=tgApp&&tgApp.colorScheme;if(tgScheme==='light'||tgScheme==='dark')return tgScheme;return matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'}
+function setTheme(mode){if(!['dark','light','auto'].includes(mode))return;S.settings.theme=mode;save();render()}
+function render(){
+ if(window.MYDAY_APPLE_UI_PENDING)return;
+ const th=resolvedTheme(),root=document.documentElement;root.dataset.theme=th;
+ const ai=S.settings.accent||0,rs=root.style,accent=AC[ai]||AC[0];
+ rs.setProperty('--accent',accent[0]);rs.setProperty('--accent-2',accent[1]);rs.setProperty('--ac',accent[0]);rs.setProperty('--ac2',accent[1]);rs.setProperty('--accent-soft',`color-mix(in srgb,${accent[0]} 12%,var(--surface))`);rs.setProperty('--accent-ink','#fffdf7');
+ const pageColor=th==='light'?'#f4f2ec':'#151c18',meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.content=pageColor;
+ try{tgApp&&tgApp.setHeaderColor&&tgApp.setHeaderColor(pageColor);tgApp&&tgApp.setBackgroundColor&&tgApp.setBackgroundColor(pageColor);tgApp&&tgApp.setBottomBarColor&&tgApp.setBottomBarColor(pageColor)}catch(_){}
+ const T=[['today','today','День'],['sched','sched','План'],['tasks','tasks','Задачи'],['study','study','Учёба'],['more','more','Ещё']];
+ const icons={today:'<path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6 7 7m10 10 1.4 1.4m0-12.8L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/>',sched:'<rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M7 3v4m10-4v4M4 10h16M8 14h2m4 0h2m-8 3h2"/>',tasks:'<path d="M8 6h12M8 12h12M8 18h12"/><path d="m3.5 6 .8.8L5.8 5m-2.3 7 .8.8 1.5-1.8m-2.3 7 .8.8 1.5-1.8"/>',study:'<path d="M4 5.5c3-1 6-1 8 1 2-2 5-2 8-1v13c-3-1-6-1-8 1-2-2-5-2-8-1z"/><path d="M12 7v12"/>',more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'};
+ $('#nav').innerHTML=`<div class="nav-brand"><span class="nav-brand-mark">M</span><span>MYDAY<small>PERSONAL DAYBOOK</small></span></div><div class="nav-caption">ПРОСТРАНСТВО</div>`+T.map(t=>`<button class="${tab==t[0]?'on':''}" aria-current="${tab==t[0]?'page':'false'}" aria-label="${t[2]}" onclick="go('${t[0]}')"><b><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icons[t[1]]}</svg></b><span>${t[2]}</span></button>`).join('');
+ $('#app').innerHTML=({today:vToday,sched:vSched,tasks:vTasks,study:vStudy,more:vMore})[tab]();
+ enhanceActionSemantics();
+ const vk=tab+'|'+st+'|'+openSubj;if(vk!=window._vk){window._vk=vk;const a=$('#app');a.classList.add('in');clearTimeout(window._vt);window._vt=setTimeout(()=>a.classList.remove('in'),1300)}
+}
+const $=s=>document.querySelector(s);
+function enhanceActionSemantics(){
+ $('#app').querySelectorAll('[onclick]').forEach(el=>{
+  if(el.matches('button,a,input,select,textarea,[role]')||el.querySelector('button,a,input,select,textarea'))return;
+  el.setAttribute('role','button');el.tabIndex=0;el.classList.add('is-action');
+  if(!el.hasAttribute('aria-label')){const label=(el.innerText||el.textContent||'').replace(/\s+/g,' ').trim().slice(0,140);if(label)el.setAttribute('aria-label',label)}
+  el.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();el.click()}})
+ })
+}
+function fieldError(field,message){if(!field)return;field.parentElement?.querySelectorAll('.field-error').forEach(x=>x.remove());const note=document.createElement('div');note.className='field-error';note.id='field-error-'+id();note.setAttribute('role','alert');note.textContent=message;field.insertAdjacentElement('afterend',note);field.setAttribute('aria-invalid','true');field.setAttribute('aria-describedby',note.id);field.focus()}
+function clearFieldError(ev){const field=ev.target;if(!field||field.getAttribute('aria-invalid')!=='true')return;const desc=field.getAttribute('aria-describedby');if(desc)document.getElementById(desc)?.remove();field.removeAttribute('aria-invalid');field.removeAttribute('aria-describedby')}
+document.addEventListener('input',clearFieldError);document.addEventListener('change',clearFieldError);
+const go=t=>{tab=t;openSubj=null;st=null;render();scrollTo(0,0)};
+const head=(t,s)=>`<header class="app-header"><div class="page-heading"><div class="brandline"><span class="brandmark">M</span><span>MYDAY</span><span class="brand-caption">PERSONAL DAYBOOK</span></div><h1>${t}</h1>${s?`<div class="sub">${s}</div>`:''}</div><div class="row page-actions"><button class="plus" onclick="search()" aria-label="Поиск"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m16 16 4 4"/></svg></button><button class="plus" onclick="capture()" aria-label="Быстрое добавление">+</button></div></header>`;
+const allOpen=()=>[...S.tasks.map(t=>({...t,k:'t'})),...S.hw.filter(h=>!(S.subjects.find(s=>s.id==h.subj)||{}).closed).map(h=>({...h,k:'h',title:subj(h.subj)+': '+h.title}))].filter(x=>x.status!=2);
+const late=x=>x.due&&x.due<today();
+
+function row(x){const k=x.k||'t',dn=x.status==2;
+ return `<div class="card row task-row ${late(x)&&!dn?'lc':''}" data-k="${k}" data-id="${x.id}"><button class="chk ${dn?'on':''}" aria-label="${dn?'Вернуть в активные':'Отметить выполненным'}: ${e(x.title)}" aria-pressed="${dn}" onclick="tog('${k}','${x.id}')">${dn?'✓':''}</button><div class="grow task-row-copy" onclick="detail('${k}','${x.id}')"><div class="t ${dn?'done':''}">${e(x.title)}</div><div class="tag task-row-meta">${x.due?`<span class="${late(x)&&!dn?'late':''}">${fmt(x.due)}</span> · `:''}${x.cat?e(x.cat)+' · ':''}${x.prio==2?'высокий приоритет · ':''}${x.subs&&x.subs.length?x.subs.filter(s=>s.d).length+'/'+x.subs.length+' подзадач':''}${x.needDue?'<span class="late">уточнить срок</span>':''}</div></div><span class="task-row-arrow" aria-hidden="true">›</span></div>`;}
+function vToday(){
+ const n=new Date(),t=today(),L=lessons(n),all=allOpen(),studyTask=x=>x.k==='h'||(x.space||'personal')==='study';
+ const overdue=all.filter(x=>late(x)&&studyTask(x)),due=all.filter(x=>x.due==t&&studyTask(x)),workDue=all.filter(x=>x.due==t&&(x.space||'personal')==='work');
+ const now=pad(n.getHours())+':'+pad(n.getMinutes()),current=L.find(l=>l.s<=now&&l.e>now),doneToday=S.done.filter(d=>d==t).length,total=due.length+doneToday,pct=total?Math.round(doneToday/total*100):0;
+ const greeting=n.getHours()<5?'Доброй ночи':n.getHours()<12?'Доброе утро':n.getHours()<18?'Добрый день':'Добрый вечер';
+ const dateLabel=n.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'});
+ const timeline=L.length?`<div class="timeline">${L.map(l=>`<div class="lesson-row ${current&&current.id==l.id?'current':''}" role="button" tabindex="0" aria-label="${e(l.subj)}, ${l.s}–${l.e}" onclick="lessonDay('${l.id}','${t}')"><div class="lesson-time">${l.s}</div><span class="lesson-node"></span><div class="lesson-main"><span class="lesson-title">${e(l.subj)}</span><div class="lesson-meta">${tyP(l)}<span>${l.s}–${l.e}</span>${l.teacher?`<span>${e(l.teacher)}</span>`:''}</div></div><span class="lesson-room">${e(roomOf(l))}</span></div>`).join('')}</div>`:'<div class="empty-state"><b>Сегодня занятий нет</b><span>Освободившееся время можно оставить свободным. Это тоже план.</span></div>';
+ const tomorrow=new Date(n);tomorrow.setDate(tomorrow.getDate()+1);const next=lessons(tomorrow).slice(0,2);
+ return head(greeting,dateLabel+' · '+wkName(wk()))+
+ `<section class="today-hero"><div class="hero-copy"><div class="hero-kicker">ВАШ ДЕНЬ · ${dateLabel}</div><div class="hero-title">${current?'Сейчас: '+e(current.subj):L.length?`${L.length} ${L.length===1?'занятие':'занятия'} сегодня`:'Сегодня можно не спешить'}</div><div class="hero-note">${total?(doneToday===total?'Все задачи на сегодня выполнены':`Выполнено ${doneToday} из ${total} задач на сегодня`):'Ваши занятия, задачи и планы в одном спокойном месте'}</div></div><div class="hero-progress"><svg role="img" aria-label="${total?pct+'% задач выполнено':'Нет задач на сегодня'}" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#ffffff30" stroke-width="6"/><circle cx="32" cy="32" r="26" fill="none" stroke="#e5c998" stroke-width="6" stroke-linecap="round" transform="rotate(-90 32 32)" style="stroke-dasharray:163.4;stroke-dashoffset:${total?163.4*(1-pct/100):163.4}"/><text x="32" y="37" text-anchor="middle" fill="#fffdf7" font-size="14" font-weight="700">${total?pct+'%':'—'}</text></svg><div class="hero-progress-label"><b>${total?doneToday+'/'+total:'На сегодня'}</b><span>${total?'готово':'план свободен'}</span></div></div></section>`+
+ `<div class="today-metrics"><div><span>Занятия</span><b>${L.length}</b></div><div><span>Задачи</span><b>${due.length}</b></div><div><span>Просрочено</span><b class="${overdue.length?'late':''}">${overdue.length}</b></div></div>`+
+ `<div class="today-grid"><section class="today-panel"><div class="section-head"><div><h2>Расписание</h2><p>${L.length?L.length+' занятия · '+wkName(wk()):'План занятий на сегодня'}</p></div><button class="text-action" onclick="go('sched')">Вся неделя ↗</button></div>${current?`<div class="current-callout"><b>Идёт сейчас · ${e(current.subj)}</b><span>До ${current.e} · ${e(roomOf(current))}</span></div>`:''}${timeline}${excRows(t)}</section><aside class="today-right"><section class="today-panel"><div class="section-head"><div><h2>Задачи на сегодня</h2><p>${due.length?due.length+' в плане':'Начните с одного небольшого дела'}</p></div><button class="text-action" onclick="go('tasks')">Все ↗</button></div>${due.length?due.map(row).join(''):'<div class="empty-state"><b>Список пока пуст</b><span>Добавьте задачу, чтобы не держать её в голове.</span></div>'}<div class="row" style="margin-top:12px"><input id="qa" aria-label="Быстро добавить задачу" placeholder="Добавить задачу…" onkeydown="if(event.key==='Enter')qadd()"><button class="btn" aria-label="Добавить задачу" onclick="qadd()">+</button></div></section>${workDue.length?`<section class="today-panel"><div class="section-head"><div><h2>Работа</h2><p>${workDue.length} на сегодня</p></div><button class="text-action" onclick="taskSpace='work';go('tasks')">Все ↗</button></div>${workDue.map(row).join('')}</section>`:''}${overdue.length?`<section class="today-mini"><h2>Просрочено по учёбе · ${overdue.length}</h2>${overdue.slice(0,3).map(row).join('')}</section>`:''}${next.length?`<section class="today-mini"><h2>Завтра</h2>${next.map(l=>`<div class="mini-line"><span>${e(l.subj)}</span><span>${l.s}</span></div>`).join('')}</section>`:''}${tm()}</aside></div>`;
+}
+function qadd(){const v=$('#qa').value.trim();if(!v)return;S.tasks.push(mk({title:v,due:guess(v)||today(),cat:catGuess(v)||'Учёба',space:'study'}));save();render()}
+const mk=o=>({id:id(),title:'',desc:'',cat:'Другое',space:'personal',due:'',prio:1,status:0,subs:[],repeat:'',created:today(),...o});
+
+function vSched(){
+ const t=schedSpace==='work'?'work':(st||wk()),bucket=scheduleBucket(schedSpace,t),days=['','Пн','Вт','Ср','Чт','Пт','Сб'];
+ const buttons=[1,2,3,4,5,6].map(d=>`<button class="${sd==d?'on':''}" aria-label="${DAYS[d]}, событий ${(bucket[d]||[]).length}" onclick="sd=${d};render()"><b>${days[d]}</b><small>${(bucket[d]||[]).length?((bucket[d]||[]).length+' дел'):'Свободно'}${d==new Date().getDay()?' · сегодня':''}</small></button>`).join('');
+ const list=(bucket[sd]||[]).slice().sort((a,b)=>a.s.localeCompare(b.s));
+ return head('Расписание','Неделя целиком, один день за раз. Учёба и работа живут отдельно.')+
+ `<div class="chips workspace-switch"><button class="${schedSpace==='study'?'on':''}" onclick="schedSpace='study';st=null;render()">Учёба</button><button class="${schedSpace==='work'?'on':''}" onclick="schedSpace='work';st='work';render()">Работа</button></div><section class="schedule-control"><div class="schedule-week-label"><span>${schedSpace==='study'?'Учебная неделя':'Рабочий график'}</span><span class="week-cycle">${schedSpace==='study'?wkName(t):'Повторяется каждую неделю'}</span></div>${schedSpace==='study'?`<div class="chips"><button class="${t==='odd'?'on':''}" onclick="st='odd';render()">Нижняя · нечётная</button><button class="${t==='even'?'on':''}" onclick="st='even';render()">Верхняя · чётная</button></div>`:''}<div class="days">${buttons}</div></section><div class="schedule-day-head"><div><div class="schedule-date-kicker">${DAYS[sd].toUpperCase()}</div><h2>${DAYS[sd]}</h2><p>${list.length?list.length+' записей в расписании':'Пока свободный день'}</p></div><button class="btn" onclick="lessonForm('${t}')">+ Добавить</button></div>${list.length?`<section class="schedule-wrap"><div class="timeline">${list.map(l=>`<div class="lesson-row" role="button" tabindex="0" aria-label="Изменить ${e(l.subj)}, ${l.s}–${l.e}" onclick="lessonForm('${t}','${l.id}')"><div class="lesson-time">${l.s}</div><span class="lesson-node"></span><div class="lesson-main"><span class="lesson-title">${e(l.subj)}</span><div class="lesson-meta">${schedSpace==='study'?tyP(l):''}<span>${l.s}–${l.e}</span>${l.teacher?`<span>${e(l.teacher)}</span>`:''}</div></div><span class="lesson-room">${e(roomOf(l))}</span></div>`).join('')}</div></section>`:'<div class="empty-state"><b>День свободен</b><span>Добавьте занятие, смену или встречу. Новая запись появится только в этом пространстве.</span><button class="btn" style="margin-top:8px" onclick="lessonForm(\''+t+'\')">Создать запись</button></div>'}<div class="schedule-actions"><button class="btn g" onclick="bulkForm('${t}')">Добавить списком</button>${schedSpace==='study'?`<button class="btn g" onclick="copyForm('${t}')">Копировать день</button>`:''}</div>`;
+}
+function lessonForm(t,lid){
+ const bucket=scheduleBucket(schedSpace,t),l=lid?bucket[sd].find(x=>x.id==lid):{subj:'',s:'09:00',e:'10:30',room:'',teacher:''};
+ sheet(`<h1>${schedSpace==='study'?(lid?'Занятие':'Новая пара'):(lid?'Рабочее событие':'Новое событие')} · ${DAYS[sd]}</h1><label>${schedSpace==='study'?'Предмет':'Название'}</label><input id="f1" list="sl" value="${e(l.subj)}"><datalist id="sl">${S.subjects.map(s=>`<option value="${e(s.name)}">`).join('')}</datalist>
+ <div class="row"><div class="grow"><label>Начало</label><input id="f2" type="time" value="${l.s}"></div><div class="grow"><label>Конец</label><input id="f3" type="time" value="${l.e}"></div></div>
+ <label>${schedSpace==='study'?'Аудитория':'Место / ссылка'}</label><input id="f4" value="${e(l.room)}"><label>${schedSpace==='study'?'Преподаватель (необязательно)':'Заметка (необязательно)'}</label><input id="f5" value="${e(l.teacher)}">
+ <div class="row"><button class="btn grow" onclick="saveLesson('${t}','${lid||''}')">Сохранить</button>${lid?`<button class="btn r" onclick="delLesson('${t}','${lid}')">Удалить</button>`:''}</div>`)}
+function saveLesson(t,lid){const o={subj:$('#f1').value.trim(),s:$('#f2').value,e:$('#f3').value,room:$('#f4').value.trim(),teacher:$('#f5').value.trim()};
+ if(!o.subj){fieldError($('#f1'),'Укажите название записи');return}if(!o.s){fieldError($('#f2'),'Укажите время начала');return}if(!o.e){fieldError($('#f3'),'Укажите время окончания');return}if(o.e<=o.s){fieldError($('#f3'),'Время окончания должно быть позже начала');return}
+ const bucket=scheduleBucket(schedSpace,t),a=(bucket[sd]=bucket[sd]||[]);if(lid)Object.assign(a.find(x=>x.id==lid),o);else a.push({id:id(),...o});save();close_();render()}
+function delLesson(t,lid){if(!confirm('Удалить запись?'))return;const bucket=scheduleBucket(schedSpace,t);bucket[sd]=bucket[sd].filter(x=>x.id!=lid);save();close_();render()}
+
+function vTasks(){
+ let L=S.tasks.filter(t=>(t.space||'personal')===taskSpace&&(tf.show==='done'?t.status==2:t.status!=2)&&(!tf.cat||t.cat===tf.cat));
+ L.sort((a,b)=>tf.show==='done'?(b.doneAt||'').localeCompare(a.doneAt||''):(a.due||'9999').localeCompare(b.due||'9999')||b.prio-a.prio);
+ const all=S.tasks.filter(t=>(t.space||'personal')===taskSpace),active=all.filter(t=>t.status!=2).length,done=all.filter(t=>t.status==2).length;
+ const name=taskSpace==='study'?'Учёба':taskSpace==='work'?'Работа':'Личное';
+ return head('Задачи','Понятный список дел без лишних уровней и случайной мешанины.')+
+ `<section class="task-overview"><div><span class="task-overview-kicker">${name.toUpperCase()} · СПИСОК</span><div class="task-overview-number">${tf.show==='done'?done:active}</div><div class="task-overview-caption">${tf.show==='done'?'выполнено':'активных задач'}</div></div><div class="task-overview-side"><span>Готово</span><b>${done}</b><span>Осталось</span><b>${active}</b></div><button class="btn" onclick="taskForm()">+ Новая задача</button></section>`+
+ `<div class="chips workspace-switch"><button class="${taskSpace==='study'?'on':''}" onclick="taskSpace='study';tf.cat='';render()">Учёба</button><button class="${taskSpace==='work'?'on':''}" onclick="taskSpace='work';tf.cat='';render()">Работа</button><button class="${taskSpace==='personal'?'on':''}" onclick="taskSpace='personal';tf.cat='';render()">Личное</button></div>`+
+ `<div class="task-toolbar"><div class="chips"><button class="${tf.show==='open'?'on':''}" onclick="tf.show='open';render()">Активные</button><button class="${tf.show==='done'?'on':''}" onclick="tf.show='done';tf.mode='';render()">История</button><button class="${tf.mode==='prio'&&tf.show==='open'?'on':''}" onclick="tf.show='open';tf.mode=tf.mode==='prio'?'':'prio';render()">Приоритет</button></div><span class="task-count">${L.length} задач</span></div>`+
+ `<div class="chips task-categories"><button class="${!tf.cat?'on':''}" onclick="tf.cat='';render()">Все категории</button>${CATS.map(c=>`<button class="${tf.cat===c?'on':''}" onclick="tf.cat='${c}';render()">${c}</button>`).join('')}</div>`+
+ (tf.show==='open'&&tf.mode==='prio'?`<div class="tag" style="margin-bottom:8px">Перетащите задачу в нужный приоритет или откройте её для редактирования.</div>`+[2,1,0].map(p=>`<section class="zone" data-p="${p}"><h2>${PR[p]} приоритет</h2>${L.filter(t=>t.prio==p).map(t=>`<div class="dr"><div class="hd" aria-hidden="true" onpointerdown="dragStart(event,'${t.id}')">⠇</div>${row(t)}</div>`).join('')||'<div class="sub dz">Здесь пока пусто</div>'}</section>`).join(''):L.length?L.map(row).join(''):`<div class="empty-state"><b>${tf.show==='done'?'История пока пуста':'Задач пока нет'}</b><span>${tf.show==='done'?'Выполненные дела появятся здесь.':'Добавьте первое дело. Подробности и сроки можно указать позже.'}</span></div>`)+`<button class="btn task-add-wide" onclick="taskForm()">+ Добавить задачу</button>`;
+}
+function taskForm(tid){const t=tid?S.tasks.find(x=>x.id==tid):mk({space:taskSpace,cat:taskSpace==='study'?'Учёба':taskSpace==='work'?'Работа и проекты':'Другое'});
+ sheet(`<h1>${tid?'Задача':'Новая задача'}</h1><label>Раздел</label><select id="f0"><option value="study" ${(t.space||'personal')==='study'?'selected':''}>Учёба</option><option value="work" ${(t.space||'personal')==='work'?'selected':''}>Работа</option><option value="personal" ${(t.space||'personal')==='personal'?'selected':''}>Личное</option></select><label>Название</label><input id="f1" value="${e(t.title)}"><label>Описание</label><textarea id="f2">${e(t.desc)}</textarea>
+ <label>Категория</label><select id="f3">${CATS.map(c=>`<option ${c==t.cat?'selected':''}>${c}</option>`).join('')}</select>
+ <label>Срок</label><input id="f4" type="date" value="${t.due}">${dch('f4')}<label>Приоритет</label><select id="f5">${PR.map((p,i)=>`<option value="${i}" ${i==t.prio?'selected':''}>${p}</option>`).join('')}</select>
+ <label>Статус</label><select id="f6">${ST.map((p,i)=>`<option value="${i}" ${i==t.status?'selected':''}>${p}</option>`).join('')}</select>
+ <label>Повтор</label><select id="f7">${[['','Нет'],['d','Каждый день'],['w','Каждую неделю'],['m','Каждый месяц']].map(r=>`<option value="${r[0]}" ${r[0]==t.repeat?'selected':''}>${r[1]}</option>`).join('')}</select>
+ <div class="row"><button class="btn grow" onclick="saveTask('${tid||''}')">Сохранить</button></div>`)}
+function saveTask(tid){const o={space:$('#f0').value,title:$('#f1').value.trim(),desc:$('#f2').value,cat:$('#f3').value,due:$('#f4').value,prio:+$('#f5').value,status:+$('#f6').value,repeat:$('#f7').value};
+ if(!o.title){fieldError($('#f1'),'Введите название задачи');return}if(tid){const t=S.tasks.find(x=>x.id==tid);const was=t.status;Object.assign(t,o);if(o.status==2&&was!=2)finish('t',t)}else S.tasks.push(mk(o));save();close_();render()}
+function nextDue(d,r){if(!d)return '';const x=new Date(d+'T12:00');if(r=='d')x.setDate(x.getDate()+1);if(r=='w')x.setDate(x.getDate()+7);if(r=='m')x.setMonth(x.getMonth()+1);return ds(x)}
+function finish(k,x){x.status=2;x.doneAt=today();S.done.push(today());if(k=='t'&&x.repeat){S.tasks.push(mk({...x,id:id(),status:0,doneAt:'',due:nextDue(x.due||today(),x.repeat),subs:x.subs.map(s=>({...s,d:false}))}))}}
+ function tog(k,i){const x=(k=='t'?S.tasks:S.hw).find(y=>y.id==i);if(x.status==2){const i2=S.done.indexOf(x.doneAt);if(i2>-1)S.done.splice(i2,1);x.status=0;x.doneAt=''}else{finish(k,x);const ev=window.event,b=ev&&ev.target&&ev.target.closest?ev.target.closest('.chk'):null;if(b){b.classList.add('on','pop');b.innerHTML='✓';const c=b.closest('.card');if(c)c.classList.add('out');save();toast('Выполнено',()=>tog(k,i));return setTimeout(render,320)}}save();render()}
+function detail(k,i){const x=(k=='t'?S.tasks:S.hw).find(y=>y.id==i);
+ sheet(`<h1>${e(x.title)}</h1><div class="tag">${k=='h'?e(subj(x.subj)):e(x.cat)} ${x.due?'· срок '+fmt(x.due):''}</div><p>${e(x.desc)}</p><button class="btn g" style="margin-bottom:10px" onclick="snz('${k}','${i}')">Перенести на завтра</button> <button class="btn g" style="margin-bottom:10px" onclick="fcs('${k}','${i}')">Фокус 25</button>${k=='h'&&!(x.subs||[]).length?` <button class="btn g" style="margin-bottom:10px" onclick="stages('${i}')">Этапы курсовой</button>`:''}${(x.subs||[]).length?`<div class="bar" style="margin-bottom:10px"><i style="width:${x.subs.filter(s=>s.d).length/x.subs.length*100}%"></i></div>`:''}
+ ${(x.subs||[]).map((s,j)=>`<div class="row" style="margin-bottom:6px"><button class="chk ${s.d?'on':''}" onclick="subTog('${k}','${i}',${j})">${s.d?'✓':''}</button><span class="grow ${s.d?'t done':''}">${e(s.t)}</span><button class="chk" style="border:0;color:var(--er)" onclick="subDel('${k}','${i}',${j})">×</button></div>`).join('')}
+ <div class="row"><input id="ns" placeholder="Новая подзадача"><button class="btn" onclick="subAdd('${k}','${i}')">+</button></div>
+  ${k=='h'?`<div>${(x.photos||[]).map((p,j)=>`<img class="th" src="${p}" alt="Фото к заданию" onclick="if(confirm('Удалить фото?')){S.hw.find(y=>y.id=='${i}').photos.splice(${j},1);save();detail('h','${i}')}">`).join('')}</div><div>${(x.files||[]).map((f,j)=>`<div class="row" style="margin:6px 0"><button class="btn g grow" onclick="downloadFile(event,'${i}',${j})">↓ ${e(f.name)}</button><button class="btn g" onclick="removeFile('${i}',${j})">×</button></div>`).join('')}</div><label>Фото или документ (до 512 КБ)</label><input type="file" accept="image/*,.pdf,.doc,.docx,.odt,.txt" onchange="addFile(this,'${i}')"><label>Прикрепить фото</label><input type="file" accept="image/*" onchange="addPhoto(this,'${i}')">`:''}
+ <div class="row"><button class="btn grow" onclick="${k=='t'?`taskForm('${i}')`:`hwForm('${i}')`}">Изменить</button><button class="btn r" onclick="del('${k}','${i}')">Удалить</button></div>`)}
+function subAdd(k,i){const v=$('#ns').value.trim();if(!v)return;(k=='t'?S.tasks:S.hw).find(y=>y.id==i).subs.push({t:v,d:false});save();detail(k,i);render()}
+function subTog(k,i,j){const s=(k=='t'?S.tasks:S.hw).find(y=>y.id==i).subs[j];s.d=!s.d;save();detail(k,i);render()}
+function subDel(k,i,j){(k=='t'?S.tasks:S.hw).find(y=>y.id==i).subs.splice(j,1);save();detail(k,i);render()}
+function del(k,i){if(!confirm('Удалить безвозвратно?'))return;if(k=='t')S.tasks=S.tasks.filter(y=>y.id!=i);else S.hw=S.hw.filter(y=>y.id!=i);save();close_();render()}
+function addPhoto(inp,i){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas'),s=Math.min(1,800/Math.max(im.width,im.height));c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);S.hw.find(y=>y.id==i).photos.push(c.toDataURL('image/jpeg',.6));save();detail('h',i)};im.src=r.result};r.readAsDataURL(f)}
+function addFile(inp,i){const f=inp.files&&inp.files[0];if(!f)return;if(f.size>512*1024)return alert('Файл больше 512 КБ. Для больших документов добавьте ссылку в описание.');const ext=f.name.split('.').pop().toLowerCase(),ok=/^image\/(jpeg|png|webp|gif)$/i.test(f.type)||['pdf','doc','docx','odt','txt'].includes(ext);if(!ok)return alert('Поддерживаются JPEG, PNG, WEBP, GIF, PDF, DOC, DOCX, ODT и TXT.');const r=new FileReader();r.onload=()=>{const data=String(r.result||'');if(!/^data:(image\/(jpeg|png|webp|gif)|application\/(pdf|msword|vnd\.openxmlformats-officedocument\.wordprocessingml\.document|vnd\.oasis\.opendocument\.text|octet-stream)|text\/plain);base64,/i.test(data))return alert('Тип файла не поддерживается');if((JSON.stringify(S).length+data.length*2)>4000000)return alert('Память браузера почти заполнена. Сначала экспортируйте резервную копию или удалите старые вложения.');const x=S.hw.find(y=>y.id==i);x.files=x.files||[];x.files.push({name:f.name.replace(/[\\/]/g,'_').slice(0,120),data});save();detail('h',i)};r.onerror=()=>alert('Не удалось прочитать файл');r.readAsDataURL(f)}
+function removeFile(i,j){const x=S.hw.find(y=>y.id==i);if(!x||!x.files||!confirm('Удалить вложение?'))return;x.files.splice(j,1);save();detail('h',i)}
+async function downloadFile(ev,i,j){ev.preventDefault();ev.stopPropagation();const f=(S.hw.find(y=>y.id==i)||{}).files?.[j];if(!f||typeof f.data!='string'||!f.data.startsWith('data:'))return alert('Файл повреждён');try{const blob=await(await fetch(f.data)).blob(),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=f.name||'attachment';a.rel='noopener';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(_){alert('Не удалось открыть вложение')}}
+
+function vStudy(){
+ if(openSubj){const s=S.subjects.find(x=>x.id==openSubj);if(!s){openSubj=null;return vStudy()}const H=S.hw.filter(h=>h.subj==s.id),done=H.filter(h=>h.status==2).length,active=H.filter(h=>h.status!=2).length,lateH=H.filter(h=>h.status!=2&&h.due&&h.due<today()).length;
+  return head(e(s.name),s.closed?'Предмет закрыт · задания остаются в истории':'Задания и сроки по предмету')+
+  `<section class="study-hero subject-detail-hero"><div><div class="study-eyebrow">ПРЕДМЕТ</div><div class="subject-detail-title">${e(s.name)}</div><div class="study-hero-note">${s.closed?'Зачёт получен':active?`${active} активных · ${lateH?lateH+' просрочено':'всё под контролем'}`:'Активных заданий нет'}</div></div><button class="btn" onclick="hwForm('','${s.id}')">+ Задание</button></section>`+
+  `<div class="study-stats subject-detail-stats"><div class="study-stat"><b>${H.length}</b><span>всего</span></div><div class="study-stat"><b>${active}</b><span>к выполнению</span></div><div class="study-stat"><b>${done}</b><span>готово</span></div></div>`+
+  `<div class="study-section-head"><div><h2>Список заданий</h2><p>${H.length?`Готовность по предмету · ${H.length?Math.round(done/H.length*100):0}%`:'Ваш план по этому предмету'}</p></div><button class="btn g" onclick="subjEdit('${s.id}')">Настроить предмет</button></div><div class="bar study-progress"><i style="width:${H.length?done/H.length*100:0}%"></i></div>`+
+  (H.length?H.slice().sort((a,b)=>(a.status==2)-(b.status==2)||(a.due||'9999').localeCompare(b.due||'9999')).map(h=>row({...h,k:'h',cat:s.name})).join(''):'<div class="empty-state"><b>Пока нет заданий по предмету</b><span class="sub">Добавьте домашнюю работу, проект или подготовку к зачёту.</span></div>')+
+  `<button class="btn g" style="margin-top:12px" onclick="openSubj=null;render()">← К списку предметов</button>`}
+ const all=S.hw.slice().sort((a,b)=>{if((a.status==2)!=(b.status==2))return a.status==2?1:-1;return (a.due||'9999').localeCompare(b.due||'9999')});
+ const active=all.filter(h=>h.status!=2),done=all.filter(h=>h.status==2),lateH=active.filter(h=>h.due&&h.due<today()),soon=active.filter(h=>h.due&&h.due>=today()&&h.due<=addDays(today(),7));
+ const filtered=studyFilter=='done'?done:studyFilter=='all'?all:studyFilter=='soon'?soon:active;
+ const subjIcon=s=>{const n=s.name.toLowerCase();const paths=/матем|алгебр|геометр|физик/.test(n)?'<path d="M5 5h14v14H5z"/><path d="m8 9 3 3-3 3m5 0h3"/>':/язык|литерат|русск|англ|филолог/.test(n)?'<path d="M4 5h16v14H4z"/><path d="M8 9h8m-8 3h5m-5 3h8"/>':/программ|информат|код|компьют|it\b/.test(n)?'<rect x="3.5" y="5" width="17" height="12" rx="2"/><path d="M8 21h8m-4-4v4m-3-9 2 2 4-4"/>':/хими|биолог|медицин|анатом/.test(n)?'<path d="M9 3h6m-5 0v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/><path d="M7 16h10"/>':/истори|обществ|прав|эконом/.test(n)?'<path d="M4 20h16M6 17V9m4 8V9m4 8V9m4 8V9M3 7l9-4 9 4v1H3z"/>':'<path d="M4 5.5c3-1 6-1 8 1 2-2 5-2 8-1v13c-3-1-6-1-8 1-2-2-5-2-8-1z"/><path d="M12 7v12"/>';return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`};
+ const subjectCards=S.subjects.map((s,i)=>{const H=S.hw.filter(h=>h.subj==s.id),d=H.filter(h=>h.status==2).length,o=H.filter(h=>h.status!=2).length,p=H.length?Math.round(d/H.length*100):0,ld=H.filter(h=>h.status!=2&&h.due&&h.due<today()).length,activeLabel=o?ruCount(o,'задание в работе','задания в работе','заданий в работе'):'Нет активных заданий',palette=[['#70b8a3','#70b8a322'],['#91a9d7','#91a9d722'],['#d3a56c','#d3a56c22'],['#bf91c8','#bf91c822'],['#78aebd','#78aebd22'],['#d28f83','#d28f8322']][i%6];
+  return `<div class="subject-card card" style="--subject-color:${palette[0]};--subject-tint:${palette[1]}" role="button" tabindex="0" aria-label="Открыть предмет ${e(s.name)}, ${o} активных заданий" onclick="openSubj='${s.id}';render()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSubj='${s.id}';render()}"><div class="subject-card-top"><div class="subject-mark">${subjIcon(s)}</div><div class="grow"><b>${e(s.name)}</b><span>${s.closed?'Зачёт получен':activeLabel}</span></div></div><div class="bar"><i style="width:${p}%;background:${palette[0]}"></i></div><div class="subject-foot"><span>${H.length?`${d} из ${H.length} выполнено`:'Пока без заданий'}</span>${ld?`<span class="late">Просрочено: ${ld}</span>`:`<span>${H.length?p+'% готово':'Добавить первое'}</span>`}</div><div class="subject-open"><b>Открыть предмет</b><span aria-hidden="true">↗</span></div></div>`}).join('');
+ const filterButtons=[['open','Активные',active.length],['soon','7 дней',soon.length],['done','Готово',done.length],['all','Все',all.length]].map(([k,label,count])=>`<button class="${studyFilter==k?'on':''}" aria-pressed="${studyFilter==k}" onclick="studyFilter='${k}';render()"><span>${label}</span><small>${count}</small></button>`).join('');
+ const groups=[['late','Просрочено','#e27b70'],['today','Сдать сегодня','#d3a56c'],['week','На этой неделе','#70b8a3'],['later','Позже','#91a9d7'],['none','Без срока','#929d98'],['done','Выполнено','#70b8a3']];
+ const grouped=groups.map(([key,label,color])=>{const items=filtered.filter(h=>{if(h.status==2)return key=='done';if(!h.due)return key=='none';if(h.due<today())return key=='late';if(h.due==today())return key=='today';if(h.due<=addDays(today(),7))return key=='week';return key=='later'});return items.length?`<section class="study-task-group" style="--group-color:${color}"><h3 class="study-task-group-head">${label}<small>${items.length} ${items.length==1?'задание':items.length<5?'задания':'заданий'}</small></h3>${items.map(h=>row({...h,k:'h',cat:subj(h.subj)})).join('')}</section>`:''}).join('');
+ return head('Учёба','Предметы отдельно, задания — по срокам')+
+ `<section class="study-hero"><div><div class="study-eyebrow">УЧЕБНАЯ НАГРУЗКА</div><div class="study-hero-title">${active.length?`${ruCount(active.length,'задание','задания','заданий')} в работе`:'Свободно для нового'}</div><div class="study-hero-note">${lateH.length?`${ruCount(lateH.length,'задание просрочено','задания просрочены','заданий просрочено')} · ${soon[0]?`ближайший срок ${fmt(soon[0].due)}`:'уточните сроки'}`:soon.length?`${ruCount(soon.length,'срок на этой неделе','срока на этой неделе','сроков на этой неделе')}`:all.length&&!active.length?'Все задания выполнены — можно добавить новое':active.length?'Сроки и прогресс по предметам собраны здесь':'Все задания и предметы на одном экране'}</div></div><button class="btn" onclick="${S.subjects.length?"hwForm()":"subjEdit()"}">${S.subjects.length?'+ Новое задание':'+ Добавить предмет'}</button></section>`+
+ `<div class="study-stats"><div class="study-stat" style="--stat-color:#70b8a3;--stat-tint:#70b8a31a"><i class="study-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></i><b>${active.length}</b><span>в работе</span></div><div class="study-stat ${lateH.length?'stat-alert':''}" style="--stat-color:#e27b70;--stat-tint:#e27b701a"><i class="study-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></i><b>${lateH.length}</b><span>просрочено</span></div><div class="study-stat" style="--stat-color:#91a9d7;--stat-tint:#91a9d71a"><i class="study-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></i><b>${done.length}</b><span>выполнено</span></div></div>`+
+ `<section class="subjects-panel study-section"><div class="study-section-head"><div class="study-subject-title-icon"><span class="subject-mark" style="--subject-color:var(--ac);--subject-tint:color-mix(in srgb,var(--ac) 14%,transparent)">${subjIcon({name:'Предметы'})}</span><div><h2>Мои предметы</h2><p>${S.subjects.length?`${ruCount(S.subjects.length,'предмет','предмета','предметов')} · выберите курс, чтобы увидеть задания`:'Разделите учебные дела по курсам'}</p></div></div><button class="btn g" onclick="subjEdit()">+ Предмет</button></div>`+
+ (subjectCards?`<div class="subjects-grid">${subjectCards}</div>`:`<div class="empty-state"><div class="study-empty-icon">${subjIcon({name:'Предметы'})}</div><b>Начните с первого предмета</b><span class="sub">Затем добавляйте задания — они будут собраны внутри курса и отсортированы по срокам.</span><button class="btn" style="margin-top:12px" onclick="subjEdit()">Создать предмет</button></div>`)+`</section>`+
+ `<section class="study-section" style="margin-top:28px"><div class="study-section-head"><div><h2>Учебные задания</h2><p>${active.length?`${active.length} активных · сроки собраны по группам`:'Спокойный день без активных заданий'}</p></div><button class="btn" onclick="${S.subjects.length?'hwForm()':'subjEdit()'}">+ Задание</button></div><div class="study-tasks-shell"><div class="chips study-filters">${filterButtons}</div>`+
+ (grouped?`<div class="study-task-groups">${grouped}</div>`:`<div class="empty-state"><b>${studyFilter=='done'?'Выполненных заданий пока нет':studyFilter=='soon'?'На ближайшую неделю сроков нет':studyFilter=='all'?'Заданий пока нет':'Список свободен'}</b><span class="sub">${!S.subjects.length?'Сначала создайте предмет — так задания будут собраны по учебным курсам.':'Переключите период или добавьте задание.'}</span>${!S.subjects.length?'<button class="btn" style="margin-top:10px" onclick="subjEdit()">+ Создать предмет</button>':''}</div>`)+`</div></section>`}
+function subjEdit(sid){const s=sid?S.subjects.find(x=>x.id==sid):{name:'',closed:false};
+ sheet(`<h1>Предмет</h1><input id="f1" value="${e(s.name)}"><label><input type="checkbox" id="f2" ${s.closed?'checked':''} style="width:auto"> Зачёт получен (без напоминаний)</label>
+ <div class="row"><button class="btn grow" onclick="saveSubj('${sid||''}')">Сохранить</button>${sid?`<button class="btn r" onclick="delSubj('${sid}')">Удалить</button>`:''}</div>`)}
+function saveSubj(sid){const n=$('#f1').value.trim();if(!n)return fieldError($('#f1'),'Введите название предмета');if(sid){const s=S.subjects.find(x=>x.id==sid);s.name=n;s.closed=$('#f2').checked}else S.subjects.push({id:id(),name:n,closed:$('#f2').checked});save();close_();render()}
+function delSubj(sid){if(!confirm('Удалить предмет вместе с заданиями?'))return;S.subjects=S.subjects.filter(x=>x.id!=sid);S.hw=S.hw.filter(h=>h.subj!=sid);openSubj=null;save();close_();render()}
+function hwForm(hid,sid){const h=hid?S.hw.find(x=>x.id==hid):{subj:sid||openSubj,title:'',desc:'',due:'',status:0};
+ sheet(`<h1>Задание</h1><label>Предмет</label><select id="f0">${S.subjects.map(s=>`<option value="${s.id}" ${s.id==h.subj?'selected':''}>${e(s.name)}</option>`).join('')}</select>
+ <label>Название</label><input id="f1" value="${e(h.title)}"><label>Описание</label><textarea id="f2">${e(h.desc)}</textarea><label>Срок сдачи</label><input id="f3" type="date" value="${h.due}">${dch('f3')}
+ <label>Статус</label><select id="f4">${ST.map((p,i)=>`<option value="${i}" ${i==h.status?'selected':''}>${p}</option>`).join('')}</select>
+ <button class="btn" style="width:100%" onclick="saveHw('${hid||''}')">Сохранить</button>`)}
+function saveHw(hid){const o={subj:$('#f0').value,title:$('#f1').value.trim(),desc:$('#f2').value,due:$('#f3').value,status:+$('#f4').value};if(!o.subj){fieldError($('#f0'),'Выберите предмет');return}if(!o.title){fieldError($('#f1'),'Введите название задания');return}
+ if(o.due)o.needDue=0;if(hid){const h=S.hw.find(x=>x.id==hid);const w=h.status;Object.assign(h,o);if(o.status==2&&w!=2)finish('h',h)}else S.hw.push({id:id(),subs:[],photos:[],...o});save();close_();render()}
+
+function vMore(){
+ const M=S.settings;
+ if(tab=='more'&&st=='stats')return statsView();if(st=='cal')return calView();if(st=='week')return weekView();
+ if(st=='uni'){const u=S.uni;return `<header><button class="btn g" onclick="st=null;render()">‹ Назад</button></header><h1>Университет</h1>
+ <label>Название</label><input id="u1" value="${e(u.name)}"><label>Личный кабинет (ссылка)</label><input id="u2" value="${e(u.url)}"><label>Логин</label><input id="u3" value="${e(u.login)}">
+ <div class="sub">Пароль здесь не хранится — используйте менеджер паролей iPhone.</div><label>Полезные ссылки</label><textarea id="u4">${e(u.links)}</textarea>
+ <label>Контакты преподавателей</label><textarea id="u5">${e(u.teachers)}</textarea><label>Заметки</label><textarea id="u6">${e(u.notes)}</textarea>
+ <div class="row"><button class="btn grow" onclick="saveUni()">Сохранить</button><button class="btn g" onclick="saveUni();openUni()">Открыть сайт</button></div>`}
+ if(st=='inbox')return `<header><button class="btn g" onclick="st=null;render()">‹ Назад</button></header><h1>Идеи и заметки</h1>`+(S.inbox.length?S.inbox.map((n,i)=>`<div class="card row"><div class="grow">${e(n.text)}<div class="tag">${n.d}</div></div><button class="btn g" onclick="toTask(${i})">В задачи</button><button class="chk" style="border:0;color:var(--er)" onclick="S.inbox.splice(${i},1);save();render()">×</button></div>`).join(''):'<div class="sub">Пусто</div>');
+ const tools=[
+  ['uni','Университет','Ссылки, заметки и контакты','У','st=\'uni\';render()',''],
+  ['week','План недели','Нагрузка по дням и пары','7',"st='week';render()",''],
+  ['cal','Дедлайны и события','Календарь сдач и экзаменов','↗',"cdsel=today();st='cal';render()",String((S.events||[]).filter(z=>z.date>=today()).length)],
+  ['stats','Статистика','Фокус и прогресс за неделю','∿',"st='stats';render()",''],
+  ['inbox','Идеи и заметки','Быстрые записи без срока','✎',"st='inbox';render()",String(S.inbox.length)],
+  ['subjects','Предметы','Список курсов и домашние задания','К',"go('study')",String(S.subjects.length)]
+ ];
+ const moreIcons={uni:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 9-5 9 5v2H3z"/><path d="M5 10v9m4-9v9m6-9v9m4-9v9M3 21h18"/></svg>',week:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="3"/><path d="M7 3v4m10-4v4M4 10h16M8 14h3m3 0h2M8 17h3"/></svg>',cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="3"/><path d="M7 3v4m10-4v4M4 10h16m-10 4 2 2 4-4"/></svg>',stats:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10m5 10V5m5 15v-7m5 7V3"/></svg>',inbox:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8m-8 4h5"/></svg>',subjects:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5c3-1 6-1 8 1 2-2 5-2 8-1v13c-3-1-6-1-8 1-2-2-5-2-8-1z"/><path d="M12 7v12"/></svg>'};
+ const toolHtml=tools.map(([id,title,desc,icon,action,badge])=>`<div class="more-tool-card card" role="button" tabindex="0" aria-label="${title}${badge&&Number(badge)>0?`, ${badge}`:''}" onclick="${action}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${action}}"><span class="more-tool-icon" aria-hidden="true">${moreIcons[id]||icon}</span><span class="more-tool-copy"><b>${title}</b><small>${desc}</small></span>${badge&&Number(badge)>0?`<span class="more-tool-badge">${badge}</span>`:''}<span class="more-tool-arrow" aria-hidden="true">↗</span></div>`).join('');
+ const open=k=>moreOpen.has(k)?'open':'';
+ return head('Ещё','Инструменты и настройки приложения')+
+ `<section class="more-section"><div class="study-section-head"><div><h2>Инструменты</h2><p>Дополнительные разделы MYDAY</p></div></div><div class="more-tools-grid">${toolHtml}</div></section>`+
+ `<section class="more-section settings-section"><div class="study-section-head"><div><h2>Настройки</h2><p>Меняйте внешний вид, напоминания и данные</p></div></div><div class="settings-group card" style="padding:16px;margin-bottom:12px"><b>Синхронизация MYDAY</b><div class="tag">${tgUserId?'Telegram-профиль: определён':'Откройте приложение через меню Telegram для личного профиля'}</div><div class="tag" role="status" aria-live="polite" data-cloud-status>${e(cloudStatus)}</div>${tgInitData&&!cloudConflict?'<button class="btn g" style="margin-top:10px" onclick="retryCloud()">Проверить соединение</button>':''}${cloudConflictBackupAvailable?'<button class="btn g" style="margin-top:10px" onclick="downloadCloudConflict()">Скачать сохранённую локальную копию</button>':''}${cloudConflict?'<div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn g grow" onclick="acceptCloudRemote()">Загрузить облачную</button><button class="btn grow" onclick="keepLocalVersion()">Оставить мою</button></div><div class="tag">Выбери, какую версию оставить. Локальная копия сохранена отдельно и доступна для скачивания.</div>':''}</div>`+
+ `<details class="settings-group card" ${open('appearance')} ontoggle="this.open?moreOpen.add('appearance'):moreOpen.delete('appearance')"><summary><span class="settings-icon">◐</span><span class="settings-summary-copy"><b>Внешний вид</b><small>Тема и акцентный цвет</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Режим оформления</label><div class="theme-options" role="group" aria-label="Режим оформления">
+ <button type="button" class="${M.theme=='light'?'on':''}" aria-pressed="${M.theme=='light'}" onclick="setTheme('light')"><span class="theme-option-icon" aria-hidden="true">☼</span><b>Светлая</b></button>
+ <button type="button" class="${M.theme=='dark'?'on':''}" aria-pressed="${M.theme=='dark'}" onclick="setTheme('dark')"><span class="theme-option-icon" aria-hidden="true">☾</span><b>Тёмная</b></button>
+ <button type="button" class="${M.theme=='auto'?'on':''}" aria-pressed="${M.theme=='auto'}" onclick="setTheme('auto')"><span class="theme-option-icon" aria-hidden="true">◐</span><b>Система</b></button>
+ </div><div class="tag theme-note">${M.theme=='auto'?'Оформление повторяет тему Telegram. В браузере используется тема устройства.':M.theme=='light'?'Светлая тема включена на всех экранах приложения.':'Тёмная тема включена на всех экранах приложения.'}</div>
+ <label>Акцентный цвет</label><div class="row settings-swatches">${AC.map((c,i)=>`<button type="button" onclick="S.settings.accent=${i};save();render()" aria-label="Акцентный цвет ${['Лесной','Сланцевый','Терракотовый','Песочный','Сливовый'][i]}" title="${['Лесной','Сланцевый','Терракотовый','Песочный','Сливовый'][i]}" aria-pressed="${(M.accent||0)==i}" style="--swatch-a:${c[0]};--swatch-b:${c[1]}">${(M.accent||0)==i?'<span aria-hidden="true">✓</span>':''}</button>`).join('')}</div></div></details>`+
+ `<details class="settings-group card" ${open('week')} ontoggle="this.open?moreOpen.add('week'):moreOpen.delete('week')"><summary><span class="settings-icon">7</span><span class="settings-summary-copy"><b>Учебная неделя</b><small>${wkName(wk())}</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Тип текущей недели</label><select onchange="setWeekType(this.value)"><option value="odd" ${wk()=='odd'?'selected':''}>Нечётная (нижняя)</option><option value="even" ${wk()=='even'?'selected':''}>Чётная (верхняя)</option></select><div class="tag">Тип недели меняется каждый понедельник. Здесь можно скорректировать его вручную.</div></div></details>`+
+ `<details class="settings-group card" ${open('notifications')} ontoggle="this.open?moreOpen.add('notifications'):moreOpen.delete('notifications')"><summary><span class="settings-icon">◷</span><span class="settings-summary-copy"><b>Напоминания</b><small>Утренний план и домашние задания</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><label>Утреннее расписание</label><input type="time" value="${M.morning}" onchange="S.settings.morning=this.value;save()"><label>Спросить про домашку через (мин) после последней пары</label><input type="number" min="0" value="${M.hwDelay}" onchange="S.settings.hwDelay=+this.value;save()"><button class="btn" onclick="askNotif()">Разрешить уведомления</button><div class="tag settings-help">Статус: ${'Notification' in window?Notification.permission:'не поддерживается'}. Напоминания проверяются, пока MYDAY открыта; браузер может приостановить их в фоне.</div></div></details>`+
+ `<details class="settings-group card" ${open('data')} ontoggle="this.open?moreOpen.add('data'):moreOpen.delete('data')"><summary><span class="settings-icon">↗</span><span class="settings-summary-copy"><b>Данные и резервные копии</b><small>Экспорт, восстановление и перенос</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><div class="settings-actions"><button class="btn g" onclick="exp()">Скачать копию</button><button class="btn g" onclick="imp()">Импорт JSON</button><button class="btn g" onclick="restoreBak()">Автокопия</button><button class="btn r" onclick="reset()">Сбросить всё</button></div><div class="tag settings-help">MYDAY хранит локальную копию на устройстве и синхронизирует профиль через Telegram и облако. Экспортируйте резервную копию перед переносом.</div></div></details>`+
+ `<details class="settings-group card" ${open('offline')} ontoggle="this.open?moreOpen.add('offline'):moreOpen.delete('offline')"><summary><span class="settings-icon">⌁</span><span class="settings-summary-copy"><b>Работа без интернета</b><small>Установка на экран «Домой»</small></span><span class="settings-chevron">⌄</span></summary><div class="settings-body"><div class="tag">После первого открытия MYDAY оболочка приложения сохраняется для запуска без сети. Изменения синхронизируются с облаком при подключении к интернету.</div></div></details></section>`}
+function saveUni(){S.uni={name:$('#u1').value,url:$('#u2').value,login:$('#u3').value,links:$('#u4').value,teachers:$('#u5').value,notes:$('#u6').value};save()}
+function openUni(){let u=S.uni.url.trim();if(!u)return alert('Укажите ссылку');if(!/^https?:\/\//.test(u))u='https://'+u;window.open(u,'_blank','noopener')}
+function toTask(i){S.tasks.push(mk({title:S.inbox[i].text}));S.inbox.splice(i,1);save();render()}
+function statsView(){const t=new Date(),days=[...Array(7)].map((_,i)=>addDays(today(),i-6)),all=[...S.tasks,...S.hw],cnt=d=>all.filter(x=>x.doneAt==d).length,mx=Math.max(1,...days.map(cnt));
+ const month=all.filter(x=>x.doneAt&&x.doneAt.slice(0,7)==today().slice(0,7)).length,ov=allOpen().filter(late).length;
+ const busy=[1,2,3,4,5,6].map(d=>({d,n:(S.sched.odd[d]||[]).length+(S.sched.even[d]||[]).length+allOpen().filter(x=>x.due&&new Date(x.due+'T12:00').getDay()==d).length})).sort((a,b)=>b.n-a.n).slice(0,3).filter(x=>x.n);
+ return `<header><button class="btn g" onclick="st=null;render()">‹ Назад</button></header><h1>Статистика</h1><h2>Выполнено за 7 дней</h2><div class="card"><div class="col">${days.map(d=>`<div><i style="height:${cnt(d)/mx*70}px"></i>${cnt(d)}<br>${d.slice(8)}</div>`).join('')}</div></div>
+ <div class="card">Фокус за 7 дней: <b>${(S.focus||[]).filter(f=>f.d>=days[0]).reduce((a,f)=>a+f.m,0)} мин</b><br>Выполнено за месяц: <b>${month}</b><br>Просрочено сейчас: <b>${ov}</b></div><h2>Прогресс по предметам</h2>`+
+ S.subjects.filter(s=>!s.closed).map(s=>{const H=S.hw.filter(h=>h.subj==s.id),d=H.filter(h=>h.status==2).length;return `<div class="card"><div class="tag">${e(s.name)} · ${d}/${H.length}</div><div class="bar"><i style="width:${H.length?d/H.length*100:0}%"></i></div></div>`}).join('')+
+ `<h2>Самые загруженные дни</h2><div class="card">${busy.length?busy.map(b=>DAYS[b.d]+' — '+b.n).join('<br>'):'Пока нет данных'}</div>`}
+const askNotif=()=>{if(!('Notification' in window))return alert('Этот браузер не поддерживает уведомления. На iPhone сначала добавьте MYDAY на экран «Домой» (iOS 16.4+).');if(!window.isSecureContext)return alert('Разрешение уведомлений доступно на защищённом HTTPS-сайте или в установленной PWA.');Notification.requestPermission().then(()=>render()).catch(()=>alert('Не удалось запросить разрешение уведомлений.'))};
+function exp(){S.lastExport=Date.now();save();const j=JSON.stringify(S,null,2),blob=new Blob([j],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='myday-backup-'+today()+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Резервная копия скачана')}
+function imp(){sheet(`<h1>Импорт резервной копии</h1><div class="sub">Выберите JSON-файл или вставьте его содержимое. Текущие данные будут заменены после проверки.</div><label>Файл копии</label><input type="file" accept="application/json,.json" onchange="readBackup(this)"><textarea id="im" style="height:160px" placeholder="Или вставьте JSON сюда"></textarea><button class="btn" onclick="doImp()">Проверить и восстановить</button>`)}
+function readBackup(input){const f=input.files&&input.files[0];if(!f)return;if(f.size>4000000)return alert('Файл больше 4 МБ и не может поместиться в локальное хранилище');const r=new FileReader();r.onload=()=>$('#im').value=String(r.result||'');r.onerror=()=>alert('Не удалось прочитать файл');r.readAsText(f)}
+function normalizeBackup(d){
+ if(!d||typeof d!='object'||Array.isArray(d)||!d.settings||typeof d.settings!='object'||!Array.isArray(d.tasks)||!Array.isArray(d.hw))throw 0;
+ if(d.tasks.length>10000||d.hw.length>10000)throw 0;
+ const validItem=x=>x&&typeof x=='object'&&!Array.isArray(x)&&typeof x.title=='string'&&x.title.length<=5000;
+ if(!d.tasks.every(validItem)||!d.hw.every(validItem))throw 0;
+ if(d.subjects!==undefined&&(!Array.isArray(d.subjects)||!d.subjects.every(s=>s&&typeof s.id=='string'&&/^[A-Za-z0-9]{1,40}$/.test(s.id)&&typeof s.name=='string')))throw 0;
+ if(d.sched!==undefined&&(!d.sched||typeof d.sched!='object'||!d.sched.odd||!d.sched.even||typeof d.sched.odd!='object'||typeof d.sched.even!='object'))throw 0;
+ const time=/^([01]\d|2[0-3]):[0-5]\d$/;
+ for(const week of ['odd','even'])for(const [day,lessons] of Object.entries(d.sched?.[week]||{})){if(!/^[1-6]$/.test(day)||!Array.isArray(lessons))throw 0;for(const l of lessons)if(!l||typeof l.id!='string'||!/^[A-Za-z0-9]{1,40}$/.test(l.id)||typeof l.subj!='string'||!time.test(l.s)||!time.test(l.e)||l.e<=l.s)throw 0}
+ const base=seed(),out={...base,...d,settings:{...base.settings,...d.settings},uni:{...base.uni,...(d.uni||{})},sched:{odd:d.sched?.odd||{},even:d.sched?.even||{},work:d.sched?.work||{},fixed:d.sched?.fixed||{},cycle:d.sched?.cycle||{},dates:d.sched?.dates||{}},scheduleConfig:{...base.scheduleConfig,...(d.scheduleConfig||{})},workConfig:{...base.workConfig,...(d.workConfig||{})},habits:Array.isArray(d.habits)?d.habits:[],subjects:d.subjects||base.subjects,inbox:Array.isArray(d.inbox)?d.inbox:[],fired:d.fired&&typeof d.fired=='object'?d.fired:{},done:Array.isArray(d.done)?d.done:[],exc:Array.isArray(d.exc)?d.exc:[],focus:Array.isArray(d.focus)?d.focus:[]};
+ const validDate=v=>{if(typeof v!='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;const z=new Date(v+'T12:00:00');return !Number.isNaN(z.getTime())&&z.getFullYear()+'-'+String(z.getMonth()+1).padStart(2,'0')+'-'+String(z.getDate()).padStart(2,'0')===v};
+ const safeId=x=>{if(typeof x.id!='string'||!/^[A-Za-z0-9]{1,40}$/.test(x.id))throw 0;if(typeof x.desc!='string')x.desc='';if(!validDate(x.due))x.due='';if(!validDate(x.doneAt))x.doneAt='';if(!Number.isInteger(x.status)||x.status<0||x.status>2)x.status=0;if(!Number.isFinite(x.mins)||x.mins<0)x.mins=0;if(!Array.isArray(x.subs))x.subs=[];x.subs=x.subs.filter(s=>s&&typeof s.t=='string').map(s=>({t:s.t.slice(0,500),d:!!s.d}));if(!Array.isArray(x.photos))x.photos=[];if(!Array.isArray(x.files))x.files=[];if(x.photos.some(p=>typeof p!='string'||!/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=\r\n]+$/i.test(p)))throw 0;if(x.files.some(f=>!f||typeof f.name!='string'||f.name.length>120||typeof f.data!='string'||!/^data:(image\/(jpeg|png|webp|gif)|application\/(pdf|msword|vnd\.openxmlformats-officedocument\.wordprocessingml\.document|vnd\.oasis\.opendocument\.text|octet-stream)|text\/plain);base64,[A-Za-z0-9+/=\r\n]+$/i.test(f.data)))throw 0};
+ for(const x of out.tasks){safeId(x);if(!CATS.includes(x.cat))x.cat='Другое';if(!Number.isInteger(x.prio)||x.prio<0||x.prio>2)x.prio=1;if(!['','d','w','m'].includes(x.repeat))x.repeat=''}
+ for(const x of out.hw){safeId(x);if(typeof x.subj!='string'||!/^[A-Za-z0-9]{1,40}$/.test(x.subj))throw 0}
+ for(const s of out.subjects)safeId(s);
+ for(const x of out.hw)if(!out.subjects.some(s=>s.id==x.subj))x.subj=out.subjects[0]?.id||'';
+ out.inbox=out.inbox.filter(x=>x&&typeof x.text=='string').map(x=>({text:x.text.slice(0,5000),d:validDate(x.d)?x.d:today()}));
+ out.events=Array.isArray(out.events)?out.events.filter(x=>x&&typeof x.id=='string'&&/^[A-Za-z0-9]{1,40}$/.test(x.id)&&typeof x.title=='string'&&validDate(x.date)).map(x=>({id:x.id,title:x.title.slice(0,500),type:typeof x.type=='string'?x.type.slice(0,80):'Событие',date:x.date})):[];
+ out.exc=out.exc.filter(x=>x&&validDate(x.date)&&['add','cancel','edit'].includes(x.type)&&((typeof x.lid=='string'&&/^[A-Za-z0-9]{1,40}$/.test(x.lid))||(x.type=='add'&&typeof x.id=='string'&&/^[A-Za-z0-9]{1,40}$/.test(x.id))));
+ for(const x of out.exc){if(x.o){if(!time.test(x.o.s)||!time.test(x.o.e)||x.o.e<=x.o.s||typeof x.o.subj!='string')throw 0;x.o.room=typeof x.o.room=='string'?x.o.room:'';x.o.teacher=typeof x.o.teacher=='string'?x.o.teacher:''}}
+ out.tpl=Array.isArray(out.tpl)?out.tpl.filter(x=>typeof x=='string').map(x=>x.slice(0,500)).slice(0,100):[];
+ out.focus=out.focus.filter(x=>x&&validDate(x.d)&&Number.isInteger(x.m)&&x.m>=0&&x.m<=100000);
+ for(const s of out.subjects)s.closed=!!s.closed;
+ for(const key of ['name','url','login','notes','links','teachers'])if(typeof out.uni[key]!='string')out.uni[key]='';
+ if(!['dark','light','auto'].includes(out.settings.theme))out.settings.theme=base.settings.theme;
+ if(!Number.isInteger(out.settings.accent)||out.settings.accent<0||out.settings.accent>=AC.length)out.settings.accent=0;
+ if(typeof out.settings.morning!='string'||!time.test(out.settings.morning))out.settings.morning=base.settings.morning;
+ if(!Number.isFinite(+out.settings.hwDelay)||+out.settings.hwDelay<0||+out.settings.hwDelay>1440)out.settings.hwDelay=base.settings.hwDelay;else out.settings.hwDelay=+out.settings.hwDelay;
+ if(out.settings.weekAnchor&&!validDate(out.settings.weekAnchor))delete out.settings.weekAnchor;
+ if(!['odd','even'].includes(out.settings.weekAnchorType))delete out.settings.weekAnchorType;
+ return out
+}
+function doImp(){try{const raw=$('#im').value;if(!raw||raw.length>4000000)throw 0;const d=normalizeBackup(JSON.parse(raw));if(!confirm('Заменить текущие данные этой резервной копией?'))return;const previous=S;S=d;if(!save()){S=previous;return}migrate();close_();render();toast('Данные восстановлены')}catch(_){alert('Файл повреждён, слишком велик или создан в неподдерживаемом формате. Текущие данные не изменены.')}}
+function reset(){if(confirm('Удалить ВСЕ данные?')&&confirm('Точно? Это нельзя отменить.')){S=seed();save();render()}}
+
+function sheet(h){const q=$('#ov'),replacing=!!q;if(q)q.remove();else{window._dialogTrigger=document.activeElement!==document.body?document.activeElement:null;window._dialogOverflow=document.body.style.overflow;document.body.style.overflow='hidden'}const o=document.createElement('div');o.className='ov'+(replacing?' nos':'');o.id='ov';o.onclick=ev=>{if(ev.target===o)close_()};o.innerHTML='<div class="sheet" role="dialog" aria-modal="true" tabindex="-1"><div class="grab" aria-hidden="true"></div><button class="sheet-close" type="button" aria-label="Закрыть" onclick="close_()">×</button>'+h+'</div>';document.body.appendChild(o);const panel=o.querySelector('.sheet'),title=panel.querySelector('h1');if(title){title.id=title.id||'dialog-title';panel.setAttribute('aria-labelledby',title.id);title.tabIndex=-1}else panel.setAttribute('aria-label','Диалог');panel.querySelectorAll('label').forEach(l=>{if(l.htmlFor||l.querySelector('input,select,textarea'))return;const f=l.nextElementSibling;if(f&&f.matches('input,select,textarea')){if(!f.id)f.id='field-'+id();l.htmlFor=f.id}});panel.addEventListener('keydown',ev=>{if(ev.key==='Escape'){ev.preventDefault();close_();return}if(ev.key!=='Tab')return;const a=[...panel.querySelectorAll('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])')].filter(x=>x.offsetParent!==null);if(!a.length){ev.preventDefault();panel.focus();return}if(ev.shiftKey&&document.activeElement===a[0]){ev.preventDefault();a[a.length-1].focus()}else if(!ev.shiftKey&&document.activeElement===a[a.length-1]){ev.preventDefault();a[0].focus()}});setTimeout(()=>{if(!o.isConnected)return;const target=title||panel;target.focus({preventScroll:true})},0)}
+function close_(){const o=$('#ov');if(o){o.id='';o.classList.add('bye');setTimeout(()=>{o.remove();document.body.style.overflow=window._dialogOverflow||'';const t=window._dialogTrigger;window._dialogTrigger=null;if(t&&t.isConnected)t.focus({preventScroll:true})},230)}}
+function capture(){
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ sheet(`<h1>Быстрая запись</h1><textarea id="cq" oninput="capHint()" placeholder="Мысль, задача, идея…"></textarea><div id="chint" style="min-height:26px;margin-bottom:6px"></div><div id="tpl" style="margin-bottom:6px">${tplHtml()}</div>
+ <label>Срок (необязательно)</label><input type="date" id="cd">${dch('cd')}<label>Сохранить как</label><select id="ck"><option value="t">Задача</option><option value="i">Идея / заметка</option></select>
+ <div class="row">${SR?'<button class="btn g" onclick="voice()">🎤 Голос</button>':''}<button class="btn g" onclick="tplAdd()">★</button><button class="btn grow" onclick="capSave()">Сохранить</button></div>
+ ${SR?'':'<div class="tag">Голосовой ввод в браузере недоступен — используйте значок микрофона на клавиатуре iPhone.</div>'}
+ <div class="tag">Если в тексте несколько дел через «и» / «;», можно разбить на отдельные задачи. Срок ставится, только если вы выбрали дату или написали «сегодня», «завтра», «послезавтра».</div>
+ <label><input type="checkbox" id="cs" onchange="capHint()" style="width:auto"> Разбить на отдельные задачи</label>`)}
+function voice(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition,r=new SR();r.lang='ru-RU';r.onresult=ev=>{$('#cq').value+=(ev.results[0][0].transcript)+' '};r.onerror=()=>alert('Не удалось распознать речь. Проверьте доступ к микрофону.');try{r.start()}catch(_){}}
+function capSave(){const v=$('#cq').value.trim();if(!v)return;const d=$('#cd').value;
+ if($('#ck').value=='i')S.inbox.unshift({text:v,d:today()});else{const parts=$('#cs').checked?v.split(/;|\s+и\s+|\n/).map(s=>s.trim()).filter(Boolean):[v];parts.forEach(p=>S.tasks.push(mk({title:p,due:d||guess(p)||guess(v),cat:catGuess(p)||catGuess(v)||'Другое'})))}
+ save();close_();render()}
+
+function notify(title,body){try{if(!('Notification' in window)||Notification.permission!='granted')return false;const opts={body,tag:'myday-'+title,renotify:false};if('serviceWorker' in navigator&&navigator.serviceWorker.controller){navigator.serviceWorker.ready.then(reg=>reg.showNotification(title,opts)).catch(()=>{try{new Notification(title,opts)}catch(_){}})}else new Notification(title,opts);return true}catch(_){return false}}
+function tick(){
+ const n=new Date(),t=today(),hm=pad(n.getHours())+':'+pad(n.getMinutes()),F=S.fired;
+ Object.keys(F).forEach(k=>{if(!k.startsWith(t)&&!k.startsWith('x'))delete F[k]});
+ const L=lessons(n);
+ if(hm>=S.settings.morning&&!F[t+'m']){F[t+'m']=1;save();if(L.length){const txt='Сегодня '+DAYS[n.getDay()].toLowerCase()+', '+wkName(wk()).split(' ')[0]+' неделя.\n'+L.map(l=>l.s+' — '+l.subj).join('\n')+(allOpen().some(x=>x.due&&x.due<=t)?'\nЗадач на сегодня и просроченных: '+allOpen().filter(x=>x.due&&x.due<=t).length:'');if(!notify('Доброе утро!',txt))sheet(`<h1>Доброе утро!</h1><p style="white-space:pre-line">${e(txt)}</p><button class="btn" onclick="close_()">Ок</button>`)}}
+ if(L.length){const last=L[L.length-1].e,[h,m]=last.split(':').map(Number),at=new Date(n);at.setHours(h,m+S.settings.hwDelay,0,0);
+  if(n>=at&&!F[t+'h']&&(!F[t+'s']||n.getTime()>F[t+'s'])&&!$('#ov')){hwPrompt()}}
+ if(hm>='18:00'&&!F[t+'r']){F[t+'r']=1;const a=allOpen().filter(x=>x.due==addDays(t,1));if(a.length){save();rem('Завтра срок',a)}}
+ if(hm>='15:00'&&!F[t+'q']){F[t+'q']=1;const a=allOpen().filter(x=>x.due==t);if(a.length){save();rem('Сегодня срок',a)}}
+ const lv=$('#live');if(tab=='today'&&lv&&!$('#ov')){const h=liveHtml();if(lv.innerHTML!==h)lv.innerHTML=h}}
+function hwPrompt(){S.fired[today()+'s']=Date.now()+18e5;save();notify('Занятия закончились','Какие задания тебе задали?');
+ sheet(`<h1>Занятия на сегодня закончились</h1><div class="sub">Какие задания тебе задали?</div><label>Предмет</label><select id="hp">${S.subjects.filter(s=>!s.closed).map(s=>`<option value="${s.id}">${e(s.name)}</option>`).join('')}</select>
+ <label>Задание</label><textarea id="ht"></textarea><label>Срок</label><input type="date" id="hd"><button class="btn" style="width:100%" onclick="hpSave()">Записать</button>
+ <div class="row" style="margin-top:8px"><button class="btn g grow" onclick="S.fired[today()+'h']=1;save();close_()">Заданий нет</button><button class="btn g grow" onclick="S.fired[today()+'s']=Date.now()+18e5;save();close_()">Позже (30 мин)</button></div>`)}
+function hpSave(){const t=$('#ht').value.trim();if(!t)return fieldError($('#ht'),'Опишите задание');S.hw.push({id:id(),subj:$('#hp').value,title:t,desc:'',due:$('#hd').value,status:0,subs:[],photos:[]});S.fired[today()+'h']=1;save();close_();render()}
+function migrate(){S=normalizeProfile(S);if(!S.settings.weekAnchor){S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=((isoWeek(new Date())+(S.settings.shift||0))%2==1?'odd':'even')}S.sched=S.sched||{odd:{},even:{},work:{},fixed:{},cycle:{},dates:{}};['odd','even','work','fixed','cycle','dates'].forEach(k=>S.sched[k]=S.sched[k]||{});S.scheduleConfig=S.scheduleConfig||{studyMode:'alternating',cycleWeeks:2,cycleAnchor:'',selectedDate:''};if(!['alternating','fixed','cycle','dates','hybrid'].includes(S.scheduleConfig.studyMode))S.scheduleConfig.studyMode='alternating';S.scheduleConfig.cycleWeeks=Math.max(2,Math.min(4,Number(S.scheduleConfig.cycleWeeks)||2));S.workConfig=S.workConfig||{mode:'weekly',pattern:['work','work','off','off'],anchorDate:'',start:'09:00',end:'18:00',title:'Рабочая смена',exceptions:{}};if(!['weekly','rotation'].includes(S.workConfig.mode))S.workConfig.mode='weekly';if(!Array.isArray(S.workConfig.pattern)||!S.workConfig.pattern.length)S.workConfig.pattern=['work','work','off','off'];S.workConfig.exceptions=S.workConfig.exceptions||{};S.habits=Array.isArray(S.habits)?S.habits:[];S.settings.dashboard=S.settings.dashboard||{workShift:true,habits:false,notes:false};S.settings.dashboardOrder=Array.isArray(S.settings.dashboardOrder)?S.settings.dashboardOrder:['workShift','habits','notes'];S.subjects=S.subjects||[];S.hw=S.hw||[];S.exc=S.exc||[];S.events=S.events||[];save()}
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}migrate();render();try{const mq=window.matchMedia('(prefers-color-scheme: light)');mq.addEventListener?mq.addEventListener('change',()=>{if(S.settings.theme==='auto'&&!(tgApp&&tgApp.colorScheme))render()}):mq.addListener&&mq.addListener(()=>{if(S.settings.theme==='auto'&&!(tgApp&&tgApp.colorScheme))render()});tgApp&&tgApp.onEvent&&tgApp.onEvent('themeChanged',()=>{if(S.settings.theme==='auto')render()})}catch(_){}initCloud();setTimeout(()=>tick(),400);setInterval(tick,30000);setInterval(()=>{if(!document.hidden)cloudPull()},20000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){tick();render();cloudPull()}});
+if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script><script src="./apple-ui.js" defer></script><script src="./schedule-lab.js" defer></script></body></html>
