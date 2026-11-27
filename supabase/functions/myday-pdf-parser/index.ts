@@ -23,10 +23,10 @@ Deno.serve(async (req: Request) => {
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent();
       const items = content.items as unknown as Array<{ str?: string; hasEOL?: boolean }>;
-      const line = items.map((item) => String(item.str || "") + (item.hasEOL ? "\\n" : " ")).join("");
-      if (line.trim()) chunks.push("СТРАНИЦА " + pageNumber + "\\n" + line);
+      const line = items.map((item) => String(item.str || "") + (item.hasEOL ? "\n" : " ")).join("");
+      if (line.trim()) chunks.push("СТРАНИЦА " + pageNumber + "\n" + line);
     }
-    const text = chunks.join("\\n\\n").replace(/[ \\t]+\\n/g, "\\n").trim();
+    const text = chunks.join("\n\n").replace(/[ \t]+\n/g, "\n").trim();
     if (text.length < 40) {
       return json({ error: "В PDF не удалось извлечь текст. Похоже, это скан или документ из изображений. Пришли страницы PDF отдельными фотографиями." }, 422);
     }
