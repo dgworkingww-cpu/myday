@@ -84,7 +84,7 @@ async function markUpdate(updateId: number) {
   return Array.isArray(rows) && rows.length > 0;
 }
 function inferTime(text: string) {
-  const m = text.toLowerCase().match(/(?:в|на)\\s*(\\d{1,2})[:.](\\d{2})/);
+  const m = text.toLowerCase().match(/(?:в|на)\s*(\d{1,2})[:.](\d{2})/);
   if (!m) return "";
   const h = Number(m[1]), min = Number(m[2]);
   return h <= 23 && min <= 59 ? String(h).padStart(2, "0") + ":" + String(min).padStart(2, "0") : "";
@@ -181,7 +181,7 @@ async function handleText(chatId: number, userId: number, text: string) {
     const incomingEvents = Array.isArray(payload.events) ? payload.events : [];
     if (!incomingEvents.length) { await send(chatId, "Не смог определить событие и дату. Напиши, например: «Экзамен по теплотехнике 12.12»."); return; }
     p.data.events = Array.isArray(p.data.events) ? p.data.events : [];
-    const createdEvents = incomingEvents.slice(0, 10).map((x: AnyRecord) => ({ id: uid(), title: String(x.title || cmd).slice(0, 240), type: String(x.type || "Событие"), date: /^\\d{4}-\\d{2}-\\d{2}$/.test(String(x.date || "")) ? x.date : inferDate(cmd, today) || today, time: /^\\d{2}:\\d{2}$/.test(String(x.time || "")) ? x.time : inferTime(cmd) }));
+    const createdEvents = incomingEvents.slice(0, 10).map((x: AnyRecord) => ({ id: uid(), title: String(x.title || cmd).slice(0, 240), type: String(x.type || "Событие"), date: /^\d{4}-\d{2}-\d{2}$/.test(String(x.date || "")) ? x.date : inferDate(cmd, today) || today, time: /^\d{2}:\d{2}$/.test(String(x.time || "")) ? x.time : inferTime(cmd) }));
     p.data.events.push(...createdEvents);
     await saveProfile(userId, p.data, p.baseData);
     await send(chatId, "Добавил событие в календарь MYDAY:\\n" + createdEvents.map((x: AnyRecord) => "📌 <b>" + escapeHtml(x.title) + "</b> · " + x.date).join("\\n"));
