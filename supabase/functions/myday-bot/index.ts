@@ -969,10 +969,9 @@ Deno.serve(async (req: Request) => {
     return json({ ok: true });
   } catch (error) {
     console.error("MYDAY bot webhook error:", error);
-    if (currentUpdateId !== null) {
-      try { await releaseFailedUpdate(currentUpdateId); }
-      catch (releaseError) { console.error("Could not release failed Telegram update:", releaseError); }
-    }
+    // Do not release a failed update after sending a user-facing error.
+    // Telegram retries webhook deliveries on HTTP 5xx; deleting the dedupe row
+    // would make every retry send the same error message again.
     if (fallbackChatId) {
       try {
         const errorText = error instanceof Error ? error.message : "неизвестная ошибка";
@@ -986,6 +985,8 @@ Deno.serve(async (req: Request) => {
         }
       } catch { /* Telegram may be temporarily unavailable */ }
     }
-    return json({ ok: false, retry: true }, 500);
+    // Acknowledge the update even when its processing failed. The failure is
+    // logged and reported once; returning 5xx would make Telegram redeliver it.
+    return json({ ok: true, handled_error: true });
   }
 });
