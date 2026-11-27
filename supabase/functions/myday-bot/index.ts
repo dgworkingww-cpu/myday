@@ -61,6 +61,14 @@ function mergeBotChanges(latest: AnyRecord, incoming: AnyRecord, base: AnyRecord
   const latestInbox = Array.isArray(latest.inbox) ? latest.inbox : [];
   const additions = incomingInbox.filter((item: AnyRecord) => !baseInbox.some((old: AnyRecord) => JSON.stringify(old) === JSON.stringify(item)) && !latestInbox.some((old: AnyRecord) => JSON.stringify(old) === JSON.stringify(item)));
   merged.inbox = [...additions, ...latestInbox].slice(0, 300);
+  const baseEvents = Array.isArray(base.events) ? base.events : [];
+  const incomingEvents = Array.isArray(incoming.events) ? incoming.events : [];
+  const latestEvents = Array.isArray(latest.events) ? [...latest.events] : [];
+  for (const event of incomingEvents) {
+    const id = String(event.id || "");
+    if (id && !baseEvents.some((old: AnyRecord) => String(old.id) === id) && !latestEvents.some((old: AnyRecord) => String(old.id) === id)) latestEvents.push(event);
+  }
+  merged.events = latestEvents;
   return merged;
 }
 async function saveProfile(telegramId: number, incoming: AnyRecord, baseData: AnyRecord) {
