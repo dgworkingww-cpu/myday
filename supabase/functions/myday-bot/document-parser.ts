@@ -145,5 +145,5 @@ export async function extractScheduleDocument(
   }
 
   if (ext === "doc") throw new Error("Старый формат DOC не поддерживается напрямую. Сохрани документ как DOCX или PDF и отправь ещё раз.");
-  throw new Error("Формат файла не поддерживается. Отправь PDF, DOCX, XLSX, XLS, CSV, TSV, TXT или ODT.");
+  throw new Error("Формат файла не поддерживается. Отправь PDF, DOCX, XLSX, XLSM, CSV, TSV, TXT, JSON или ODT. Старый XLS сначала сохрани как XLSX.");
 }
