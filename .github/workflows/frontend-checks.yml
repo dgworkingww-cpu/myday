@@ -52,21 +52,19 @@ jobs:
           const fs = require('node:fs');
           const html = fs.readFileSync('index.html', 'utf8');
           const ocr = fs.readFileSync('ocr.html', 'utf8');
-          const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
-            .filter(([, attrs, body]) => !/\bsrc\s*=/.test(attrs) && body.trim())
-            .map(([, , body]) => body);
+          function inlineScripts(source) {
+            return [...source.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+              .filter(([, attrs, body]) => !/\bsrc\s*=/.test(attrs) && body.trim())
+              .map(([, , body]) => body);
+          }
+          const scripts = inlineScripts(html);
+          const ocrScripts = inlineScripts(ocr);
           if (!scripts.length) throw new Error('No inline app script found');
-          fs.writeFileSync('/tmp/myday.js', scripts.join('\\n;\\n'));
-          const ocrScripts = [...ocr.matchAll(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script>/gi)]
-            .filter(([, attrs, body]) => !/\\bsrc\\s*=/.test(attrs) && body.trim())
-            .map(([, , body]) => body);
           if (!ocrScripts.length) throw new Error('OCR page has no inline application script');
-          fs.writeFileSync('/tmp/myday-ocr.js', ocrScripts.join('\\n;\\n'));
+          fs.writeFileSync('/tmp/myday.js', scripts.join('\n;\n'));
+          fs.writeFileSync('/tmp/myday-ocr.js', ocrScripts.join('\n;\n'));
           NODE
           node --check /tmp/myday.js
-          const ocrScripts = [...ocr.matchAll(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script>/gi)].filter(([,attrs,body])=>!/\\bsrc\\s*=/.test(attrs)&&body.trim()).map(([, ,body])=>body);
-          if (!ocrScripts.length) throw new Error('OCR page has no inline application script');
-          fs.writeFileSync('/tmp/myday-ocr.js', ocrScripts.join('\\n;\\n'));
           node --check /tmp/myday-ocr.js
           node --check apple-ui.js
           node --check sw.js
