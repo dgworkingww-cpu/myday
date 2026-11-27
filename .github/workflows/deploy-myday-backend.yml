@@ -126,7 +126,12 @@ jobs:
             -H 'Content-Type: application/json' \
             --data '{"menu_button":{"type":"web_app","text":"Открыть MYDAY","web_app":{"url":"https://dgworkingww-cpu.github.io/myday/"}}}')"
           echo "$menu_response" | jq -e '.ok == true' >/dev/null
-          echo "MYDAY webhook and Mini App menu button registered successfully."
+          commands_response="$(curl --fail --silent --show-error \
+            -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setMyCommands" \
+            -H 'Content-Type: application/json' \
+            --data '{"commands":[{"command":"today","description":"План на сегодня"},{"command":"week","description":"План на 7 дней"},{"command":"tasks","description":"Все открытые задачи"},{"command":"app","description":"Открыть MYDAY"},{"command":"help","description":"Как пользоваться ботом"}]}')"
+          echo "$commands_response" | jq -e '.ok == true' >/dev/null
+          echo "MYDAY webhook, Mini App menu button and bot commands registered successfully."
 
       - name: Check frontend JavaScript syntax
         shell: bash
