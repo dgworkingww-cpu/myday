@@ -184,7 +184,7 @@
       : (records.length?'<div class="empty-state"><b>Похоже, это личное расписание</b><span>Названия нескольких групп не обнаружены. Импортируются только распознанные строки этого файла.</span></div>':'');
     const formats='Excel XLSX/XLS · PDF · Word DOCX · CSV/TXT · JPG/PNG';
     return '<main class="page">'+mydayHeader('Импорт расписания','Можно загрузить своё расписание или общее расписание университета и выбрать из него свою группу.',false,true)+
-      '<section class="surface-panel"><div class="import-drop"><span class="settings-icon">'+mydayIcon('inbox',22)+'</span><b>Выбрать файл</b><span class="page-sub">'+formats+'</span><input id="schedule-file" type="file" accept=".xlsx,.xls,.pdf,.docx,.csv,.txt,.jpg,.jpeg,.png" onchange="MYDAY_LAB.readFile(this)"><a href="./sample-university-schedule.csv" download>Скачать пример общего расписания</a></div>'+
+      '<section class="surface-panel"><div class="import-drop"><span class="settings-icon">'+mydayIcon('inbox',22)+'</span><b>Выбрать файл</b><span class="page-sub">'+formats+'</span><input id="schedule-file" type="file" accept=".xlsx,.xls,.pdf,.docx,.csv,.txt,.jpg,.jpeg,.png" onchange="MYDAY_LAB.readFile(this)"><a href="./sample-university-schedule.csv" download>Скачать пример общего расписания</a><button class="btn g" type="button" onclick="MYDAY_LAB.loadSample()">Загрузить тестовый пример</button></div>'+
       '<p class="page-sub" role="status" aria-live="polite">'+esc(d.status)+'</p><label for="import-target">Куда импортировать</label><select id="import-target" onchange="MYDAY_LAB.setDraft(\'target\',this.value)"><option value="study" '+(d.target==='study'?'selected':'')+'>Учебное расписание</option><option value="work" '+(d.target==='work'?'selected':'')+'>Рабочий график (неделя)</option></select>'+
       '<label for="import-mode">Тип учебного расписания</label><select id="import-mode" onchange="MYDAY_LAB.setDraft(\'mode\',this.value)"><option value="auto" '+(d.mode==='auto'?'selected':'')+'>Определить по файлу</option><option value="alternating" '+(d.mode==='alternating'?'selected':'')+'>Нечётная / чётная</option><option value="fixed" '+(d.mode==='fixed'?'selected':'')+'>Постоянное</option><option value="cycle" '+(d.mode==='cycle'?'selected':'')+'>Цикл 2–4 недели</option><option value="dates" '+(d.mode==='dates'?'selected':'')+'>Конкретные даты</option><option value="hybrid" '+(d.mode==='hybrid'?'selected':'')+'>Смешанное</option></select>'+
       '<label for="import-replace" class="lab-check"><input id="import-replace" type="checkbox" '+(d.replace?'checked':'')+' onchange="MYDAY_LAB.setDraft(\'replace\',this.checked)"> Заменить занятия в выбранных днях (вместо добавления)</label>'+
@@ -307,7 +307,7 @@
       for(let i=0;i<Math.min(matrix.length,12);i++){
         const cols=matrix[i].map((cell,col)=>({group:groupLabel(cell),col})).filter(x=>x.group);
         const rowText=matrix[i].join(' ').toLowerCase();
-        if(cols.length>=2||(cols.length===1&&(/время|time|день недели|^день\b/.test(rowText)||options.defaultGroup)))return {row:i,cols};
+        if(cols.length>=2||(cols.length===1&&(/время|time|день недели|^день\b/.test(rowText))))return {row:i,cols};
       }
       return null;
     })();
@@ -449,6 +449,7 @@
   }
 
   function setDraft(key,value){if(importDraft){importDraft[key]=value;if(key==='selectedGroup')render()}}
+  async function loadSample(){try{const response=await fetch('./sample-university-schedule.csv',{cache:'no-store'});if(!response.ok)throw new Error('Не удалось загрузить тестовый файл.');const blob=await response.blob();const file=new File([blob],'sample-university-schedule.csv',{type:'text/csv'});await readFile({files:[file]})}catch(err){alert(err.message||'Ошибка загрузки примера.')}}
 
   
   function editDraft(index) {
@@ -559,7 +560,7 @@
   };
 
   window.MYDAY_LAB={
-    readFile, setDraft, editDraft, saveDraftItem, removeDraftItem, applyImport, clearDraft(){importDraft=null;render()},
+    readFile, setDraft, loadSample, editDraft, saveDraftItem, removeDraftItem, applyImport, clearDraft(){importDraft=null;render()},
     setStudyMode,setCycleWeeks,setCycleAnchor,setLayer,selectDate,selectWorkDate,setWorkMode,setWorkPreset,saveWorkSettings,toggleWorkException,
     toggleNotification,toggleWidget,moveWidget,addHabit,toggleHabit,deleteHabit,workShiftForDate,workShiftList,parseRows,parseLine
   };
