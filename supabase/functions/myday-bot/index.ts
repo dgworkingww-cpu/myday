@@ -292,13 +292,18 @@ async function handleText(chatId: number, userId: number, text: string) {
       await send(chatId, "Отменил незавершённую запись. Ничего не добавлял.");
       return;
     }
-    const isFollowUp = pending.kind === "event_date" ? isDateOnlyReply(cmd) : (!/^\//.test(cmd) && cmd.length <= 120);
+    const subjectNamesForReply = (Array.isArray(p.data.subjects) ? p.data.subjects : []).filter((x: AnyRecord) => !x.closed).map((x: AnyRecord) => String(x.name || "").toLocaleLowerCase("ru"));
+    const replyLower = cmd.toLocaleLowerCase("ru");
+    const subjectReply = subjectNamesForReply.length
+      ? subjectNamesForReply.some(name => name.includes(replyLower) || replyLower.includes(name) || name.split(/\s+/).some(word => word.length > 4 && replyLower.includes(word)))
+      : (!/^\//.test(cmd) && cmd.length <= 80);
+    const isFollowUp = pending.kind === "event_date" ? isDateOnlyReply(cmd) : subjectReply;
     if (age < 12 * 60 * 60 * 1000 && isFollowUp) {
       if (pending.kind === "event_date") cmd = String(pending.raw || "") + " " + cmd;
       else cmd = String(pending.raw || "") + (/^по\s+/i.test(cmd) ? " " : " по ") + cmd;
       p.data.botState = { pending: null };
       await saveProfile(userId, p.data, p.baseData);
-    } else if (age >= 12 * 60 * 60 * 1000 || !/^\//.test(cmd)) {
+    } else if (age >= 12 * 60 * 60 * 1000 || !isFollowUp) {
       p.data.botState = { pending: null };
       await saveProfile(userId, p.data, p.baseData);
     }
