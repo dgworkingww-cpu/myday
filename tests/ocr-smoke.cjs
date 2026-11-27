@@ -78,7 +78,7 @@ function makePdf(lines) {
     await page.locator('#file').setInputFiles({name:'unsupported.exe',mimeType:'application/octet-stream',buffer:Buffer.from('bad')});
     await page.getByText('Этот формат пока не поддерживается. Выбери PDF или изображение.').waitFor();
     if(await page.locator('#extract').isDisabled()!==true) throw new Error('Unsupported file must be rejected');
-    await page.locator('#file').setInputFiles({name:'two-pages.pdf',mimeType:'application/pdf',buffer:makePdf(['MYDAY PDF PAGE ONE','MYDAY PDF PAGE TWO'])});
+    await page.locator('#file').setInputFiles({name:'two-pages.pdf',mimeType:'application/pdf',buffer:makePdf(['MYDAY PDF PAGE ONE DIGITAL TEXT EXTRACTION TEST WITH MORE THAN SIXTY CHARACTERS','MYDAY PDF PAGE TWO DIGITAL TEXT EXTRACTION TEST WITH MORE THAN SIXTY CHARACTERS'])});
     await page.getByText(/PDF открыт\. Страниц: 2/).waitFor({timeout:15000});
     if(await page.locator('#pageNo').inputValue()!=='1') throw new Error('PDF preview did not start at page 1');
     await page.locator('#next').click();
