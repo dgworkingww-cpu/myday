@@ -31,15 +31,19 @@ jobs:
           const workflow = fs.readFileSync('.github/workflows/deploy-myday-backend.yml', 'utf8');
           const bot = fs.readFileSync('supabase/functions/myday-bot/index.ts', 'utf8');
           const migration = fs.readFileSync('supabase/migrations/005_myday_bot_updates.sql', 'utf8');
+          const quotaMigration = fs.readFileSync('supabase/migrations/006_myday_bot_ai_quota.sql', 'utf8');
           for (const token of ['[functions.myday-bot]', 'verify_jwt = false']) {
             if (!config.includes(token)) throw new Error('Missing function config: ' + token);
           }
-          for (const token of ['supabase functions deploy myday-bot', 'setWebhook', 'MYDAY_WEBHOOK_SECRET']) {
+          for (const token of ['supabase functions deploy myday-bot', 'setWebhook', 'MYDAY_WEBHOOK_SECRET', 'GROQ_API_KEY']) {
             if (!workflow.includes(token)) throw new Error('Missing webhook deployment step: ' + token);
           }
           for (const token of ['x-telegram-bot-api-secret-token', 'myday_sync_profile', 'myday_bot_updates']) {
             if (!bot.includes(token)) throw new Error('Missing bot security/sync feature: ' + token);
           }
           if (!migration.includes('update_id bigint primary key')) throw new Error('Missing Telegram update idempotency key');
+          if (!quotaMigration.includes('myday_consume_bot_ai')) throw new Error('Missing per-user AI quota migration');
+          if (workflow.includes('OPENAI_API_KEY')) throw new Error('Deployment workflow still references the old OpenAI secret');
+          if (!bot.includes('https://api.groq.com/openai/v1/chat/completions') || !bot.includes('GROQ_API_KEY')) throw new Error('Groq chat API is not configured in the bot');
           console.log('Telegram webhook config, deployment, profile sync and idempotency checks passed.');
           NODE
