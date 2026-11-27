@@ -392,7 +392,7 @@ async function handleText(chatId: number, userId: number, text: string) {
     return scheduleItemsForDate(p.data, date).map((x: AnyRecord) => date + " " + x.kind + ": " + x.title + " " + x.start + (x.end ? "–" + x.end : ""));
   }).flat().slice(0, 60);
   const profileContext = "Предметы: " + (subjects.join("; ") || "не указаны") + "\nОткрытые задачи: " + (openTaskNames.join("; ") || "нет") + "\nДомашняя работа: " + (openHomeworkNames.join("; ") || "нет") + "\nПредстоящие события: " + (upcomingEvents.join("; ") || "нет") + "\nРасписание учёбы и работы на 7 дней: " + (upcomingSchedule.join("; ") || "не заполнено");
-  const fallbackSubject = subjects.find(name => {
+  const fallbackSubject = subjects.find((name: string) => {
     const normalized = name.toLocaleLowerCase("ru");
     const textLower = cmd.toLocaleLowerCase("ru");
     return textLower.includes(normalized) || normalized.split(/\s+/).some((word: string) => word.length > 5 && textLower.includes(word.slice(0, 7)));
