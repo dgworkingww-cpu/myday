@@ -16,6 +16,7 @@ on:
   push:
     branches: [main, redesign/myday-apple-2026-v2]
     paths:
+      - 'ocr.html'
       - 'index.html'
       - 'design-system.css'
       - 'apple-ui.js'
