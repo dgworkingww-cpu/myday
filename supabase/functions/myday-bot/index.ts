@@ -189,7 +189,7 @@ async function handleText(chatId: number, userId: number, text: string) {
   const eventLike = /тренировк|встреч|при[её]м|врач|экзамен|зач[её]т|консультац|день рождения|собеседован|мероприят/i.test(cmd);
   const fallbackSpace = guessSpace(cmd);
   const payload = await aiInterpret(cmd, today) || (eventLike
-    ? { intent: "add_event", tasks: [], events: [{ title: cmd, type: /экзамен/i.test(cmd) ? "Экзамен" : /зач[её]т/i.test(cmd) ? "Зачёт" : "Событие", date: inferDate(cmd, today) || today }] }
+    ? { intent: "add_event", tasks: [], events: [{ title: cmd, type: /экзамен/i.test(cmd) ? "Экзамен" : /зач[её]т/i.test(cmd) ? "Зачёт" : "Событие", date: inferDate(cmd, today) }] }
     : { intent: "add", tasks: [{ title: cmd, desc: "", space: fallbackSpace, cat: guessCategory(fallbackSpace), due: inferDate(cmd, today), prio: 1 }] });
   if (payload.intent === "clarify") { await send(chatId, escapeHtml(payload.reply || "Уточни, пожалуйста, дату или к какому разделу относится задача.")); return; }
   if (payload.intent === "list_today" || payload.intent === "list_tasks" || payload.intent === "list_week") {
@@ -218,7 +218,7 @@ async function handleText(chatId: number, userId: number, text: string) {
       return;
     }
     const due = String(payload.due || "");
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(due)) { await send(chatId, "На какую дату перенести «" + escapeHtml(task.title) + "»? Напиши, например: «на пятницу» или «на 12.12»."); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) { await send(chatId, "На какую дату перенести «" + escapeHtml(task.title) + "»? Напиши, например: «на пятницу» или «на 12.12»."); return; }
     task.due = due; await saveProfile(userId, p.data, p.baseData);
     await send(chatId, "Перенёс <b>" + escapeHtml(task.title) + "</b> на " + due + "."); return;
   }
@@ -226,7 +226,9 @@ async function handleText(chatId: number, userId: number, text: string) {
     const incomingEvents = Array.isArray(payload.events) ? payload.events : [];
     if (!incomingEvents.length) { await send(chatId, "Не смог определить событие и дату. Напиши, например: «Экзамен по теплотехнике 12.12»."); return; }
     p.data.events = Array.isArray(p.data.events) ? p.data.events : [];
-    const createdEvents = incomingEvents.slice(0, 10).map((x: AnyRecord) => ({ id: uid(), title: String(x.title || cmd).slice(0, 240), type: String(x.type || "Событие"), date: /^\d{4}-\d{2}-\d{2}$/.test(String(x.date || "")) ? x.date : inferDate(cmd, today) || today, time: /^\d{2}:\d{2}$/.test(String(x.time || "")) ? x.time : inferTime(cmd) }));
+    const datedEvents = incomingEvents.filter((x: AnyRecord) => /^\d{4}-\d{2}-\d{2}$/.test(String(x.date || "")) || !!inferDate(cmd, today));
+    if (!datedEvents.length) { await send(chatId, "Событие понял, но дату не разобрал. Напиши, например: «Тренировка завтра в 18:00»."); return; }
+    const createdEvents = datedEvents.slice(0, 10).map((x: AnyRecord) => ({ id: uid(), title: String(x.title || cmd).slice(0, 240), type: String(x.type || "Событие"), date: /^\d{4}-\d{2}-\d{2}$/.test(String(x.date || "")) ? x.date : inferDate(cmd, today), time: /^\d{2}:\d{2}$/.test(String(x.time || "")) ? x.time : inferTime(cmd) }));
     p.data.events.push(...createdEvents);
     await saveProfile(userId, p.data, p.baseData);
     await send(chatId, "Добавил событие в календарь MYDAY:\n" + createdEvents.map((x: AnyRecord) => "📌 <b>" + escapeHtml(x.title) + "</b> · " + x.date + (x.time ? " · " + x.time : "")).join("\n"));
