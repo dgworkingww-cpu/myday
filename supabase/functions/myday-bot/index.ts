@@ -11,6 +11,14 @@ type AnyRecord = Record<string, any>;
 const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { ...cors, "Content-Type": "application/json" } });
 const isoToday = (tz = TZ) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 function shiftDate(date: string, days: number) { const d = new Date(date + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
+function parseRussianMonthDate(value: string, reference: string) {
+  const match = String(value || "").toLocaleLowerCase("ru").match(/(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)/);
+  if (!match) return "";
+  const months: Record<string, string> = { "января":"01","февраля":"02","марта":"03","апреля":"04","мая":"05","июня":"06","июля":"07","августа":"08","сентября":"09","октября":"10","ноября":"11","декабря":"12" };
+  let year = Number(reference.slice(0,4)), result = year+"-"+months[match[2]]+"-"+match[1].padStart(2,"0");
+  if (result < reference) { year++; result = year+"-"+months[match[2]]+"-"+match[1].padStart(2,"0"); }
+  return validDate(result) ? result : "";
+}
 function uid() { return crypto.randomUUID(); }
 function escapeHtml(s: unknown) { return String(s ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]!)); }
 function profileSeed(): AnyRecord {
@@ -584,8 +592,8 @@ async function handleText(chatId: number, userId: number, text: string) {
     const months = "января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря";
     const anchorMatch = cmd.match(new RegExp("(?:с|начиная с|старт)\\s+(\\d{1,2}\\s+(?:" + months + "))", "i"));
     const endMatch = cmd.match(new RegExp("до\\s+(\\d{1,2}\\s+(?:" + months + "))", "i"));
-    const anchorDate = anchorMatch ? inferDate(anchorMatch[1], today) : shiftDate(today, 1);
-    const endDate = endMatch ? inferDate(endMatch[1], today) : "";
+    const anchorDate = anchorMatch ? parseRussianMonthDate(anchorMatch[1], today) : shiftDate(today, 1);
+    const endDate = endMatch ? parseRussianMonthDate(endMatch[1], today) : "";
     if (!validDate(anchorDate) || !validDate(endDate) || endDate < anchorDate) {
       await send(chatId, "Понял, что нужен цикл «день → ночь → отсыпной → выходной». Укажи дату первой дневной смены и дату окончания, например: «с 28 ноября по 15 декабря».");
       return;
