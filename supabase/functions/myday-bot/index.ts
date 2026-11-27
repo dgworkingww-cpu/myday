@@ -214,7 +214,7 @@ async function handleText(chatId: number, userId: number, text: string) {
 
   // Keep the meaning of a clarification across messages, e.g. "Работа с 19 до 23:30" -> "завтра".
   const pending = p.data.botState?.pending;
-  if (pending?.kind === "event_date") {
+  if (pending?.kind === "event_date" || pending?.kind === "homework_subject") {
     const age = Date.now() - Number(pending.createdAt || 0);
     if (age < 12 * 60 * 60 * 1000 && isCancellation(cmd)) {
       p.data.botState = { pending: null };
@@ -222,8 +222,10 @@ async function handleText(chatId: number, userId: number, text: string) {
       await send(chatId, "Отменил незавершённую запись. Ничего не добавлял.");
       return;
     }
-    if (age < 12 * 60 * 60 * 1000 && isDateOnlyReply(cmd)) {
-      cmd = String(pending.raw || "") + " " + cmd;
+    const isFollowUp = pending.kind === "event_date" ? isDateOnlyReply(cmd) : (!/^\//.test(cmd) && cmd.length <= 120);
+    if (age < 12 * 60 * 60 * 1000 && isFollowUp) {
+      if (pending.kind === "event_date") cmd = String(pending.raw || "") + " " + cmd;
+      else cmd = String(pending.raw || "") + (/^по\s+/i.test(cmd) ? " " : " по ") + cmd;
       p.data.botState = { pending: null };
       await saveProfile(userId, p.data, p.baseData);
     } else if (age >= 12 * 60 * 60 * 1000 || !/^\//.test(cmd)) {
