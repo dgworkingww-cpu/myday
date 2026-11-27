@@ -55,13 +55,13 @@ function makePdf(lines) {
       documentType:'Учебный документ',title:'Тестовый документ',summary:'Проверка сквозного сценария MYDAY.',
       keyPoints:['В документе две страницы.'],warnings:[],
       proposals:{tasks:[{title:'Проверочная задача',description:'Из PDF',dueDate:null,priority:'medium',category:'Учёба'}],
-        homework:[],events:[{title:'Проверочное событие',date:'2026-12-01',time:'12:00',endTime:'13:00',type:'Учёба'}],schedule:[]}
+        homework:[],events:[{title:'Проверочное событие',date:'2026-12-01',time:'12:00',endTime:'13:00',type:'Учёба'}],schedule:[{weekday:1,start:'09:00',end:'10:00',subject:'Конфликтующая пара',room:'',teacher:'',weekType:'odd',confidence:0.99}]}
     }})});
   });
   let savedProfile=null;
   await page.route('https://rzgsctbvgzerqizfjhuq.supabase.co/functions/v1/myday-sync',async route=>{
     const body=route.request().postDataJSON();
-    if(body.action==='load') return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({data:{tasks:[],hw:[],events:[],sched:{odd:{},even:{}}},revision:0})});
+    if(body.action==='load') return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({data:{tasks:[],hw:[],events:[],sched:{odd:{'1':[{subj:'Существующая пара',s:'09:30',e:'10:30'}]},even:{}}},revision:0})});
     if(body.action==='save'){savedProfile=body.data;return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,revision:1})})}
     return route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:'Unknown action'})});
   });
@@ -88,6 +88,8 @@ function makePdf(lines) {
     await page.locator('#save').click();
     await page.getByText(/Сохранено в MYDAY: 1/).waitFor({timeout:15000});
     if(!savedProfile || savedProfile.tasks.length!==1 || savedProfile.events.length!==0) throw new Error('Selected-item import did not save the expected profile');
+    if(savedProfile.sched.odd['1'].length!==1) throw new Error('Conflicting timetable entry was not skipped');
+    await page.getByText(/Пропущено из-за пересечений: 1/).waitFor();
     const cache=await page.evaluate(()=>({profile:localStorage.getItem('myday2:user:12345'),base:localStorage.getItem('myday2:sync-base:12345'),revision:localStorage.getItem('myday2:sync-revision:12345')}));
     if(!cache.profile||!cache.base||cache.revision!=='1') throw new Error('Local MYDAY cache was not aligned after cloud save');
     const pngBase64=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=1800;c.height=500;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.fillStyle='#000';x.font='bold 130px Arial';x.fillText('MYDAY OCR TEST 123',90,300);return c.toDataURL('image/png').split(',')[1]});
@@ -98,6 +100,6 @@ function makePdf(lines) {
     const ocrText=(await page.locator('#output').inputValue()).toUpperCase();
     if(!ocrText.includes('MYDAY')||!ocrText.includes('OCR')) throw new Error('Real image OCR failed: '+ocrText);
     if(errors.length) throw new Error('Browser runtime errors: '+errors.join(' | '));
-    console.log(JSON.stringify({result:'passed',tests:['file selection','PDF preview','next/previous page controls','two-page text extraction','AI analysis UI','selective import','cloud profile save','real image OCR'],savedTasks:savedProfile.tasks.length,savedEvents:savedProfile.events.length,errors,failedRequests:failed},null,2));
+    console.log(JSON.stringify({result:'passed',tests:['file selection','PDF preview','next/previous page controls','two-page text extraction','AI analysis UI','selective import','cloud profile save','schedule conflict prevention','real image OCR'],savedTasks:savedProfile.tasks.length,savedEvents:savedProfile.events.length,errors,failedRequests:failed},null,2));
   } finally { await context.close();await browser.close();await new Promise(resolve=>server.close(resolve)); }
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});
