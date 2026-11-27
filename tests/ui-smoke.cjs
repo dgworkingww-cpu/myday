@@ -92,8 +92,11 @@ const server = http.createServer((req,res) => {
     if(await page.locator('html').getAttribute('data-theme')!=='dark') throw new Error('Dark theme did not apply');
     await themeButtons.nth(2).click();
 
-    await page.locator('#nav button').nth(0).click();
-    await page.locator('button[aria-label="Быстрое добавление"]').click();
+    await page.getByRole('button',{name:'День'}).click();
+    await page.locator('#app .app-header').waitFor();
+    const quickCapture=page.locator('#app .app-header button[onclick="capture()"]');
+    if(await quickCapture.count()!==1) throw new Error('Today screen did not expose the quick-capture action: '+JSON.stringify(await page.locator('#app').innerText()));
+    await quickCapture.click();
     const sheet=page.locator('#ov .sheet');
     await sheet.waitFor();
     await page.waitForTimeout(260);
@@ -104,7 +107,7 @@ const server = http.createServer((req,res) => {
     await page.locator('.ov').waitFor({state:'detached'});
 
     // Arbitrary text is captured as an inbox note by default, without forcing a task category.
-    await page.locator('button[aria-label="Быстрое добавление"]').click();
+    await page.locator('#app .app-header button[onclick="capture()"]).click();
     await page.locator('#ov #cq').waitFor();
     await page.locator('#ov #cq').fill('MYDAY freeform note with a link https://example.com');
     const captureDefault=await page.locator('#ov #capture-kind').inputValue();
