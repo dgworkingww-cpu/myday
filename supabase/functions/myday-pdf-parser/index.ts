@@ -1,4 +1,4 @@
-import * as pdfjs from "npm:pdfjs-dist@4.10.38/legacy/build/pdf.mjs";
+import * as pdfjs from "npm:pdfjs-dist@4.10.38/build/pdf.min.mjs";
 
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
