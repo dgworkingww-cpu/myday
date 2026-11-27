@@ -173,7 +173,7 @@
     const formats='Excel XLSX/XLS · PDF · Word DOCX · CSV/TXT · JPG/PNG';
     const records=d.records||[];
     return '<main class="page">'+mydayHeader('Импорт расписания','Загрузи файл, проверь распознанные пары и только потом сохрани.',false,true)+
-      '<section class="surface-panel"><div class="import-drop"><span class="settings-icon">'+mydayIcon('inbox',22)+'</span><b>Выбрать файл</b><span class="page-sub">'+formats+'</span><input id="schedule-file" type="file" accept=".xlsx,.xls,.pdf,.docx,.csv,.txt,.jpg,.jpeg,.png" onchange="MYDAY_LAB.readFile(this)"></div>'+
+      '<section class="surface-panel"><div class="import-drop"><span class="settings-icon">'+mydayIcon('inbox',22)+'</span><b>Выбрать файл</b><span class="page-sub">'+formats+'</span><input id="schedule-file" type="file" accept=".xlsx,.xls,.pdf,.docx,.csv,.txt,.jpg,.jpeg,.png" onchange="MYDAY_LAB.readFile(this)"><a href="./sample-schedule.csv" download>Скачать пример CSV</a></div>'+
       '<p class="page-sub" role="status" aria-live="polite">'+esc(d.status)+'</p><label for="import-target">Куда импортировать</label><select id="import-target" onchange="MYDAY_LAB.setDraft(\'target\',this.value)"><option value="study" '+(d.target==='study'?'selected':'')+'>Учебное расписание</option><option value="work" '+(d.target==='work'?'selected':'')+'>Рабочий график (неделя)</option></select>'+
       '<label for="import-mode">Тип учебного расписания</label><select id="import-mode" onchange="MYDAY_LAB.setDraft(\'mode\',this.value)"><option value="auto" '+(d.mode==='auto'?'selected':'')+'>Определить по файлу</option><option value="alternating" '+(d.mode==='alternating'?'selected':'')+'>Нечётная / чётная</option><option value="fixed" '+(d.mode==='fixed'?'selected':'')+'>Постоянное</option><option value="cycle" '+(d.mode==='cycle'?'selected':'')+'>Цикл 2–4 недели</option><option value="dates" '+(d.mode==='dates'?'selected':'')+'>Конкретные даты</option><option value="hybrid" '+(d.mode==='hybrid'?'selected':'')+'>Смешанное</option></select>'+
       '<label for="import-replace" class="lab-check"><input id="import-replace" type="checkbox" '+(d.replace?'checked':'')+' onchange="MYDAY_LAB.setDraft(\'replace\',this.checked)"> Заменить занятия в выбранных днях (вместо добавления)</label>'+
@@ -260,56 +260,85 @@
     return out;
   }
 
-  function parseRows(rows) {
-    const records=[],seen=new Set();
-    const add=(r)=>{if(!r||!r.subj||!r.s||!r.e)return;const key=[r.date,r.day,r.week,r.subj,r.s,r.e,r.room].join('|');if(!seen.has(key)){seen.add(key);records.push(r)}};
-    const weekdayCols=[];
-    const dayWords=Object.keys(DAY_NAMES);
-    rows.forEach(row=>{
-      if(!Array.isArray(row))return;
-      row.forEach((cell,i)=>{const v=String(cell||'').trim().toLowerCase();if(DAY_NAMES[v]!=null)weekdayCols[i]=DAY_NAMES[v]});
-    });
-    for(const row of rows){
-      if(!Array.isArray(row))continue;
-      const cells=row.map(x=>String(x==null?'':x).trim());
-      const joined=cells.filter(Boolean).join(' | ');
-      const lower=joined.toLowerCase();
-      const headers=cells.map(x=>x.toLowerCase());
-      const dayIndex=headers.findIndex(x=>/^(день|день недели|weekday|day)$/.test(x));
-      const subjectIndex=headers.findIndex(x=>/предмет|дисциплина|занятие|subject|class/.test(x));
-      const startIndex=headers.findIndex(x=>/начало|start|с$/.test(x));
-      const endIndex=headers.findIndex(x=>/конец|end|до$/.test(x));
-      const timeIndex=headers.findIndex(x=>/время|time/.test(x));
-      if(dayIndex>=0&&(subjectIndex>=0)&&(timeIndex>=0||startIndex>=0)){
-        const ri=rows.indexOf(row)+1;if(ri>=rows.length)continue;
-        const data=rows[ri].map(x=>String(x==null?'':x).trim());
-        const day=DAY_NAMES[(data[dayIndex]||'').toLowerCase()];
-        let times=data[timeIndex>=0?timeIndex:startIndex]||'',m=times.match(timeRegex);
-        const s=startIndex>=0?data[startIndex]:m?normalizeTime(m[1],m[2]):'',eTime=endIndex>=0?data[endIndex]:m?normalizeTime(m[3],m[4]):'';
-        add({id:id(),day,date:'',week:'',subj:data[subjectIndex]||'',s,e:eTime,room:data[headers.findIndex(x=>/ауд|кабинет|room/.test(x))]||'',teacher:data[headers.findIndex(x=>/препод|teacher/.test(x))]||''});
-      }
-      const timeCell=cells.find(x=>timeRegex.test(x));
-      if(timeCell){
-        const m=timeCell.match(timeRegex),dayInRow=cells.map(x=>DAY_NAMES[x.toLowerCase()]).find(x=>x!=null);
-        if(dayInRow!=null){
-          const ti=cells.indexOf(timeCell),subjCell=cells.slice(ti+1).find(x=>x&&!DAY_NAMES[x.toLowerCase()])||cells.find(x=>x!==timeCell&&x&&!/^\d{1,2}[:.]\d{2}/.test(x));
-          if(subjCell)add({id:id(),day:dayInRow,date:'',week:/неч[её]тн|нижн/.test(lower)?'odd':/ч[её]тн|верхн/.test(lower)?'even':'',subj:subjCell,s:normalizeTime(m[1],m[2]),e:normalizeTime(m[3],m[4]),room:'',teacher:''});
-        }
-      }
-      if(weekdayCols.some(x=>x!=null)){
-        const first=cells[0]||'',m=first.match(timeRegex);
-        if(m){weekdayCols.forEach((day,col)=>{if(day==null||!cells[col])return;parseLine(cells[col]+' '+m[0],{day,week:/неч[её]тн|нижн/.test(lower)?'odd':/ч[её]тн|верхн/.test(lower)?'even':''}).forEach(add)})}
-      }
-      parseLine(joined,{day:null,week:''}).forEach(add);
+  function splitCsvLine(line,delimiter) {
+    const out=[];let value='',quoted=false;
+    for(let i=0;i<line.length;i++){
+      const ch=line[i];
+      if(ch==='"'&&line[i+1]==='"'&&quoted){value+='"';i++}
+      else if(ch==='"')quoted=!quoted;
+      else if(ch===delimiter&&!quoted){out.push(value.trim());value=''}
+      else value+=ch;
     }
+    out.push(value.trim());return out;
+  }
+  function parseRows(rows) {
+    const matrix=(rows||[]).map(row=>Array.isArray(row)?row.map(x=>String(x==null?'':x).trim()):[String(row||'').trim()]);
+    const records=[],seen=new Set();
+    const add=r=>{
+      if(!r||!r.subj||!r.s||!r.e)return;
+      const key=[r.date,r.day,r.week,r.cycleIndex,r.subj,r.s,r.e,r.room,r.teacher].join('|');
+      if(!seen.has(key)){seen.add(key);records.push(r)}
+    };
+    const headerIndex=matrix.findIndex(row=>{
+      const h=row.map(x=>x.toLowerCase());
+      return h.some(x=>/день недели|^день$|^weekday$|^day$/.test(x)) &&
+        h.some(x=>/предмет|дисциплина|занятие|subject|class/.test(x)) &&
+        h.some(x=>/время|time|начало|start/.test(x));
+    });
+    if(headerIndex>=0){
+      const h=matrix[headerIndex].map(x=>x.toLowerCase());
+      const find=rx=>h.findIndex(x=>rx.test(x));
+      const di=find(/день недели|^день$|^weekday$|^day$/),si=find(/предмет|дисциплина|занятие|subject|class/);
+      const ti=find(/время|time/),bi=find(/начало|start/),ei=find(/конец|end|окончание/);
+      const ri=find(/ауд|кабинет|room|место/),pi=find(/препод|teacher/),wi=find(/недел|week/),dti=find(/дата|date/);
+      for(let i=headerIndex+1;i<matrix.length;i++){
+        const row=matrix[i];if(!row.some(Boolean))continue;
+        const day=DAY_NAMES[(row[di]||'').toLowerCase()];
+        const time=(ti>=0?row[ti]:'')||'',m=time.match(timeRegex);
+        const s0=bi>=0?normalizeClock(row[bi]):m?normalizeTime(m[1],m[2]):'';
+        const eTime=ei>=0?normalizeClock(row[ei]):m?normalizeTime(m[3],m[4]):'';
+        let week='',cycleIndex=null;
+        const w=(wi>=0?row[wi]||'':'').toLowerCase();
+        if(/неч[её]тн|нижн/.test(w))week='odd';else if(/ч[её]тн|верхн/.test(w))week='even';else if(/постоян/.test(w))week='fixed';
+        const cm=w.match(/(?:цикл|недел[яи])\s*([1-4])/);if(cm)cycleIndex=Number(cm[1])-1;
+        const date=dti>=0?parseDate(row[dti]):'';
+        if(day!=null&&row[si]&&s0&&eTime&&eTime>s0)add({id:id(),day,date,week,cycleIndex,subj:row[si],s:s0,e:eTime,room:ri>=0?row[ri]||'':'',teacher:pi>=0?row[pi]||'':''});
+      }
+      if(records.length)return records;
+    }
+    let dayColumns=null,dayHeaderRow=-1;
+    for(let i=0;i<Math.min(matrix.length,8);i++){
+      const cols=matrix[i].map((cell,col)=>({day:DAY_NAMES[cell.toLowerCase()],col})).filter(x=>x.day!=null);
+      if(cols.length>=2){dayColumns=cols;dayHeaderRow=i;break}
+    }
+    if(dayColumns){
+      for(let i=dayHeaderRow+1;i<matrix.length;i++){
+        const row=matrix[i],timeCell=row.find(x=>timeRegex.test(x||''));if(!timeCell)continue;
+        const m=timeCell.match(timeRegex);if(!m)continue;
+        const w=row.join(' ').toLowerCase(),week=/неч[её]тн|нижн/.test(w)?'odd':/ч[её]тн|верхн/.test(w)?'even':'';
+        dayColumns.forEach(({day,col})=>{const cell=row[col];if(cell)parseLine(cell+' '+timeCell,{day,week}).forEach(add)});
+      }
+      if(records.length)return records;
+    }
+    for(const row of matrix)parseLine(row.filter(Boolean).join(' | '),{day:null,week:''}).forEach(add);
     return records;
   }
-
+  function normalizeClock(value) {
+    const m=String(value||'').match(/^([01]?\d|2[0-3])[:.]([0-5]\d)$/);
+    return m?normalizeTime(m[1],m[2]):'';
+  }
+  function parseDate(value) {
+    const v=String(value||'').trim();
+    let m=v.match(/^(20\d{2})[-.](\d{1,2})[-.](\d{1,2})$/);
+    if(m)return m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');
+    m=v.match(/^(\d{1,2})[.](\d{1,2})[.](20\d{2})$/);
+    return m?m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0'):'';
+  }
   async function extractFile(file) {
     const name=file.name||'schedule',ext=(name.split('.').pop()||'').toLowerCase();
     let records=[];
     if(['csv','txt'].includes(ext)){
-      const text=await file.text();records=parseRows(text.split(/\r?\n/).map(line=>line.split(/[;\t,]/)));
+      const text=await file.text(),first=text.split(/\r?\n/).find(x=>x.trim())||'',delimiter=first.includes(';')?';':first.includes('\t')?'\t':',';records=parseRows(text.split(/\r?\n/).map(line=>splitCsvLine(line,delimiter)));
       if(!records.length)records=text.split(/\r?\n/).flatMap(line=>parseLine(line,{day:null,week:''}));
     } else if(['xlsx','xls'].includes(ext)){
       await loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',()=>!!window.XLSX);
@@ -321,7 +350,7 @@
       await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',()=>!!window.pdfjsLib);
       pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;let lines=[];
-      for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p),tc=await page.getTextContent();lines.push(tc.items.map(x=>x.str).join(' '))}
+      for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p),tc=await page.getTextContent();lines.push(tc.items.map(x=>x.str+(x.hasEOL?'\n':' ')).join('').split(/\r?\n/).filter(Boolean).join('\n'))}
       records=lines.flatMap(x=>parseLine(x,{day:null,week:''}));if(!records.length)records=parseRows(lines.map(x=>[x]));
     } else if(['jpg','jpeg','png'].includes(ext)){
       await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',()=>!!window.Tesseract);
