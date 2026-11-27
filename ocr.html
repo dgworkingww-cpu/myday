@@ -111,7 +111,7 @@ const apiBase=String(cfg.supabaseUrl||"").replace(/\/+$/,"");
 const anonKey=cfg.supabaseAnonKey||"";
 const initData=tg&&tg.initData||"";
 let file=null,pdf=null,page=1,pageCount=1,recognized="",analysis=null,busy=false,cancelRequested=false,activeWorker=null,imageUrl="";
-const allowed=/\.(pdf|jpe?g|png|webp|tiff?)$/i;
+const allowed=/\.(pdf|jpe?g|png|webp|tiff?|heic|heif)$/i;
 function status(message,kind){$("status").textContent=message;$("status").className="status "+(kind||"")}
 function analysisStatus(message,kind){$("analysisStatus").textContent=message;$("analysisStatus").className="status "+(kind||"")}
 function progress(value,message,kind){$("bar").style.width=Math.max(0,Math.min(100,value))+"%";status(message,kind)}
@@ -149,7 +149,22 @@ async function showFile(){
  }
  $("extract").disabled=false;
 }
-async function imageToCanvas(source){\n const url=URL.createObjectURL(source);\n try{\n  const img=new Image();img.src=url;\n  await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error("Не удалось открыть изображение. Сохрани его как JPG или PNG и повтори попытку."))});\n  const scale=Math.min(1,2800/Math.max(img.naturalWidth,img.naturalHeight));\n  const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));\n  const ctx=canvas.getContext("2d",{willReadFrequently:true});if(!ctx)throw new Error("Браузер не смог подготовить изображение для OCR.");\n  ctx.drawImage(img,0,0,canvas.width,canvas.height);return canvas;\n }finally{URL.revokeObjectURL(url)}\n}\nasync function extractText(){
+async function imageToCanvas(source){
+ const url=URL.createObjectURL(source);
+ try{
+  const img=new Image();img.src=url;
+  await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error("Не удалось открыть изображение. Сохрани его как JPG или PNG и повтори попытку."))});
+  const scale=Math.min(1,2800/Math.max(img.naturalWidth,img.naturalHeight));
+  const canvas=document.createElement("canvas");
+  canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));
+  canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
+  const ctx=canvas.getContext("2d",{willReadFrequently:true});
+  if(!ctx)throw new Error("Браузер не смог подготовить изображение для OCR.");
+  ctx.drawImage(img,0,0,canvas.width,canvas.height);
+  return canvas;
+ }finally{URL.revokeObjectURL(url)}
+}
+async function extractText(){
  if(!file){progress(0,"Сначала выбери PDF или изображение.","error");return}
  if(busy)return;
  setBusy(true);cancelRequested=false;recognized="";$("output").value="";$("textPanel").classList.add("hidden");$("resultPanel").classList.add("hidden");
@@ -163,7 +178,7 @@ async function imageToCanvas(source){\n const url=URL.createObjectURL(source);\n
     progress(2+Math.round((n-1)/limit*88),"Читаю страницу "+n+" из "+limit+"…");
     const p=await pdf.getPage(n),tc=await p.getTextContent();
     const digital=tc.items.map(x=>String(x.str||"")+(x.hasEOL?"\n":" ")).join("").trim();
-    if(digital.length>=24){parts.push("СТРАНИЦА "+n+"\n"+digital)}
+    if(digital.replace(/\s/g,"").length>=60){parts.push("СТРАНИЦА "+n+"\n"+digital)}
     else{
      usedOcr=true;
      if(!window.Tesseract)throw new Error("Не загрузился бесплатный движок OCR. Проверь подключение к интернету и повтори попытку.");
