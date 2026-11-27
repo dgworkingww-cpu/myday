@@ -251,6 +251,18 @@ async function analyzeDocument(){
  finally{$("analyze").disabled=false}
 }
 function id(){return crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)}
+async function alignLocalCache(data,revision){
+ const userId=String(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user&&tg.initDataUnsafe.user.id||"");
+ if(!userId)return;
+ const snapshot=JSON.stringify(data);
+ try{
+  localStorage.setItem("myday2:user:"+userId,snapshot);
+  const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(snapshot));
+  const hash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
+  localStorage.setItem("myday2:sync-base:"+userId,hash);
+  localStorage.setItem("myday2:sync-revision:"+userId,String(revision));
+ }catch(err){console.warn("MYDAY local cache alignment skipped:",err)}
+}
 async function saveSelected(){
  if(!analysis)return;
  const selected=[...$("proposals").querySelectorAll('input[type="checkbox"]:checked')];
@@ -293,6 +305,7 @@ async function saveSelected(){
   }
   if(!added){$("saveStatus").textContent=duplicates?"Все выбранные записи уже есть в MYDAY.":"Не выбраны записи с достаточными данными.";$("save").disabled=false;return}
   const saved=await postSync({action:"save",data,expectedRevision:revision});
+  await alignLocalCache(data,Number(saved.revision||revision+1));
   $("saveStatus").textContent="Сохранено в MYDAY: "+added+". Уже было: "+duplicates+". Открой основное приложение заново, чтобы увидеть обновления.";
   $("saveStatus").className="status success";$("save").textContent="Сохранено";
   try{tg&&tg.showAlert&&tg.showAlert("Сохранено в MYDAY: "+added+" записей. Уже существовало: "+duplicates+".")}catch(_){}
