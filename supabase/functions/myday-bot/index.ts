@@ -13,7 +13,7 @@ function shiftDate(date: string, days: number) { const d = new Date(date + "T12:
 function uid() { return crypto.randomUUID(); }
 function escapeHtml(s: unknown) { return String(s ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]!)); }
 function profileSeed(): AnyRecord {
-  return { v: 2, settings: { theme: "auto", morning: "07:30", shift: 0, notif: true, hwDelay: 60, notifications: { study: true, work: true, personal: true } }, sched: { odd: {}, even: {}, work: {}, fixed: {}, cycle: {}, dates: {} }, scheduleConfig: { studyMode: "alternating", cycleWeeks: 2, cycleAnchor: "", selectedDate: "" }, workConfig: { mode: "weekly", pattern: ["work", "work", "off", "off"], anchorDate: "", start: "09:00", end: "18:00", title: "Рабочая смена", exceptions: {} }, habits: [], tasks: [], inbox: [], fired: {}, done: [], uni: { name: "", url: "", login: "", notes: "", links: "", teachers: "" }, subjects: [], hw: [], exc: [], events: [] };
+  return { v: 2, settings: { theme: "auto", morning: "07:30", shift: 0, notif: true, hwDelay: 60, notifications: { study: true, work: true, personal: true } }, sched: { odd: {}, even: {}, work: {}, fixed: {}, cycle: {}, dates: {} }, scheduleConfig: { studyMode: "alternating", cycleWeeks: 2, cycleAnchor: "", selectedDate: "" }, workConfig: { mode: "weekly", pattern: ["work", "work", "off", "off"], anchorDate: "", start: "09:00", end: "18:00", title: "Рабочая смена", exceptions: {} }, habits: [], tasks: [], inbox: [], fired: {}, done: [], uni: { name: "", url: "", login: "", notes: "", links: "", teachers: "" }, subjects: [], hw: [], exc: [], events: [], botState: { pending: null } };
 }
 async function tg(method: string, body: AnyRecord) {
   const token = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
