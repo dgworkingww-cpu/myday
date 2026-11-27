@@ -27,6 +27,10 @@ on:
       - '.github/workflows/frontend-checks.yml'
   workflow_dispatch:
 
+concurrency:
+  group: myday-frontend-checks-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
