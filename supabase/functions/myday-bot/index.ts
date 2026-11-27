@@ -275,7 +275,7 @@ async function handleText(chatId: number, userId: number, text: string) {
   let cmd = text.trim();
   if (!cmd) return;
   if (/^\/(start|help)(\s|$)/i.test(cmd)) {
-    await send(chatId, "Привет! Я <b>MYDAY Assistant</b> — твой личный планировщик. Пиши как человеку, не нужно запоминать команды.\n\nПримеры:\n• «Сдать лабораторную по теплотехнике до пятницы»\n• «Завтра работа с 19:00 до 23:30»\n• «Запиши домашку по теплотехнике: решить задачу»\n• «Перенеси курсовую на понедельник»\n• «Что у меня сегодня?»\n• «Отметь лабораторную выполненной»\n• «Запомни: преподаватель перенёс пару»\n\nКоманды: /today, /week, /tasks, /events, /homework, /app, /help", [[{ text: "Сегодня", callback_data: "view:today" }, { text: "Мои задачи", callback_data: "view:tasks" }], [{ text: "Открыть MYDAY", web_app: { url: "https://dgworkingww-cpu.github.io/myday/" } }]]);
+    await send(chatId, "Привет! Я <b>MYDAY Assistant</b> — твой личный планировщик. Пиши как человеку, не нужно запоминать команды.\n\nПримеры:\n• «Сдать лабораторную по теплотехнике до пятницы»\n• «Завтра работа с 19:00 до 23:30»\n• «Запиши домашку по теплотехнике: решить задачу»\n• «Перенеси курсовую на понедельник»\n• «Что у меня сегодня?»\n• «Какие пары завтра?»\n• «Покажи расписание на следующую пятницу»\n• «Отметь лабораторную выполненной»\n• «Запомни: преподаватель перенёс пару»\n\nКоманды: /today, /tomorrow, /day дата, /week, /tasks, /events, /homework, /app, /help", [[{ text: "Сегодня", callback_data: "view:today" }, { text: "Мои задачи", callback_data: "view:tasks" }], [{ text: "Открыть MYDAY", web_app: { url: "https://dgworkingww-cpu.github.io/myday/" } }]]);
     return;
   }
   const p = await getProfile(userId);
@@ -544,7 +544,7 @@ async function handleText(chatId: number, userId: number, text: string) {
     await send(chatId, "Добавил в календарь MYDAY:\n" + createdEvents.map((x: AnyRecord) => "📌 <b>" + escapeHtml(x.title) + "</b> · " + x.date + (x.time ? " · " + x.time + (x.endTime ? "–" + x.endTime : "") : "")).join("\n"));
     return;
   }
-  if (payload.intent === "help") { await send(chatId, "Можешь свободно писать задачи, события, домашнюю работу, заметки и команды на изменение записей. Примеры: «завтра работа с 19 до 23:30», «запиши лабораторную по теплотехнике до пятницы», «перенеси тренировку на субботу», «что у меня на неделе?». Команды: /today, /week, /tasks, /events, /homework, /app."); return; }
+  if (payload.intent === "help") { await send(chatId, "Можешь свободно писать задачи, события, домашнюю работу, заметки и команды на изменение записей. Примеры: «завтра работа с 19 до 23:30», «запиши лабораторную по теплотехнике до пятницы», «перенеси тренировку на субботу», «что у меня на неделе?». Команды: /today, /tomorrow, /day дата, /week, /tasks, /events, /homework, /app."); return; }
 
   const incoming = Array.isArray(payload.tasks) ? payload.tasks : [];
   if (!incoming.length) { await send(chatId, "Не понял, что сохранить. Попробуй сформулировать как действие: что нужно сделать и к какому сроку."); return; }
