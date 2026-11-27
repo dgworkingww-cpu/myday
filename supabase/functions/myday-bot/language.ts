@@ -122,7 +122,7 @@ export function parseClock(text: string): string {
   return "";
 }
 export function inferTime(text: string): string {
-  const m = text.toLocaleLowerCase("ru").match(/(?:в|к|на|с)\s*((?:\d{1,2}(?:[:.]\d{2})?\s*(?:утра|дня|вечера|ночи)?)|(?:пол(?:овина)?\s*[а-яе]+)|(?:[а-яе]+\s*(?:утра|дня|вечера|ночи)))/i);
+  const m = text.toLocaleLowerCase("ru").match(/(?:в|к|на|с|до)\s*((?:\d{1,2}(?:[:.]\d{2})?\s*(?:утра|дня|вечера|ночи)?)|(?:пол(?:овина)?\s*[а-яе]+)|(?:[а-яе]+\s*(?:утра|дня|вечера|ночи)))/i);
   return m ? parseClock(m[1]) : "";
 }
 export function inferTimeRange(text: string): { start: string; end: string } | null {
