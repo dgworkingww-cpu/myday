@@ -3,6 +3,7 @@
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type,x-telegram-bot-api-secret-token", "Access-Control-Allow-Methods": "POST,OPTIONS" };
 const enc = new TextEncoder();
 const TZ = "Europe/Moscow";
+let failureStage = "запуск функции";
 
 type AnyRecord = Record<string, any>;
 const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { ...cors, "Content-Type": "application/json" } });
@@ -24,6 +25,7 @@ async function send(chatId: number, text: string, keyboard?: AnyRecord[][]) {
   return await tg("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}) });
 }
 async function getProfile(telegramId: number) {
+  failureStage = "чтение профиля из Supabase";
   const base = Deno.env.get("SUPABASE_URL")!.replace(/\/+$/, "");
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || (() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}").default || ""; } catch { return ""; } })();
   if (!key) throw new Error("Supabase server key missing");
@@ -36,6 +38,7 @@ async function getProfile(telegramId: number) {
   return { data, baseData: JSON.parse(JSON.stringify(data)), revision: Number(rows[0]?.revision || 0), base, key, headers };
 }
 async function consumeAiQuota(telegramId: number, usageDate: string, limit = 100): Promise<boolean> {
+  failureStage = "проверка дневного лимита AI";
   const profile = await getProfile(telegramId);
   const response = await fetch(profile.base + "/rest/v1/rpc/myday_consume_bot_ai", {
     method: "POST",
@@ -82,6 +85,7 @@ function mergeBotChanges(latest: AnyRecord, incoming: AnyRecord, base: AnyRecord
   return merged;
 }
 async function saveProfile(telegramId: number, incoming: AnyRecord, baseData: AnyRecord) {
+  failureStage = "сохранение задачи в Supabase";
   for (let attempt = 0; attempt < 4; attempt++) {
     const current = await getProfile(telegramId);
     const merged = mergeBotChanges(current.data, incoming, baseData || {});
@@ -173,6 +177,7 @@ async function vision(fileId: string, userId: number, today: string) {
 }
 function taskKeyboard(tasks: Array<[string, string]>) { return tasks.map(([id, title]) => [{ text: "✓ " + String(title).slice(0, 28), callback_data: "done:" + id }, { text: "Завтра", callback_data: "tomorrow:" + id }, { text: "Удалить", callback_data: "delete:" + id }]); }
 async function handleText(chatId: number, userId: number, text: string) {
+  failureStage = "разбор команды";
   const cmd = text.trim();
   if (/^\/(start|help)(\s|$)/i.test(cmd)) {
     await send(chatId, "Привет! Я <b>MYDAY Assistant</b> — твой планировщик прямо в Telegram.\n\nНапиши задачу обычными словами или отправь голосовое. Например: «Сдать лабораторную по теплотехнике до пятницы» или «Завтра в 18:00 тренировка».\n\nКоманды: /today, /week, /tasks, /app, /help", [[{ text: "Сегодня", callback_data: "view:today" }, { text: "Мои задачи", callback_data: "view:tasks" }], [{ text: "Открыть MYDAY", web_app: { url: "https://dgworkingww-cpu.github.io/myday/" } }]]);
@@ -202,6 +207,7 @@ async function handleText(chatId: number, userId: number, text: string) {
   }
   const eventLike = /тренировк|встреч|при[её]м|врач|экзамен|зач[её]т|консультац|день рождения|собеседован|мероприят/i.test(cmd);
   const fallbackSpace = guessSpace(cmd);
+  failureStage = "распознавание текста";
   const payload = await aiInterpret(cmd, today, userId) || (eventLike
     ? { intent: "add_event", tasks: [], events: [{ title: cmd, type: /экзамен/i.test(cmd) ? "Экзамен" : /зач[её]т/i.test(cmd) ? "Зачёт" : "Событие", date: inferDate(cmd, today) }] }
     : { intent: "add", tasks: [{ title: cmd, desc: "", space: fallbackSpace, cat: guessCategory(fallbackSpace), due: inferDate(cmd, today), prio: 1 }] });
@@ -261,6 +267,7 @@ async function handleText(chatId: number, userId: number, text: string) {
   }
   if (!created.length) { await send(chatId, "Не смог выделить название задачи."); return; }
   await saveProfile(userId, p.data, p.baseData);
+  failureStage = "отправка подтверждения в Telegram";
   const summary = created.map((x, i) => (i + 1) + ". <b>" + escapeHtml(x.title) + "</b>" + (x.due ? " · " + x.due : "")).join("\n");
   await send(chatId, "Сохранил в MYDAY и синхронизировал с приложением:\n" + summary, taskKeyboard(created.map((x): [string, string] => [String(x.id), String(x.title)])));
 }
@@ -287,13 +294,15 @@ Deno.serve(async (req: Request) => {
   if (!secret || req.headers.get("x-telegram-bot-api-secret-token") !== secret) return json({ error: "Unauthorized" }, 401);
   let fallbackChatId = 0;
   try {
+    failureStage = "чтение входящего обновления Telegram";
     const update = await req.json();
     fallbackChatId = Number(update.message?.chat?.id || update.callback_query?.message?.chat?.id || 0);
+    failureStage = "проверка повторного обновления";
     if (Number.isSafeInteger(update.update_id)) {
       const fresh = await markUpdate(Number(update.update_id));
       if (!fresh) return json({ ok: true, duplicate: true });
     }
-    if (update.callback_query) await handleCallback(update.callback_query);
+    if (update.callback_query) { failureStage = "обработка нажатия кнопки"; await handleCallback(update.callback_query); }
     else if (update.message) {
       const m = update.message, chatId = Number(m.chat?.id), userId = Number(m.from?.id);
       if (!chatId || !userId || m.chat?.type !== "private") return json({ ok: true });
@@ -316,14 +325,19 @@ Deno.serve(async (req: Request) => {
           else { await send(chatId, "PDF получил. Для точного импорта расписания открой Mini App → Расписание → Импорт. Прямой разбор PDF в чате добавим отдельным этапом."); return json({ ok: true }); }
         } else { await send(chatId, "Файл получил. Для импорта Excel/DOCX пока используй раздел импорта внутри Mini App."); return json({ ok: true }); }
       }
-      if (text) await handleText(chatId, userId, text);
+      if (text) { failureStage = "обработка текстового сообщения"; await handleText(chatId, userId, text); }
       else if (!m.voice && !m.audio && !m.photo && !m.document) await send(chatId, "Напиши задачу текстом или отправь голосовое. Команды: /today, /week, /tasks, /app.");
     }
     return json({ ok: true });
   } catch (error) {
     console.error("MYDAY bot webhook error:", error);
     if (fallbackChatId) {
-      try { await send(fallbackChatId, String(error).includes("MYDAY_AI_DAILY_LIMIT") ? "На сегодня исчерпан лимит AI-запросов MYDAY (100). Обычные команды и текстовое добавление задач остаются доступны." : "Не получилось обработать сообщение. Проверь /tasks: если задача уже появилась, повторно отправлять её не нужно."); } catch { /* Telegram may be temporarily unavailable */ }
+      try {
+        const message = String(error).includes("MYDAY_AI_DAILY_LIMIT")
+          ? "На сегодня исчерпан лимит AI-запросов MYDAY (100). Обычные команды и текстовое добавление задач остаются доступны."
+          : "Не получилось обработать сообщение.\nЭтап: " + failureStage + ".\nПричина: " + (error instanceof Error ? error.message : "неизвестная ошибка") + ".\nПроверь /tasks, чтобы не создать дубликат.";
+        await send(fallbackChatId, message);
+      } catch { /* Telegram may be temporarily unavailable */ }
     }
     return json({ ok: true });
   }
