@@ -84,6 +84,9 @@ jobs:
       - name: Deploy Telegram-authenticated sync function
         run: supabase functions deploy myday-sync --project-ref "$SUPABASE_PROJECT_REF"
 
+      - name: Deploy isolated MYDAY PDF parser
+        run: supabase functions deploy myday-pdf-parser --project-ref "$SUPABASE_PROJECT_REF"
+
       - name: Deploy MYDAY Telegram assistant
         run: supabase functions deploy myday-bot --project-ref "$SUPABASE_PROJECT_REF"
 
