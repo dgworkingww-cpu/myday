@@ -1,17 +1,9 @@
 name: Deploy and validate MYDAY backend
 
 on:
+  # Production backend deployment is managed from feature/myday-telegram-assistant.
+  # Keep this legacy workflow manual-only to avoid deploying stale migrations from the frontend branch.
   workflow_dispatch:
-  push:
-    branches:
-      - feature/multi-user-myday
-      - main
-    paths:
-      - '.github/workflows/deploy-myday-backend.yml'
-      - 'supabase/**'
-      - 'index.html'
-      - 'backend-config.js'
-      - 'sw.js'
 
 permissions:
   contents: read
