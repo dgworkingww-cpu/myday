@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'index.html'
+      - 'schedule-lab.js'
       - 'design-system.css'
       - 'apple-ui.js'
       - 'manifest.webmanifest'
@@ -16,6 +17,7 @@ on:
     branches: [main, redesign/myday-apple-2026-v2]
     paths:
       - 'index.html'
+      - 'schedule-lab.js'
       - 'design-system.css'
       - 'apple-ui.js'
       - 'manifest.webmanifest'
@@ -44,6 +46,7 @@ jobs:
         run: |
           node tests/ui-smoke.cjs
           BROWSER=webkit node tests/ui-smoke.cjs
+          node tests/schedule-import-groups.cjs
       - name: Check JavaScript syntax
         run: |
           node <<'NODE'
@@ -57,6 +60,7 @@ jobs:
           NODE
           node --check /tmp/myday.js
           node --check apple-ui.js
+          node --check schedule-lab.js
           node --check sw.js
           node --check backend-config.js
       - name: Validate manifest and app shell
