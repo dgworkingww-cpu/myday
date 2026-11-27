@@ -413,10 +413,22 @@ async function handleText(chatId: number, userId: number, text: string) {
   failureStage = "распознавание текста";
   const payload = await aiInterpret(cmd, today, userId, "text", profileContext) || fallbackPayload;
 
-  // Strong deterministic guard: a clearly spoken work/shift interval is always a calendar event.
+  // Deterministic guard: an explicit event with a complete time range must be saved as a calendar event,
+  // even if the language model classifies it as a task or drops one of the time endpoints.
   if (hasSpokenTimeRange && eventLike && !["complete", "delete", "reschedule", "update_task", "delete_event", "reschedule_event", "list_today", "list_week", "list_tasks", "list_events", "list_homework", "note", "help"].includes(String(payload.intent))) {
+    const namedTitle = cmd.match(/(?:называется|под\s+названием|название)\s*[«"']?(.+?)[»"']?$/i)?.[1]?.trim();
+    const aiEvent = Array.isArray(payload.events) && payload.events.length ? payload.events[0] : {};
+    const aiTitle = String(aiEvent.title || payload.title || "").trim();
+    const title = namedTitle || (aiTitle && !/^(?:событие|занятие|пара)$/i.test(aiTitle) ? aiTitle : guessEventTitle(cmd));
     payload.intent = "add_event";
-    payload.events = Array.isArray(payload.events) && payload.events.length ? payload.events : [{ title: guessEventTitle(cmd), type: guessEventTitle(cmd), date: inferDate(cmd, today), time: timeRange.start, endTime: timeRange.end }];
+    payload.events = [{
+      ...aiEvent,
+      title,
+      type: String(aiEvent.type || "Занятие"),
+      date: inferDate(cmd, today) || (validDate(aiEvent.date) ? aiEvent.date : ""),
+      time: timeRange.start,
+      endTime: timeRange.end
+    }];
   }
   if ((payload.intent === "add_event" || (eventLike && (hasSpokenTimeRange || payload.intent === "clarify"))) && !inferDate(cmd, today) && !(Array.isArray(payload.events) && payload.events.some((x: AnyRecord) => validDate(x.date)))) {
     p.data.botState = { pending: { kind: "event_date", raw: cmd, createdAt: Date.now() } };
