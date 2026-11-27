@@ -77,11 +77,18 @@
     const anchor=c.anchorDate || today();
     const pattern=Array.isArray(c.pattern)&&c.pattern.length?c.pattern:['work','work','off','off'];
     const index=((dayDiff(key,anchor)%pattern.length)+pattern.length)%pattern.length;
-    const item=pattern[index];
-    const isWork=item==='work'||item===1||item==='1'||(item&&typeof item==='object'&&item.type==='work');
+    const item=pattern[index],obj=item&&typeof item==='object'?item:{type:item};
+    const kind=String(obj.type||'').toLowerCase();
+    if (kind==='off'||kind==='recovery'||kind==='rest'||kind==='отсыпной'||kind==='выходной') {
+      if(kind==='off'||kind==='выходной'||kind==='rest')return null;
+      return {id:'shift_'+key,subj:obj.title||'Отсыпной',s:'',e:'',room:'',teacher:'',_workShift:true,_shiftKind:'recovery',date:key};
+    }
+    const isDay=kind==='day'||kind==='день',isNight=kind==='night'||kind==='ночь';
+    const isWork=isDay||isNight||kind==='work'||item===1||item==='1'||kind==='work';
     if (!isWork) return null;
-    const obj=item&&typeof item==='object'?item:{};
-    return { id:'shift_'+key, subj:obj.title||c.title||'Рабочая смена', s:obj.start||c.start||'09:00', e:obj.end||c.end||'18:00', room:obj.place||'', teacher:'', _workShift:true, date:key };
+    const start=isDay?(obj.start||c.dayStart||c.start||'08:00'):isNight?(obj.start||c.nightStart||'20:00'):(obj.start||c.start||'09:00');
+    const end=isDay?(obj.end||c.dayEnd||c.end||'20:00'):isNight?(obj.end||c.nightEnd||'08:00'):(obj.end||c.end||'18:00');
+    return { id:'shift_'+key, subj:obj.title||(isDay?'Дневная смена':isNight?'Ночная смена':c.title||'Рабочая смена'), s:start, e:end, room:obj.place||'', teacher:'', _workShift:true,_shiftKind:isDay?'day':isNight?'night':'work', date:key };
   }
   function workShiftList(start,count) {
     const out=[];
@@ -162,16 +169,16 @@
     const c=S.workConfig||{},date=c.selectedDate||today(),shift=workShiftForDate(date),days=workShiftList(date,14);
     return '<main class="page">'+mydayHeader('Сменный график','Рабочие и выходные дни рассчитываются по циклу.',true,true)+
       '<section class="surface-panel"><label for="work-date">Дата</label><input id="work-date" type="date" value="'+date+'" onchange="MYDAY_LAB.selectWorkDate(this.value)">'+
-      (shift?'<div class="work-shift-card"><span class="eyebrow">РАБОЧАЯ СМЕНА</span><b>'+esc(shift.subj)+'</b><strong>'+shift.s+'–'+shift.e+'</strong></div>':'<div class="empty-state"><b>Выходной</b><span>По текущему циклу смена на эту дату не запланирована.</span></div>')+
+      (shift?(shift._shiftKind==='recovery'?'<div class="work-shift-card"><span class="eyebrow">ВОССТАНОВЛЕНИЕ</span><b>'+esc(shift.subj)+'</b><strong>Без рабочей смены</strong></div>':'<div class="work-shift-card"><span class="eyebrow">'+(shift._shiftKind==='night'?'НОЧНАЯ СМЕНА':'РАБОЧАЯ СМЕНА')+'</span><b>'+esc(shift.subj)+'</b><strong>'+shift.s+'–'+shift.e+'</strong></div>'):'<div class="empty-state"><b>Выходной</b><span>По текущему циклу смена на эту дату не запланирована.</span></div>')+
       '<div class="schedule-actions"><button class="btn" onclick="go(\'more\');st=\'work-shifts\';render()">Настроить цикл</button><button class="btn g" onclick="MYDAY_LAB.toggleWorkException(\''+date+'\')">'+(shift?'Сделать выходным':'Добавить смену')+'</button></div></section>'+
-      '<section class="section"><div class="section-head"><div><h2>Следующие 14 дней</h2><p class="section-caption">Цикл считается от выбранной даты начала.</p></div></div><div class="week-list">'+days.map(x=>'<button class="week-day-card" onclick="MYDAY_LAB.selectWorkDate(\''+x.date+'\')"><span class="week-day-date">'+x.date.slice(8,10)+'<small>'+DAYS_SHORT[fromIso(x.date).getDay()]+'</small></span><span class="week-day-summary"><b>'+ (x.shift?esc(x.shift.subj):'Выходной') +'</b><small>'+(x.shift?x.shift.s+'–'+x.shift.e:'Без смены')+'</small></span><span class="week-day-arrow">›</span></button>').join('')+'</div></section></main>';
+      '<section class="section"><div class="section-head"><div><h2>Следующие 14 дней</h2><p class="section-caption">Цикл считается от выбранной даты начала.</p></div></div><div class="week-list">'+days.map(x=>'<button class="week-day-card" onclick="MYDAY_LAB.selectWorkDate(\''+x.date+'\')"><span class="week-day-date">'+x.date.slice(8,10)+'<small>'+DAYS_SHORT[fromIso(x.date).getDay()]+'</small></span><span class="week-day-summary"><b>'+ (x.shift?esc(x.shift.subj):'Выходной') +'</b><small>'+(x.shift?(x.shift._shiftKind==='recovery'?'Отсыпной':x.shift.s+'–'+x.shift.e):'Выходной')+'</small></span><span class="week-day-arrow">›</span></button>').join('')+'</div></section></main>';
   }
 
   function renderWorkSettings() {
-    const c=S.workConfig||{},preset=Array.isArray(c.pattern)?c.pattern.map(x=>x==='work'||x===1||x==='1'?'Р':'В').join(''):'РРВВ';
+    const c=S.workConfig||{},preset=Array.isArray(c.pattern)?c.pattern.map(x=>{const t=String(x&&typeof x==='object'?x.type:x).toLowerCase();return t==='day'?'Д':t==='night'?'Н':t==='recovery'?'О':t==='off'?'В':t==='work'||t==='1'||t==='1'?'Р':'В'}).join(''):'РРВВ';
     return '<main class="page">'+mydayHeader('Рабочие смены','Фиксированный график или повторяющийся цикл.',false,true)+
       '<section class="surface-panel"><label for="work-mode">Тип графика</label><select id="work-mode" onchange="MYDAY_LAB.setWorkMode(this.value)"><option value="weekly" '+(c.mode!=='rotation'?'selected':'')+'>Одинаковая неделя</option><option value="rotation" '+(c.mode==='rotation'?'selected':'')+'>Сменный цикл</option></select>'+
-      (c.mode==='rotation'?'<label for="work-pattern">Цикл (Р — рабочий день, В — выходной)</label><input id="work-pattern" value="'+preset+'" maxlength="28" autocapitalize="characters"><div class="chip-row"><button class="chip" onclick="MYDAY_LAB.setWorkPreset(\'РРВВ\')">2/2</button><button class="chip" onclick="MYDAY_LAB.setWorkPreset(\'РРРРРВВ\')">5/2</button><button class="chip" onclick="MYDAY_LAB.setWorkPreset(\'РВВВ\')">1/3</button></div><label for="work-anchor">Первый день цикла</label><input id="work-anchor" type="date" value="'+esc(c.anchorDate||today())+'"><label for="work-title">Название смены</label><input id="work-title" value="'+esc(c.title||'Рабочая смена')+'"><div class="row"><div class="grow"><label for="work-start">Начало</label><input id="work-start" type="time" value="'+esc(c.start||'09:00')+'"></div><div class="grow"><label for="work-end">Конец</label><input id="work-end" type="time" value="'+esc(c.end||'18:00')+'"></div></div><button class="btn" style="width:100%" onclick="MYDAY_LAB.saveWorkSettings()">Сохранить цикл</button><p class="page-sub">Распределение смен сохраняется в вашем профиле Telegram и синхронизируется с MYDAY.</p>':'<p class="page-sub">Для одинаковой рабочей недели откройте «План → Работа» и добавьте события по дням.</p>')+
+      (c.mode==='rotation'?'<label for="work-pattern">Цикл: Д — день, Н — ночь, О — отсыпной, В — выходной</label><input id="work-pattern" value="'+preset+'" maxlength="28" autocapitalize="characters"><div class="chip-row"><button class="chip" onclick="MYDAY_LAB.setWorkPreset(\'ДНОВ\')">День · ночь · отсыпной · выходной</button><button class="chip" onclick="MYDAY_LAB.setWorkPreset(\'РРВВ\')">2/2 обычный</button><button class="chip" onclick="MYDAY_LAB.setWorkPreset(\'РРРРРВВ\')">5/2</button></div><label for="work-anchor">Первый день цикла</label><input id="work-anchor" type="date" value="'+esc(c.anchorDate||today())+'"><div class="row"><div class="grow"><label for="work-day-start">День: начало</label><input id="work-day-start" type="time" value="'+esc(c.dayStart||'08:00')+'"></div><div class="grow"><label for="work-day-end">День: конец</label><input id="work-day-end" type="time" value="'+esc(c.dayEnd||'20:00')+'"></div></div><div class="row"><div class="grow"><label for="work-night-start">Ночь: начало</label><input id="work-night-start" type="time" value="'+esc(c.nightStart||'20:00')+'"></div><div class="grow"><label for="work-night-end">Ночь: конец</label><input id="work-night-end" type="time" value="'+esc(c.nightEnd||'08:00')+'"></div></div><button class="btn" style="width:100%" onclick="MYDAY_LAB.saveWorkSettings()">Сохранить цикл</button><p class="page-sub">Цикл повторяется автоматически. Ночная смена заканчивается на следующее утро.</p>':'<p class="page-sub">Для одинаковой рабочей недели откройте «План → Работа» и добавьте события по дням.</p>')+
       '<button class="btn g" style="width:100%;margin-top:8px" onclick="go(\'sched\');schedSpace=\'work\';render()">Открыть рабочий план</button></section></main>';
   }
 
@@ -548,13 +555,16 @@
   function setLayer(layer){st=layer;render()}
   function selectDate(date){if(!date)return;const d=fromIso(date);cfg().selectedDate=d.getDay()===0?shiftDate(date,1):date;sd=fromIso(cfg().selectedDate).getDay()||1;st=null;save();render()}
   function setWorkMode(mode){S.workConfig.mode=mode==='rotation'?'rotation':'weekly';save();render()}
-  function setWorkPreset(pattern){const c=S.workConfig;c.pattern=[...pattern].map(x=>x==='Р'?'work':'off');const el=document.querySelector('#work-pattern');if(el)el.value=pattern}
+  function setWorkPreset(pattern){const el=document.querySelector('#work-pattern');if(el)el.value=pattern}
   function saveWorkSettings(){
-    const pattern=(document.querySelector('#work-pattern')?.value||'РРВВ').toUpperCase().replace(/\s/g,'');
-    if(!pattern||pattern.length>28||!/^[РВ10]+$/.test(pattern)){alert('Цикл должен состоять из Р и В (или 1 и 0), например РРВВ.');return}
-    const start=document.querySelector('#work-start').value,end=document.querySelector('#work-end').value;
-    if(!start||!end||end<=start){alert('Проверь время смены.');return}
-    Object.assign(S.workConfig,{mode:'rotation',pattern:[...pattern].map(x=>x==='Р'||x==='1'?'work':'off'),anchorDate:document.querySelector('#work-anchor').value||today(),title:document.querySelector('#work-title').value.trim()||'Рабочая смена',start,end,exceptions:S.workConfig.exceptions||{}});
+    const raw=(document.querySelector('#work-pattern')?.value||'РРВВ').toUpperCase().replace(/[\s,;]+/g,'');
+    if(!raw||raw.length>28||!/^[ДНОВР10]+$/.test(raw)){alert('Используй Д (день), Н (ночь), О (отсыпной), В (выходной), Р (обычная смена).');return}
+    const dayStart=document.querySelector('#work-day-start')?.value||'08:00',dayEnd=document.querySelector('#work-day-end')?.value||'20:00';
+    const nightStart=document.querySelector('#work-night-start')?.value||'20:00',nightEnd=document.querySelector('#work-night-end')?.value||'08:00';
+    const time=/^([01]\d|2[0-3]):[0-5]\d$/;
+    if(!time.test(dayStart)||!time.test(dayEnd)||dayEnd<=dayStart||!time.test(nightStart)||!time.test(nightEnd)){alert('Проверь время дневной и ночной смены.');return}
+    const map={Д:'day',Н:'night',О:'recovery',В:'off',Р:'work','1':'work','0':'off'};
+    Object.assign(S.workConfig,{mode:'rotation',pattern:[...raw].map(x=>map[x]),anchorDate:document.querySelector('#work-anchor').value||today(),title:'Рабочая смена',dayStart,dayEnd,nightStart,nightEnd,start:dayStart,end:dayEnd,exceptions:S.workConfig.exceptions||{}});
     save();st=null;render();
   }
   function selectWorkDate(date){S.workConfig.selectedDate=date;save();render()}
