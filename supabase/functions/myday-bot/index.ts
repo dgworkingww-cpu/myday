@@ -158,11 +158,26 @@ async function telegramFile(fileId: string) {
 async function transcribe(fileId: string, userId: number, today: string) {
   if (!Deno.env.get("GROQ_API_KEY")) return "";
   if (!await consumeAiQuota(userId, today)) throw new Error("MYDAY_AI_DAILY_LIMIT");
+  failureStage = "загрузка голосового сообщения";
   const { blob, name } = await telegramFile(fileId);
-  const form = new FormData(); form.append("file", new File([blob], name, { type: blob.type || "audio/ogg" })); form.append("model", Deno.env.get("GROQ_TRANSCRIPTION_MODEL") || "whisper-large-v3-turbo"); form.append("language", "ru");
+  // Telegram voice notes are commonly delivered as .oga. Groq accepts OGG,
+  // so normalize the upload filename and MIME type instead of forwarding .oga.
+  const isOgg = /\.(oga|ogg)$/i.test(name) || /audio\/(ogg|opus)/i.test(blob.type);
+  const uploadName = isOgg ? "voice.ogg" : name;
+  const mimeType = isOgg ? "audio/ogg" : (blob.type || "audio/mpeg");
+  const file = new File([blob], uploadName, { type: mimeType });
+  const form = new FormData();
+  form.append("file", file);
+  form.append("model", Deno.env.get("GROQ_TRANSCRIPTION_MODEL") || "whisper-large-v3-turbo");
+  form.append("language", "ru");
+  failureStage = "распознавание голосового сообщения";
   const r = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", { method: "POST", headers: { Authorization: "Bearer " + Deno.env.get("GROQ_API_KEY")! }, body: form });
-  if (!r.ok) throw new Error("Не удалось распознать голос: " + r.status);
-  const d = await r.json(); return String(d.text || "");
+  if (!r.ok) {
+    const detail = (await r.text()).replace(/\s+/g, " ").slice(0, 350);
+    throw new Error("Groq transcription HTTP " + r.status + (detail ? ": " + detail : ""));
+  }
+  const d = await r.json();
+  return String(d.text || "");
 }
 async function vision(fileId: string, userId: number, today: string) {
   if (!Deno.env.get("GROQ_API_KEY")) return "";
