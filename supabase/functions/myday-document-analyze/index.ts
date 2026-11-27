@@ -11,7 +11,8 @@ function hex(bytes: ArrayBuffer): string {
   return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 async function hmac(keyBytes: Uint8Array, message: string): Promise<ArrayBuffer> {
-  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const material = new Uint8Array(keyBytes.byteLength); material.set(keyBytes);
+  const key = await crypto.subtle.importKey("raw", material.buffer, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return await crypto.subtle.sign("HMAC", key, encoder.encode(message));
 }
 function safeEqual(a: string, b: string): boolean {
@@ -39,8 +40,9 @@ async function validateTelegramInitData(initData: string, botToken: string): Pro
   if (!safeEqual(calculatedHash, receivedHash.toLowerCase())) throw new Error("Подпись Telegram не совпадает.");
   let user: { id?: number; first_name?: string };
   try { user = JSON.parse(params.get("user") || ""); } catch { throw new Error("В данных Telegram нет пользователя."); }
-  if (!Number.isSafeInteger(user.id) || !user.id || user.id < 0) throw new Error("Некорректный Telegram ID.");
-  return { id: user.id, firstName: String(user.first_name || "") };
+  const id = Number(user.id);
+  if (!Number.isSafeInteger(id) || !id || id < 0) throw new Error("Некорректный Telegram ID.");
+  return { id, firstName: String(user.first_name || "") };
 }
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
