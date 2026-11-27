@@ -138,15 +138,15 @@ const server = http.createServer((req,res) => {
     await page.getByRole('button',{name:/Сменный график/}).click();
     await page.getByRole('button',{name:/Открыть рабочий план/}).click();
     await page.evaluate(()=>MYDAY_LAB.selectWorkDate('2026-11-28'));
-    await page.getByText('Дневная смена',{exact:true}).waitFor();
-    await page.getByText('08:00–20:00',{exact:true}).waitFor();
+    await page.locator('.work-shift-card b').filter({hasText:'Дневная смена'}).waitFor();
+    await page.locator('.work-shift-card strong').filter({hasText:'08:00–20:00'}).waitFor();
     await page.evaluate(()=>MYDAY_LAB.selectWorkDate('2026-11-29'));
-    await page.getByText('Ночная смена',{exact:true}).waitFor();
-    await page.getByText('20:00–08:00',{exact:true}).waitFor();
+    await page.locator('.work-shift-card b').filter({hasText:'Ночная смена'}).waitFor();
+    await page.locator('.work-shift-card strong').filter({hasText:'20:00–08:00'}).waitFor();
     await page.evaluate(()=>MYDAY_LAB.selectWorkDate('2026-11-30'));
-    await page.getByText('Отсыпной',{exact:true}).waitFor();
+    await page.locator('.work-shift-card b').filter({hasText:'Отсыпной'}).waitFor();
     await page.evaluate(()=>MYDAY_LAB.selectWorkDate('2026-12-01'));
-    await page.getByText('Выходной',{exact:true}).waitFor();
+    await page.locator('.empty-state b').filter({hasText:'Выходной'}).first().waitFor();
 
     if(pageErrors.length) throw new Error('Page errors: '+pageErrors.join(' | '));
     if(consoleErrors.length) throw new Error('Console errors: '+consoleErrors.join(' | '));
