@@ -123,6 +123,24 @@ const server = http.createServer((req,res) => {
     await page.locator('#ov').waitFor({state:'detached'});
     await page.getByText('MYDAY UI smoke class',{exact:true}).waitFor();
 
+    // Global search must find both tasks and recurring schedule entries.
+    await page.locator('button[aria-label="Поиск"]').first().click();
+    await page.locator('#ov #sq').fill('MYDAY UI smoke task');
+    await page.locator('#ov [data-search-index]').first().waitFor();
+    if(!(await page.locator('#ov').innerText()).includes('MYDAY UI smoke task')) throw new Error('Global search did not find the created task');
+    await page.locator('#ov [data-search-index]').first().click();
+    await page.locator('#ov .sheet').waitFor();
+    await page.locator('#ov .sheet-close').click();
+    await page.locator('#ov').waitFor({state:'detached'});
+
+    await page.locator('button[aria-label="Поиск"]').first().click();
+    await page.locator('#ov #sq').fill('MYDAY UI smoke class');
+    await page.locator('#ov [data-search-index]').first().waitFor();
+    if(!(await page.locator('#ov').innerText()).includes('MYDAY UI smoke class')) throw new Error('Global search did not find the schedule entry');
+    await page.locator('#ov [data-search-index]').first().click();
+    await page.locator('#app .page-title').waitFor();
+    if(!(await page.locator('#app').innerText()).includes('Расписание')) throw new Error('Schedule search result did not navigate to the schedule');
+
     if(pageErrors.length) throw new Error('Page errors: '+pageErrors.join(' | '));
     if(consoleErrors.length) throw new Error('Console errors: '+consoleErrors.join(' | '));
     if(failedRequests.length) throw new Error('Failed requests: '+failedRequests.join(' | '));
