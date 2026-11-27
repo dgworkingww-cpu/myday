@@ -127,7 +127,7 @@ export function inferTime(text: string): string {
 }
 export function inferTimeRange(text: string): { start: string; end: string } | null {
   const normalized = text.toLocaleLowerCase("ru");
-  const spoken = normalized.match(/(?:^|[^а-яё])с\s+(.+?)\s+(?:до|по)\s+(.+?)(?=$|[,;.])/i);
+  const spoken = normalized.match(/(?:^|[^а-яё])(?:с\s*)?(.+?)\s+(?:до|по)\s+(.+?)(?=$|[,;.])/i);
   const numeric = normalized.match(/(?:^|[^\d])(\d{1,2}[:.]\d{2})\s*[-–—]\s*(\d{1,2}[:.]\d{2})(?=$|[^\d])/);
   const startRaw = spoken ? spoken[1] : numeric?.[1];
   const endRaw = spoken ? spoken[2] : numeric?.[2];
