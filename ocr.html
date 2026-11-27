@@ -11,7 +11,7 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg,#efeae2);color:var(--ink,#1c1915);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 main{width:min(760px,100%);margin:auto;padding:calc(18px + env(safe-area-inset-top)) 16px calc(34px + env(safe-area-inset-bottom))}
-.topline{font-size:11px;letter-spacing:.14em;color:var(--muted,#8a8175);font-weight:700}
+.topline{font-size:11px;letter-spacing:.14em;color:var(--muted,#8a8175);font-weight:700}.back{border:0;background:transparent;color:var(--ink-2);font-size:13px;font-weight:650;padding:0;margin:0 0 16px;cursor:pointer}
 h1{font-size:30px;letter-spacing:-.8px;line-height:1.05;margin:10px 0}
 .lead{color:var(--ink-2,#5c554c);font-size:14px;line-height:1.55;margin:10px 0 20px}
 .panel{background:var(--surface,#fbf8f3);border:1px solid var(--line,rgba(28,25,21,.12));border-radius:22px;padding:18px;margin:12px 0;box-shadow:0 6px 24px rgba(28,25,21,.035)}
@@ -56,7 +56,7 @@ textarea{width:100%;min-height:160px;padding:13px;border:1px solid var(--line);b
 </head>
 <body>
 <main>
-<div class="topline">MYDAY · ДОКУМЕНТЫ</div>
+<button class="back" id="back" type="button">← В MYDAY</button><div class="topline">MYDAY · ДОКУМЕНТЫ</div>
 <h1>Разбор документов</h1>
 <p class="lead">Загрузи PDF или фото. MYDAY извлечёт текст, разберёт содержание с помощью ИИ и предложит, что добавить в расписание и задачи. Ничего не сохранится без твоего подтверждения.</p>
 
@@ -334,7 +334,7 @@ async function saveSelected(){
  }catch(err){$("saveStatus").textContent=err&&err.message||"Не удалось сохранить. Данные не удалены, можно повторить попытку.";$("saveStatus").className="status error";$("save").disabled=false}
  finally{$("discard").disabled=false}
 }
-$("file").addEventListener("change",showFile);
+$("back").addEventListener("click",()=>{window.location.href="./index.html"});\n$("file").addEventListener("change",showFile);
 $("extract").addEventListener("click",extractText);
 $("cancel").addEventListener("click",()=>{cancelRequested=true;if(activeWorker){try{activeWorker.terminate()}catch(_){}}status("Останавливаю обработку…")});
 $("prev").addEventListener("click",async()=>{if(page>1){page--;try{await renderPdfPage()}catch(e){status("Не удалось отобразить страницу PDF.","error")}}});
