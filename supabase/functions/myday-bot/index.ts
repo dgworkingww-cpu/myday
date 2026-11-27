@@ -184,7 +184,7 @@ async function handleText(chatId: number, userId: number, text: string) {
     const createdEvents = incomingEvents.slice(0, 10).map((x: AnyRecord) => ({ id: uid(), title: String(x.title || cmd).slice(0, 240), type: String(x.type || "Событие"), date: /^\d{4}-\d{2}-\d{2}$/.test(String(x.date || "")) ? x.date : inferDate(cmd, today) || today, time: /^\d{2}:\d{2}$/.test(String(x.time || "")) ? x.time : inferTime(cmd) }));
     p.data.events.push(...createdEvents);
     await saveProfile(userId, p.data, p.baseData);
-    await send(chatId, "Добавил событие в календарь MYDAY:\\n" + createdEvents.map((x: AnyRecord) => "📌 <b>" + escapeHtml(x.title) + "</b> · " + x.date).join("\\n"));
+    await send(chatId, "Добавил событие в календарь MYDAY:\n" + createdEvents.map((x: AnyRecord) => "📌 <b>" + escapeHtml(x.title) + "</b> · " + x.date).join("\n"));
     return;
   }
   if (payload.intent === "help") { await send(chatId, "Напиши задачу обычным текстом, отправь голосовое или используй /today, /week, /tasks."); return; }
