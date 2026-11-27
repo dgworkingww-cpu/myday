@@ -398,12 +398,21 @@ async function handleText(chatId: number, userId: number, text: string) {
     return textLower.includes(normalized) || normalized.split(/\s+/).some((word: string) => word.length > 5 && textLower.includes(word.slice(0, 7)));
   });
   const fallbackHomework = !!fallbackSubject && /домашн|лаборатор|курсов|реферат|задан/i.test(cmd);
+  const lowerCmd = cmd.toLocaleLowerCase("ru");
+  let fallbackPayload: AnyRecord;
+  if (/^(?:что у меня сегодня|что сегодня|план на сегодня)/i.test(cmd)) fallbackPayload = { intent: "list_today" };
+  else if (/^(?:что у меня завтра|какие пары завтра|расписание на завтра|покажи расписание на завтра)/i.test(cmd)) fallbackPayload = { intent: "list_date", due: inferDate(cmd, today) };
+  else if (/^(?:что у меня|какие пары|покажи расписание|расписание на).*(?:понедельник|вторник|среду|четверг|пятниц|суббот|воскресень)/i.test(cmd)) fallbackPayload = { intent: "list_date", due: inferDate(cmd, today) };
+  else if (/^(?:что на неделе|план на неделю|покажи план на неделю|расписание на неделю)/i.test(cmd)) fallbackPayload = { intent: "list_week" };
+  else if (/^(?:покажи|какие|список).*(?:задач|дел)/i.test(cmd)) fallbackPayload = { intent: "list_tasks" };
+  else if (/^(?:покажи|какие|что).*(?:домашк|задали|домашняя работа)/i.test(cmd)) fallbackPayload = { intent: "list_homework" };
+  else if (/^(?:покажи|какие|что).*(?:событ|встреч)/i.test(cmd)) fallbackPayload = { intent: "list_events" };
+  else if (/^(?:запомни|сохрани заметку|заметка:|идея:)/i.test(cmd)) fallbackPayload = { intent: "note", note: cmd.replace(/^(?:запомни|сохрани заметку|заметка:|идея:)\s*/i, "") };
+  else if (fallbackHomework) fallbackPayload = { intent: "add_homework", homework: [{ subject: fallbackSubject, title: cmd, desc: "", due: inferDate(cmd, today) }] };
+  else if (eventLike || hasSpokenTimeRange) fallbackPayload = { intent: "add_event", tasks: [], events: [{ title: guessEventTitle(cmd), type: guessEventTitle(cmd), date: inferDate(cmd, today), time: timeRange?.start || inferTime(cmd), endTime: timeRange?.end || "" }] };
+  else fallbackPayload = { intent: "add", tasks: [{ title: cmd, desc: "", space: fallbackSpace, cat: guessCategory(fallbackSpace), due: inferDate(cmd, today), prio: 1 }] };
   failureStage = "распознавание текста";
-  const payload = await aiInterpret(cmd, today, userId, "text", profileContext) || (fallbackHomework
-    ? { intent: "add_homework", homework: [{ subject: fallbackSubject, title: cmd, desc: "", due: inferDate(cmd, today) }] }
-    : ((eventLike || hasSpokenTimeRange)
-      ? { intent: "add_event", tasks: [], events: [{ title: guessEventTitle(cmd), type: guessEventTitle(cmd), date: inferDate(cmd, today), time: timeRange?.start || inferTime(cmd), endTime: timeRange?.end || "" }] }
-      : { intent: "add", tasks: [{ title: cmd, desc: "", space: fallbackSpace, cat: guessCategory(fallbackSpace), due: inferDate(cmd, today), prio: 1 }] }));
+  const payload = await aiInterpret(cmd, today, userId, "text", profileContext) || fallbackPayload;
 
   // Strong deterministic guard: a clearly spoken work/shift interval is always a calendar event.
   if (hasSpokenTimeRange && eventLike && !["complete", "delete", "reschedule", "update_task", "delete_event", "reschedule_event", "list_today", "list_week", "list_tasks", "list_events", "list_homework", "note", "help"].includes(String(payload.intent))) {
