@@ -158,6 +158,7 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({
           model: Deno.env.get("GROQ_CHAT_MODEL") || "openai/gpt-oss-120b",
           temperature: 0.1,
+          max_tokens: 6000,
           response_format: { type: "json_object" },
           messages: [{ role: "user", content: prompt }],
         }),
