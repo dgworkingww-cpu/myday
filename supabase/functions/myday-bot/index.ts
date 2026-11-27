@@ -365,8 +365,16 @@ async function handleText(chatId: number, userId: number, text: string) {
   const fallbackSpace = guessSpace(cmd);
   const subjects = (Array.isArray(p.data.subjects) ? p.data.subjects : []).filter((x: AnyRecord) => !x.closed).map((x: AnyRecord) => String(x.name || "")).filter(Boolean);
   const openTaskNames = (Array.isArray(p.data.tasks) ? p.data.tasks : []).filter((x: AnyRecord) => Number(x.status || 0) !== 2).slice(0, 60).map((x: AnyRecord) => String(x.title || ""));
+  const openHomeworkNames = (Array.isArray(p.data.hw) ? p.data.hw : []).filter((x: AnyRecord) => Number(x.status || 0) !== 2).slice(0, 60).map((x: AnyRecord) => {
+    const subject = (p.data.subjects || []).find((v: AnyRecord) => String(v.id) === String(x.subj));
+    return (subject ? String(subject.name) + ": " : "") + String(x.title || "");
+  });
   const upcomingEvents = (Array.isArray(p.data.events) ? p.data.events : []).filter((x: AnyRecord) => x.date >= today).slice(0, 30).map((x: AnyRecord) => String(x.title || "") + " (" + x.date + ")");
-  const profileContext = "Предметы: " + (subjects.join("; ") || "не указаны") + "\nОткрытые задачи: " + (openTaskNames.join("; ") || "нет") + "\nПредстоящие события: " + (upcomingEvents.join("; ") || "нет");
+  const upcomingSchedule = Array.from({ length: 7 }, (_, i) => {
+    const date = shiftDate(today, i);
+    return scheduleItemsForDate(p.data, date).map((x: AnyRecord) => date + " " + x.kind + ": " + x.title + " " + x.start + (x.end ? "–" + x.end : ""));
+  }).flat().slice(0, 60);
+  const profileContext = "Предметы: " + (subjects.join("; ") || "не указаны") + "\nОткрытые задачи: " + (openTaskNames.join("; ") || "нет") + "\nДомашняя работа: " + (openHomeworkNames.join("; ") || "нет") + "\nПредстоящие события: " + (upcomingEvents.join("; ") || "нет") + "\nРасписание учёбы и работы на 7 дней: " + (upcomingSchedule.join("; ") || "не заполнено");
   failureStage = "распознавание текста";
   const payload = await aiInterpret(cmd, today, userId, "text", profileContext) || ((eventLike || hasSpokenTimeRange)
     ? { intent: "add_event", tasks: [], events: [{ title: /работ|смен/i.test(cmd) ? "Работа" : cmd, type: /экзамен/i.test(cmd) ? "Экзамен" : /зач[её]т/i.test(cmd) ? "Зачёт" : "Событие", date: inferDate(cmd, today), time: timeRange?.start || inferTime(cmd), endTime: timeRange?.end || "" }] }
