@@ -68,7 +68,7 @@
 
   function workShiftForDate(date) {
     const c=S.workConfig || {};
-    if (c.mode!=='rotation') return null;
+    if (c.mode!=='rotation') { const list=((S.sched&&S.sched.work)||{})[fromIso(date||today()).getDay()]||[]; return list.length?{...list[0],_workShift:true,date:String(date||today())}:null; }
     const key=String(date || today());
     const ex=(c.exceptions||{})[key];
     if (ex==='off' || (ex && ex.off===true)) return null;
@@ -155,7 +155,7 @@
     return '<main class="page">'+mydayHeader('Сменный график','Рабочие и выходные дни рассчитываются по циклу.',true,true)+
       '<section class="surface-panel"><label for="work-date">Дата</label><input id="work-date" type="date" value="'+date+'" onchange="MYDAY_LAB.selectWorkDate(this.value)">'+
       (shift?'<div class="work-shift-card"><span class="eyebrow">РАБОЧАЯ СМЕНА</span><b>'+esc(shift.subj)+'</b><strong>'+shift.s+'–'+shift.e+'</strong></div>':'<div class="empty-state"><b>Выходной</b><span>По текущему циклу смена на эту дату не запланирована.</span></div>')+
-      '<div class="schedule-actions"><button class="btn" onclick="st=\'work-shifts\';go(\'more\');render()">Настроить цикл</button><button class="btn g" onclick="MYDAY_LAB.toggleWorkException(\''+date+'\')">'+(shift?'Сделать выходным':'Добавить смену')+'</button></div></section>'+
+      '<div class="schedule-actions"><button class="btn" onclick="go(\'more\');st=\'work-shifts\';render()">Настроить цикл</button><button class="btn g" onclick="MYDAY_LAB.toggleWorkException(\''+date+'\')">'+(shift?'Сделать выходным':'Добавить смену')+'</button></div></section>'+
       '<section class="section"><div class="section-head"><div><h2>Следующие 14 дней</h2><p class="section-caption">Цикл считается от выбранной даты начала.</p></div></div><div class="week-list">'+days.map(x=>'<button class="week-day-card" onclick="MYDAY_LAB.selectWorkDate(\''+x.date+'\')"><span class="week-day-date">'+x.date.slice(8,10)+'<small>'+DAYS_SHORT[fromIso(x.date).getDay()]+'</small></span><span class="week-day-summary"><b>'+ (x.shift?esc(x.shift.subj):'Выходной') +'</b><small>'+(x.shift?x.shift.s+'–'+x.shift.e:'Без смены')+'</small></span><span class="week-day-arrow">›</span></button>').join('')+'</div></section></main>';
   }
 
@@ -215,7 +215,7 @@
   function calendarItems(date) {
     const out=[],d=fromIso(date),L=lessons(d);
     L.forEach(x=>out.push({title:x.subj,meta:'Учёба · '+x.s+'–'+x.e+(x.room?' · '+x.room:'' )}));
-    const shift=workShiftForDate(date);if(shift)out.push({title:shift.subj,meta:'Работа · '+shift.s+'–'+shift.e});
+    if(S.workConfig&&S.workConfig.mode==='rotation'){const shift=workShiftForDate(date);if(shift)out.push({title:shift.subj,meta:'Работа · '+shift.s+'–'+shift.e})}else{(((S.sched||{}).work||{})[d.getDay()]||[]).forEach(x=>out.push({title:x.subj,meta:'Работа · '+x.s+'–'+x.e}))}
     S.tasks.filter(x=>x.due===date&&x.status!==2).forEach(x=>out.push({title:x.title,meta:(x.space==='work'?'Работа':'Задача')+(x.cat?' · '+x.cat:'')}));
     S.hw.filter(x=>x.due===date&&x.status!==2).forEach(x=>out.push({title:subj(x.subj)+': '+x.title,meta:'Домашнее задание'}));
     (S.events||[]).filter(x=>x.date===date).forEach(x=>out.push({title:x.title,meta:x.type||'Событие'}));
@@ -241,6 +241,7 @@
     let week=context.week||'';
     if(/неч[её]тн|нижн/.test(lower))week='odd';
     else if(/ч[её]тн|верхн/.test(lower))week='even';
+    const cycleMatch=lower.match(/(?:цикл|недел[яи])\s*([1-4])/),cycleIndex=cycleMatch?Number(cycleMatch[1])-1:null;
     const dateMatch=text.match(/\b(20\d{2})[-.](\d{1,2})[-.](\d{1,2})\b|\b(\d{1,2})[.](\d{1,2})[.](20\d{2})\b/);
     let date='';
     if(dateMatch){date=dateMatch[1]?dateMatch[1]+'-'+String(dateMatch[2]).padStart(2,'0')+'-'+String(dateMatch[3]).padStart(2,'0'):dateMatch[6]+'-'+String(dateMatch[5]).padStart(2,'0')+'-'+String(dateMatch[4]).padStart(2,'0')}
@@ -254,7 +255,7 @@
       const roomMatch=rest.match(/(?:ауд\.?|каб\.?|кабинет|корпус)\s*([А-ЯA-Z0-9\-\/]+)/i);
       const teacherMatch=rest.match(/(?:преподаватель|преп\.?)\s*[:\-]?\s*([^,;|]+)/i);
       if(!subj||subj.length>180)subj='Занятие';
-      out.push({id:id(),day,date,week,subj,s,e:eTime,room:roomMatch?roomMatch[1]:(parts[1]||''),teacher:teacherMatch?teacherMatch[1].trim():(parts[2]||'')});
+      out.push({id:id(),day,date,week,cycleIndex,subj,s,e:eTime,room:roomMatch?roomMatch[1]:(parts[1]||''),teacher:teacherMatch?teacherMatch[1].trim():(parts[2]||'')});
     });
     return out;
   }
@@ -348,13 +349,13 @@
   function setDraft(key,value){if(importDraft)importDraft[key]=value}
   function editDraft(index) {
     const r=importDraft&&importDraft.records[index];if(!r)return;
-    sheet('<h1>Проверить занятие</h1><label for="di-subj">Предмет / название</label><input id="di-subj" value="'+esc(r.subj)+'"><label for="di-day">День недели</label><select id="di-day"><option value="0" '+(r.day==null?'selected':'')+'>Выбрать день</option>'+[1,2,3,4,5,6].map(d=>'<option value="'+d+'" '+(Number(r.day)===d?'selected':'')+'>'+DAYS_SHORT[d]+'</option>').join('')+'</select><label for="di-week">Неделя</label><select id="di-week"><option value="" '+(!r.week?'selected':'')+'>По умолчанию</option><option value="odd" '+(r.week==='odd'?'selected':'')+'>Нижняя / нечётная</option><option value="even" '+(r.week==='even'?'selected':'')+'>Верхняя / чётная</option><option value="fixed" '+(r.week==='fixed'?'selected':'')+'>Постоянная</option></select><div class="row"><div class="grow"><label for="di-start">Начало</label><input id="di-start" type="time" value="'+esc(r.s)+'"></div><div class="grow"><label for="di-end">Конец</label><input id="di-end" type="time" value="'+esc(r.e)+'"></div></div><label for="di-room">Аудитория / место</label><input id="di-room" value="'+esc(r.room)+'"><label for="di-teacher">Преподаватель / заметка</label><input id="di-teacher" value="'+esc(r.teacher)+'"><label for="di-date">Конкретная дата (если есть)</label><input id="di-date" type="date" value="'+esc(r.date||'')+'"><div class="schedule-actions"><button class="btn" onclick="MYDAY_LAB.saveDraftItem('+index+')">Сохранить</button><button class="btn g" onclick="MYDAY_LAB.removeDraftItem('+index+')">Убрать строку</button></div>');
+    sheet('<h1>Проверить занятие</h1><label for="di-subj">Предмет / название</label><input id="di-subj" value="'+esc(r.subj)+'"><label for="di-day">День недели</label><select id="di-day"><option value="0" '+(r.day==null?'selected':'')+'>Выбрать день</option>'+[1,2,3,4,5,6].map(d=>'<option value="'+d+'" '+(Number(r.day)===d?'selected':'')+'>'+DAYS_SHORT[d]+'</option>').join('')+'</select><label for="di-week">Неделя</label><select id="di-week"><option value="" '+(!r.week?'selected':'')+'>По умолчанию</option><option value="odd" '+(r.week==='odd'?'selected':'')+'>Нижняя / нечётная</option><option value="even" '+(r.week==='even'?'selected':'')+'>Верхняя / чётная</option><option value="fixed" '+(r.week==='fixed'?'selected':'')+'>Постоянная</option></select><label for="di-cycle">Неделя цикла</label><select id="di-cycle">'+[0,1,2,3].map(n=>'<option value="'+n+'" '+(Number(r.cycleIndex||0)===n?'selected':'')+'>Неделя '+(n+1)+'</option>').join('')+'</select><div class="row"><div class="grow"><label for="di-start">Начало</label><input id="di-start" type="time" value="'+esc(r.s)+'"></div><div class="grow"><label for="di-end">Конец</label><input id="di-end" type="time" value="'+esc(r.e)+'"></div></div><label for="di-room">Аудитория / место</label><input id="di-room" value="'+esc(r.room)+'"><label for="di-teacher">Преподаватель / заметка</label><input id="di-teacher" value="'+esc(r.teacher)+'"><label for="di-date">Конкретная дата (если есть)</label><input id="di-date" type="date" value="'+esc(r.date||'')+'"><div class="schedule-actions"><button class="btn" onclick="MYDAY_LAB.saveDraftItem('+index+')">Сохранить</button><button class="btn g" onclick="MYDAY_LAB.removeDraftItem('+index+')">Убрать строку</button></div>');
   }
   function saveDraftItem(i) {
     const r=importDraft.records[i];if(!r)return;
     const s=document.querySelector('#di-start').value,eTime=document.querySelector('#di-end').value;
     if(!s||!eTime||eTime<=s){alert('Проверь время начала и окончания.');return}
-    Object.assign(r,{subj:document.querySelector('#di-subj').value.trim(),day:Number(document.querySelector('#di-day').value),week:document.querySelector('#di-week').value,s,e:eTime,room:document.querySelector('#di-room').value.trim(),teacher:document.querySelector('#di-teacher').value.trim(),date:document.querySelector('#di-date').value});
+    Object.assign(r,{subj:document.querySelector('#di-subj').value.trim(),day:Number(document.querySelector('#di-day').value),week:document.querySelector('#di-week').value,cycleIndex:Number(document.querySelector('#di-cycle').value),s,e:eTime,room:document.querySelector('#di-room').value.trim(),teacher:document.querySelector('#di-teacher').value.trim(),date:document.querySelector('#di-date').value});
     close_();render();
   }
   function removeDraftItem(i){importDraft.records.splice(i,1);close_();render()}
@@ -363,8 +364,8 @@
     if(d.records.some(x=>!Number.isInteger(Number(x.day))||Number(x.day)<1||Number(x.day)>6)){alert('Укажи день недели для каждой распознанной записи. Нераспознанные строки не будут добавлены наугад.');return}
     const target=d.target||'study',mode=d.mode==='auto'?(d.records.some(x=>x.week)?'alternating':'fixed'):d.mode;
     if(target==='study'&&mode==='dates'&&d.records.some(x=>!x.date)){alert('В режиме конкретных дат у каждой записи должна быть дата. Открой строки без даты и укажи её.');return}
-    if(target==='study')cfg().studyMode=mode;
     if(d.replace&&!confirm('Заменить существующие записи в выбранных днях? Это действие нельзя отменить.'))return;
+    if(target==='study')cfg().studyMode=mode;
     const changed=new Set(),cleared=new Set();
     d.records.forEach(r=>{
       if(!r.subj||!r.s||!r.e||r.e<=r.s)return;
@@ -372,7 +373,7 @@
       if(target==='study'){
         if(mode==='fixed')key='fixed';
         else if(mode==='dates')key='date:'+r.date;
-        else if(mode==='cycle')key='cycle:0';
+        else if(mode==='cycle')key='cycle:'+(Number(r.cycleIndex)||0);
         else if(mode==='hybrid')key=r.week==='odd'||r.week==='even'?r.week:'fixed';
         else key=r.week==='odd'||r.week==='even'?r.week:wk();
       }
