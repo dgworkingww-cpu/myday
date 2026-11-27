@@ -123,6 +123,30 @@ const server = http.createServer((req,res) => {
     await page.locator('#ov').waitFor({state:'detached'});
     await page.getByText('MYDAY UI smoke class',{exact:true}).waitFor();
 
+    // Exercise the day -> night -> recovery -> off work rotation.
+    await page.locator('#nav button').nth(4).click();
+    await page.getByRole('button',{name:/Сменный график/}).click();
+    await page.locator('#work-mode').selectOption('rotation');
+    await page.locator('#work-pattern').fill('ДНОВ');
+    await page.locator('#work-anchor').fill('2026-11-28');
+    await page.locator('#work-day-start').fill('08:00');
+    await page.locator('#work-day-end').fill('20:00');
+    await page.locator('#work-night-start').fill('20:00');
+    await page.locator('#work-night-end').fill('08:00');
+    await page.getByRole('button',{name:'Сохранить цикл'}).click();
+    await page.locator('#nav button').nth(1).click();
+    await page.getByRole('button',{name:'Работа',exact:true}).click();
+    await page.evaluate(()=>MYDAY_LAB.selectWorkDate('2026-11-28'));
+    await page.getByText('Дневная смена',{exact:true}).waitFor();
+    await page.getByText('08:00–20:00',{exact:true}).waitFor();
+    await page.evaluate(()=>MYDAY_LAB.selectWorkDate('2026-11-29'));
+    await page.getByText('Ночная смена',{exact:true}).waitFor();
+    await page.getByText('20:00–08:00',{exact:true}).waitFor();
+    await page.evaluate(()=>MYDAY_LAB.selectWorkDate('2026-11-30'));
+    await page.getByText('Отсыпной',{exact:true}).waitFor();
+    await page.evaluate(()=>MYDAY_LAB.selectWorkDate('2026-12-01'));
+    await page.getByText('Выходной',{exact:true}).waitFor();
+
     if(pageErrors.length) throw new Error('Page errors: '+pageErrors.join(' | '));
     if(consoleErrors.length) throw new Error('Console errors: '+consoleErrors.join(' | '));
     if(failedRequests.length) throw new Error('Failed requests: '+failedRequests.join(' | '));
