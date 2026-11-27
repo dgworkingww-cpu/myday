@@ -126,14 +126,14 @@ async function aiInterpret(text: string, today: string, userId: number, mode = "
   const prompt = [
     "Ты — внимательный, точный персональный помощник-планировщик MYDAY. Сегодня " + today + ". Общайся на русском, естественно и коротко. Понимай разговорную речь, опечатки, обрывки фраз и расшифровки голосовых сообщений.",
     "Верни ТОЛЬКО один JSON-объект без Markdown. Схема: {intent, tasks:[{title,desc,space,cat,due,prio}], events:[{title,type,date,time,endTime}], homework:[{subject,title,desc,due}], task_query, event_query, subject, due, title, time, endTime, prio, note, reply}.",
-    "Допустимые intent: add, add_event, add_homework, list_today, list_week, list_tasks, list_events, list_homework, complete, delete, reschedule, update_task, delete_event, reschedule_event, note, help, clarify.",
+    "Допустимые intent: add, add_event, add_homework, list_today, list_week, list_tasks, list_events, list_homework, complete, delete, reschedule, update_task, complete_homework, delete_homework, reschedule_homework, delete_event, reschedule_event, update_event, note, help, clarify.",
     "КЛАССИФИКАЦИЯ: задача — действие, которое нужно выполнить (сдать, купить, позвонить, подготовить); событие — то, что происходит в конкретный день/время (пары, работа/смена, встреча, тренировка, врач, поездка, экзамен, консультация); домашняя работа — учебное задание, явно связанное с предметом из списка пользователя. Заметка — информация, которую просят просто сохранить, а не выполнить.",
     "Если пользователь просит добавить несколько дел, создай несколько объектов. Не склеивай независимые дела в одну задачу. Если это список заданий по предмету, используй add_homework и укажи subject для каждого.",
     "ДАТЫ: относительные даты считай от сегодняшней даты. Понимай сегодня, завтра, послезавтра, через N дней, через неделю, в этот/следующий понедельник-воскресенье, к концу недели и даты 12.12 / 12.12.2026. Для задачи дата — срок выполнения (due). Для события date — день события. Не подменяй срок задачи датой события. Если дата неоднозначна, уточни. Не выдумывай год, если дата невозможна.",
     "ВРЕМЯ: используй 24-часовой HH:MM. Понимай «в семь вечера» = 19:00, «в полвосьмого» = 07:30 или 19:30 только если контекст явно указывает период, «полдвенадцатого» = 11:30, «в 12 ночи» = 00:00. Если период неясен и это важно, спроси уточнение.",
     "ИНТЕРВАЛЫ: фраза «с ... до ...» с работой, сменой, тренировкой или другим занятием означает событие, а не задачу. Всегда заполняй ОБА поля time и endTime. Пример «Работа завтра с 7 вечера до полдвенадцатого» = событие «Работа», date завтра, time 19:00, endTime 23:30. «С 9 до 11 утра» = 09:00–11:00. «С 8 вечера до 12 ночи» = 20:00–00:00. Не теряй время окончания.",
     "НЕПОЛНЫЕ ДАННЫЕ: если событию не хватает даты, выбери clarify, сохрани смысл и спроси только дату. Если домашней работе не хватает предмета, спроси предмет и перечисли варианты из контекста. Если непонятно, какую задачу/событие изменить, спроси один конкретный вопрос. Не создавай запись до получения обязательных данных.",
-    "ДЕЙСТВИЯ С ЗАПИСЯМИ: «готово/сделал/выполнил» = complete; «удали/убери» = delete; «перенеси на пятницу/завтра» = reschedule; «переименуй/измени срок/сделай приоритетной» = update_task. Для событий используй delete_event или reschedule_event. Всегда заполняй task_query или event_query фразой, которая поможет найти существующую запись. Не заявляй, что действие выполнено, если оно не было сохранено.",
+    "ДЕЙСТВИЯ С ЗАПИСЯМИ: «готово/сделал/выполнил» = complete; «удали/убери» = delete; «перенеси на пятницу/завтра» = reschedule; «переименуй/измени срок/сделай приоритетной» = update_task. Для домашки используй complete_homework, delete_homework, reschedule_homework и homework_query. Для событий используй delete_event, reschedule_event или update_event и event_query. Всегда заполняй task_query/event_query/homework_query фразой, которая поможет найти существующую запись. Не заявляй, что действие выполнено, если оно не было сохранено.",
     "СПИСКИ: «что сегодня/план на день» = list_today; «что на неделе» = list_week; «покажи задачи» = list_tasks; «какие события/встречи» = list_events; «какая домашка/что задали» = list_homework.",
     "ПРИОРИТЕТ: prio 0 высокий, 1 обычный, 2 низкий. Если приоритет не назван, ставь 1. space: study, work или personal. cat: Учёба, Работа и проекты или Другое.",
     "КОНТЕКСТ ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ (используй для распознавания названий предметов и поиска существующих записей):",
@@ -270,7 +270,7 @@ async function handleText(chatId: number, userId: number, text: string) {
 
   const timeRange = inferTimeRange(cmd);
   const hasSpokenTimeRange = !!timeRange;
-  const eventLike = /тренировк|встреч|при[её]м|врач|экзамен|зач[её]т|консультац|день рождения|собеседован|мероприят|смен|работа|парах|заняти|поездк|вылет|приход|уход/i.test(cmd);
+  const eventLike = /тренировк|встреч|при[её]м|врач|экзамен|зач[её]т|консультац|день рождения|собеседован|мероприят|смен|пар[а-я]*|занят[а-я]*|поездк|вылет|приход|уход/i.test(cmd) || (/работ[а-я]*/i.test(cmd) && (hasSpokenTimeRange || /(?:в|к)\s*\d{1,2}(?::|\.)?/.test(cmd)));
   const fallbackSpace = guessSpace(cmd);
   const subjects = (Array.isArray(p.data.subjects) ? p.data.subjects : []).filter((x: AnyRecord) => !x.closed).map((x: AnyRecord) => String(x.name || "")).filter(Boolean);
   const openTaskNames = (Array.isArray(p.data.tasks) ? p.data.tasks : []).filter((x: AnyRecord) => Number(x.status || 0) !== 2).slice(0, 60).map((x: AnyRecord) => String(x.title || ""));
@@ -286,14 +286,14 @@ async function handleText(chatId: number, userId: number, text: string) {
     payload.intent = "add_event";
     payload.events = Array.isArray(payload.events) && payload.events.length ? payload.events : [{ title: /работ|смен/i.test(cmd) ? "Работа" : cmd, type: "Событие", date: inferDate(cmd, today), time: timeRange.start, endTime: timeRange.end }];
   }
-  if ((payload.intent === "add_event" || (hasSpokenTimeRange && eventLike)) && !inferDate(cmd, today) && !(Array.isArray(payload.events) && payload.events.some((x: AnyRecord) => validDate(x.date)))) {
+  if ((payload.intent === "add_event" || (eventLike && (hasSpokenTimeRange || payload.intent === "clarify"))) && !inferDate(cmd, today) && !(Array.isArray(payload.events) && payload.events.some((x: AnyRecord) => validDate(x.date)))) {
     p.data.botState = { pending: { kind: "event_date", raw: cmd, createdAt: Date.now() } };
     await saveProfile(userId, p.data, p.baseData);
     await send(chatId, hasSpokenTimeRange ? "Понял: " + escapeHtml(timeRange!.start + "–" + timeRange!.end) + ". На какой день поставить? Можешь ответить просто «завтра», «в пятницу» или датой. Я сохраню интервал, повторять его не придётся." : "Событие понял. На какой день его поставить? Напиши «сегодня», «завтра», день недели или дату.");
     return;
   }
   if (payload.intent === "clarify") {
-    if (hasSpokenTimeRange && eventLike) {
+    if (eventLike && (hasSpokenTimeRange || payload.intent === "clarify")) {
       p.data.botState = { pending: { kind: "event_date", raw: cmd, createdAt: Date.now() } };
       await saveProfile(userId, p.data, p.baseData);
       await send(chatId, "Запомнил интервал " + escapeHtml(timeRange!.start + "–" + timeRange!.end) + ". На какой день поставить запись? Ответь просто датой или днём недели.");
@@ -378,7 +378,21 @@ async function handleText(chatId: number, userId: number, text: string) {
     }
   }
 
-  if (["delete_event", "reschedule_event"].includes(String(payload.intent))) {
+  if (["complete_homework", "delete_homework", "reschedule_homework"].includes(String(payload.intent))) {
+    const query = String(payload.homework_query || payload.task_query || "").trim().toLocaleLowerCase("ru");
+    if (!query) { await send(chatId, "Какое домашнее задание изменить? Напиши его название."); return; }
+    const items = Array.isArray(p.data.hw) ? p.data.hw : [];
+    const candidates = items.filter((x: AnyRecord) => Number(x.status || 0) !== 2 && String(x.title || "").toLocaleLowerCase("ru").includes(query));
+    if (candidates.length !== 1) { await send(chatId, candidates.length ? "Нашёл несколько похожих заданий: " + candidates.slice(0, 8).map((x: AnyRecord) => "«" + escapeHtml(x.title) + "»").join(", ") : "Не нашёл такое домашнее задание. Проверь /homework."); return; }
+    const hw = candidates[0];
+    if (payload.intent === "complete_homework") { hw.status = 2; await saveProfile(userId, p.data, p.baseData); await send(chatId, "✓ Отметил домашнюю работу выполненной: <b>" + escapeHtml(hw.title) + "</b>."); return; }
+    if (payload.intent === "delete_homework") { p.data.hw = items.filter((x: AnyRecord) => String(x.id) !== String(hw.id)); await saveProfile(userId, p.data, p.baseData); await send(chatId, "Удалил домашнее задание: <b>" + escapeHtml(hw.title) + "</b>."); return; }
+    const due = validDate(payload.due) ? payload.due : inferDate(cmd, today);
+    if (!due) { await send(chatId, "На какой срок перенести «" + escapeHtml(hw.title) + "»? Напиши дату или день недели."); return; }
+    hw.due = due; await saveProfile(userId, p.data, p.baseData); await send(chatId, "Перенёс домашнее задание на " + due + ": <b>" + escapeHtml(hw.title) + "</b>."); return;
+  }
+
+  if (["delete_event", "reschedule_event", "update_event"].includes(String(payload.intent))) {
     const query = String(payload.event_query || "").trim().toLocaleLowerCase("ru");
     if (!query) { await send(chatId, "Какое событие изменить? Напиши его название."); return; }
     const events = Array.isArray(p.data.events) ? p.data.events : [];
@@ -390,12 +404,13 @@ async function handleText(chatId: number, userId: number, text: string) {
       return;
     }
     const date = validDate(payload.due) ? payload.due : inferDate(cmd, today);
-    if (!date) { await send(chatId, "На какую дату перенести «" + escapeHtml(event.title) + "»? Напиши день недели или дату."); return; }
-    event.date = date;
+    const hasTime = validTime(payload.time) || validTime(payload.endTime);
+    if (date) event.date = date;
     if (validTime(payload.time)) event.time = payload.time;
     if (validTime(payload.endTime)) event.endTime = payload.endTime;
+    if (!date && !hasTime) { await send(chatId, "Что именно изменить у события: дату или время?"); return; }
     await saveProfile(userId, p.data, p.baseData);
-    await send(chatId, "Перенёс событие <b>" + escapeHtml(event.title) + "</b> на " + date + (event.time ? " · " + event.time + (event.endTime ? "–" + event.endTime : "") : "") + ".");
+    await send(chatId, "Обновил событие <b>" + escapeHtml(event.title) + "</b> · " + event.date + (event.time ? " · " + event.time + (event.endTime ? "–" + event.endTime : "") : "") + ".");
     return;
   }
 
