@@ -27,7 +27,7 @@ The Telegram bot is the conversational front door to the same personal MYDAY pro
 19. Telegram update deduplication to avoid duplicate tasks on webhook retries.
 20. Private-chat-only handling; group messages are ignored.
 21. One message may create up to ten separate tasks.
-22. Bot replies confirm what was saved and show quick actions.
+22. Bot replies confirm what was saved and show quick actions.\n23. Calendar events (appointments, training, exams and consultations) can be captured from a message.\n24. The /today and /week agenda combines tasks and calendar events.
 
 ## Additional product innovations to build next
 
