@@ -126,8 +126,7 @@ export async function extractScheduleDocument(
 
   if (ext === "pdf" || /application\/pdf/i.test(mime)) {
     // Load the large PDF engine only for PDF uploads so it does not inflate the main bot deployment bundle.
-    const pdfjsSpecifier = "npm:pdfjs-dist@4.10.38/legacy/build/pdf.mjs";
-    const pdfjs = await import(pdfjsSpecifier);
+    const pdfjs = await import("npm:pdfjs-dist@4.10.38/legacy/build/pdf.mjs");
     const pdf = await pdfjs.getDocument({ data: bytes, useSystemFonts: true, isEvalSupported: false }).promise;
     const pages = Math.min(pdf.numPages, 40);
     if (pdf.numPages > pages) warnings.push("Обработаны первые 40 страниц PDF.");
