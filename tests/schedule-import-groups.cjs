@@ -61,6 +61,6 @@ assert.equal(sheet[0].group,'ПИ-21');
 
 const personal = parser.parseRows(sheetRows);
 assert.equal(personal.length,1);
-assert.equal(personal[0].group,undefined);
+assert.equal(personal[0].group,'');
 
 console.log('Group import parser tests passed: matrix headers, row-based group column, workbook sheet name and personal schedule.');
