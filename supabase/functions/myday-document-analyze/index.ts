@@ -72,7 +72,7 @@ function normalizeAnalysis(raw: Record<string, unknown>) {
     title: cleanString(x?.title, 180),
     description: cleanString(x?.description, 1200),
     dueDate: validDate(x?.dueDate),
-  })).filter((x: any) => x.title) : [];
+  })).filter((x: any) => x.title && x.subject) : [];
   const events = Array.isArray(proposals.events) ? proposals.events.slice(0, 30).map((x: any) => ({
     title: cleanString(x?.title, 180),
     date: validDate(x?.date),
