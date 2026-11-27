@@ -23,6 +23,8 @@ jobs:
           deno-version: v2.x
       - name: Type-check Telegram webhook
         run: deno check supabase/functions/myday-bot/index.ts
+      - name: Test Russian assistant date and time parsing
+        run: deno test tests/myday-bot-language.test.ts
       - name: Validate bot deployment configuration
         run: |
           node <<'NODE'
