@@ -104,7 +104,7 @@ async function vision(fileId: string) {
   if (!r.ok) throw new Error("Не удалось разобрать фото: " + r.status);
   const d = await r.json(); try { return JSON.parse(d.choices?.[0]?.message?.content || "{}"); } catch { return ""; }
 }
-function taskKeyboard(tasks: AnyRecord[][]) { return tasks.map(([id, title]) => [{ text: "✓ " + String(title).slice(0, 35), callback_data: "done:" + id }, { text: "Завтра", callback_data: "tomorrow:" + id }]); }
+function taskKeyboard(tasks: Array<[string, string]>) { return tasks.map(([id, title]) => [{ text: "✓ " + String(title).slice(0, 35), callback_data: "done:" + id }, { text: "Завтра", callback_data: "tomorrow:" + id }]); }
 async function handleText(chatId: number, userId: number, text: string) {
   const cmd = text.trim();
   if (/^\/(start|help)(\s|$)/i.test(cmd)) {
@@ -121,7 +121,7 @@ async function handleText(chatId: number, userId: number, text: string) {
     const label = mode === "today" ? "Задачи на сегодня" : mode === "week" ? "Задачи на ближайшие 7 дней" : "Все открытые задачи";
     if (!list.length) { await send(chatId, label + ": пока пусто. Подозрительно, но пользуйся моментом."); return; }
     const lines = list.slice(0, 20).map((x: AnyRecord, i: number) => (i + 1) + ". " + escapeHtml(x.title) + (x.due ? " · " + x.due : "")).join("\n");
-    await send(chatId, "<b>" + label + "</b>\n" + lines, taskKeyboard(list.slice(0, 8).map((x: AnyRecord) => [x.id, x.title])));
+    await send(chatId, "<b>" + label + "</b>\n" + lines, taskKeyboard(list.slice(0, 8).map((x: AnyRecord): [string, string] => [String(x.id), String(x.title)])));
     return;
   }
   if (/^\/done\s+/i.test(cmd)) {
@@ -148,7 +148,7 @@ async function handleText(chatId: number, userId: number, text: string) {
   if (!created.length) { await send(chatId, "Не смог выделить название задачи."); return; }
   await saveProfile(userId, p.data);
   const summary = created.map((x, i) => (i + 1) + ". <b>" + escapeHtml(x.title) + "</b>" + (x.due ? " · " + x.due : "")).join("\n");
-  await send(chatId, "Сохранил в MYDAY и синхронизировал с приложением:\n" + summary, taskKeyboard(created.map(x => [x.id, x.title])));
+  await send(chatId, "Сохранил в MYDAY и синхронизировал с приложением:\n" + summary, taskKeyboard(created.map((x): [string, string] => [String(x.id), String(x.title)])));
 }
 async function handleCallback(q: AnyRecord) {
   const userId = Number(q.from?.id), chatId = Number(q.message?.chat?.id), data = String(q.data || "");
