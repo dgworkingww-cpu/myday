@@ -304,7 +304,7 @@ async function handleText(chatId: number, userId: number, text: string) {
     }
   }
 
-  if (/^/(today|tomorrow|day|week|tasks|events|homework)/i.test(cmd)) {
+  if (/^\/(today|tomorrow|day|week|tasks|events|homework)\b/i.test(cmd)) {
     const mode = cmd.match(/^\/(\w+)/)![1];
     const openTasks = (Array.isArray(p.data.tasks) ? p.data.tasks : []).filter((x: AnyRecord) => Number(x.status || 0) !== 2);
     const openHw = (Array.isArray(p.data.hw) ? p.data.hw : []).filter((x: AnyRecord) => Number(x.status || 0) !== 2);
