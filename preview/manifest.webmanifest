@@ -1,0 +1,14 @@
+{
+  "name": "MYDAY Test",
+  "short_name": "MYDAY Test",
+  "description": "Изолированная тестовая сборка MYDAY",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#efeae2",
+  "theme_color": "#efeae2",
+  "icons": [
+    { "src": "../icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "../icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
