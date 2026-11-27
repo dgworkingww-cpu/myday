@@ -7,6 +7,9 @@ Deno.test("relative Russian dates resolve from the supplied local date", () => {
   assertEquals(inferDate("послезавтра", "2026-11-27"), "2026-11-29");
   assertEquals(inferDate("через 3 дня", "2026-11-27"), "2026-11-30");
   assertEquals(inferDate("в следующую пятницу", "2026-11-27"), "2026-12-04");
+  assertEquals(inferDate("в эту пятницу", "2026-11-27"), "2026-11-27");
+  assertEquals(inferDate("через 2 недели", "2026-11-27"), "2026-12-11");
+  assertEquals(inferDate("на выходных", "2026-11-27"), "2026-11-28");
 });
 
 Deno.test("numeric dates are validated instead of silently accepted", () => {
@@ -20,6 +23,8 @@ Deno.test("spoken Russian time ranges preserve both endpoints", () => {
   assertEquals(inferTimeRange("Работа завтра с 7 вечера до полдвенадцатого"), { start: "19:00", end: "23:30" });
   assertEquals(inferTimeRange("Тренировка с 9 до 11 утра"), { start: "09:00", end: "11:00" });
   assertEquals(inferTimeRange("Смена с 8 вечера до 12 ночи"), { start: "20:00", end: "00:00" });
+  assertEquals(inferTimeRange("Работа с семи вечера по половины двенадцатого"), { start: "19:00", end: "23:30" });
+  assertEquals(parseClock("полуночи"), "00:00");
 });
 
 Deno.test("spoken half-hours and time-only follow-ups are recognized", () => {
