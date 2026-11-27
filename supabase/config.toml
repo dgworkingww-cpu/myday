@@ -2,3 +2,6 @@ project_id = "rzgsctbvgzerqizfjhuq"
 
 [functions.myday-sync]
 verify_jwt = false
+
+[functions.myday-bot]
+verify_jwt = false
