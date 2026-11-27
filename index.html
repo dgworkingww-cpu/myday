@@ -93,7 +93,7 @@ const fmt=s=>s?new Date(s+'T12:00').toLocaleDateString('ru-RU',{day:'numeric',mo
 function isoWeek(d){d=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const n=d.getUTCDay()||7;d.setUTCDate(d.getUTCDate()+4-n);const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));return Math.ceil(((d-y)/864e5+1)/7)}
 const subjNames=['Основы взаимозаменяемости и технические изменения','Сельскохозяйственные машины','Тракторы и автомобили','Детали машин, основы конструирования и ПТМ','Теоретические основы подготовки трактористов-машинистов','Теплотехника','Повышение надежности сельскохозяйственных машин','Техническое оборудование для переработки сельскохозяйственной продукции','Электротехника и электроника','Машины и оборудование в животноводстве'];
 function seed(){
- return {v:2,settings:{theme:'auto',morning:'07:30',shift:0,notif:true,hwDelay:60},
+ return {v:2,settings:{theme:'auto',morning:'07:30',shift:0,notif:true,hwDelay:60,notifications:{study:true,work:true,personal:true}},
  sched:{odd:{},even:{},work:{},fixed:{},cycle:{},dates:{}},
  scheduleConfig:{studyMode:'alternating',cycleWeeks:2,cycleAnchor:'',selectedDate:''},
  workConfig:{mode:'weekly',pattern:['work','work','off','off'],anchorDate:'',start:'09:00',end:'18:00',title:'Рабочая смена',exceptions:{}},
@@ -562,20 +562,42 @@ function capSave(){const v=$('#cq').value.trim();if(!v)return;const d=$('#cd').v
 function notify(title,body){try{if(!('Notification' in window)||Notification.permission!='granted')return false;const opts={body,tag:'myday-'+title,renotify:false};if('serviceWorker' in navigator&&navigator.serviceWorker.controller){navigator.serviceWorker.ready.then(reg=>reg.showNotification(title,opts)).catch(()=>{try{new Notification(title,opts)}catch(_){}})}else new Notification(title,opts);return true}catch(_){return false}}
 function tick(){
  const n=new Date(),t=today(),hm=pad(n.getHours())+':'+pad(n.getMinutes()),F=S.fired;
+ const N={study:true,work:true,personal:true,...(S.settings.notifications||{})};
+ const domain=x=>x.k==='h'||x.space==='study'?'study':x.space==='work'?'work':'personal';
+ const enabled=x=>N[domain(x)]!==false;
  Object.keys(F).forEach(k=>{if(!k.startsWith(t)&&!k.startsWith('x'))delete F[k]});
- const L=lessons(n);
- if(hm>=S.settings.morning&&!F[t+'m']){F[t+'m']=1;save();if(L.length){const txt='Сегодня '+DAYS[n.getDay()].toLowerCase()+', '+wkName(wk()).split(' ')[0]+' неделя.\n'+L.map(l=>l.s+' — '+l.subj).join('\n')+(allOpen().some(x=>x.due&&x.due<=t)?'\nЗадач на сегодня и просроченных: '+allOpen().filter(x=>x.due&&x.due<=t).length:'');if(!notify('Доброе утро!',txt))sheet(`<h1>Доброе утро!</h1><p style="white-space:pre-line">${e(txt)}</p><button class="btn" onclick="close_()">Ок</button>`)}}
- if(L.length){const last=L[L.length-1].e,[h,m]=last.split(':').map(Number),at=new Date(n);at.setHours(h,m+S.settings.hwDelay,0,0);
-  if(n>=at&&!F[t+'h']&&(!F[t+'s']||n.getTime()>F[t+'s'])&&!$('#ov')){hwPrompt()}}
- if(hm>='18:00'&&!F[t+'r']){F[t+'r']=1;const a=allOpen().filter(x=>x.due==addDays(t,1));if(a.length){save();rem('Завтра срок',a)}}
- if(hm>='15:00'&&!F[t+'q']){F[t+'q']=1;const a=allOpen().filter(x=>x.due==t);if(a.length){save();rem('Сегодня срок',a)}}
- const lv=$('#live');if(tab=='today'&&lv&&!$('#ov')){const h=liveHtml();if(lv.innerHTML!==h)lv.innerHTML=h}}
+ const L=N.study!==false?lessons(n):[];
+ if(hm>=S.settings.morning&&!F[t+'m']){
+  F[t+'m']=1;save();
+  const due=allOpen().filter(x=>x.due&&x.due<=t&&enabled(x));
+  const shift=N.work!==false&&window.MYDAY_LAB&&window.MYDAY_LAB.workShiftForDate?window.MYDAY_LAB.workShiftForDate(t):null;
+  if(L.length||due.length||shift){
+   const parts=[];
+   if(L.length)parts.push((S.scheduleConfig&&S.scheduleConfig.studyMode==='alternating'?wkName(wk()).split(' ')[0]+' неделя. ':'')+L.map(l=>l.s+' — '+l.subj).join('\n'));
+   if(shift)parts.push('Работа: '+shift.s+'–'+shift.e+' · '+shift.subj);
+   if(due.length)parts.push('Задачи: '+due.map(x=>x.title).slice(0,5).join(', '));
+   const txt='Сегодня '+DAYS[n.getDay()].toLowerCase()+'.\n'+parts.join('\n\n');
+   if(!notify('Доброе утро!',txt))sheet('<h1>Доброе утро!</h1><p style="white-space:pre-line">'+e(txt)+'</p><button class="btn" onclick="close_()">Ок</button>');
+  }
+ }
+ if(N.study!==false&&L.length){
+  const last=L[L.length-1].e,[h,m]=last.split(':').map(Number),at=new Date(n);at.setHours(h,m+S.settings.hwDelay,0,0);
+  if(n>=at&&!F[t+'h']&&(!F[t+'s']||n.getTime()>F[t+'s'])&&!$('#ov'))hwPrompt();
+ }
+ if(hm>='18:00'&&!F[t+'r']){
+  F[t+'r']=1;const a=allOpen().filter(x=>x.due==addDays(t,1)&&enabled(x));if(a.length){save();rem('Завтра срок',a)}
+ }
+ if(hm>='15:00'&&!F[t+'q']){
+  F[t+'q']=1;const a=allOpen().filter(x=>x.due==t&&enabled(x));if(a.length){save();rem('Сегодня срок',a)}
+ }
+ const lv=$('#live');if(tab=='today'&&lv&&!$('#ov')){const h=liveHtml();if(lv.innerHTML!==h)lv.innerHTML=h}
+}
 function hwPrompt(){S.fired[today()+'s']=Date.now()+18e5;save();notify('Занятия закончились','Какие задания тебе задали?');
  sheet(`<h1>Занятия на сегодня закончились</h1><div class="sub">Какие задания тебе задали?</div><label>Предмет</label><select id="hp">${S.subjects.filter(s=>!s.closed).map(s=>`<option value="${s.id}">${e(s.name)}</option>`).join('')}</select>
  <label>Задание</label><textarea id="ht"></textarea><label>Срок</label><input type="date" id="hd"><button class="btn" style="width:100%" onclick="hpSave()">Записать</button>
  <div class="row" style="margin-top:8px"><button class="btn g grow" onclick="S.fired[today()+'h']=1;save();close_()">Заданий нет</button><button class="btn g grow" onclick="S.fired[today()+'s']=Date.now()+18e5;save();close_()">Позже (30 мин)</button></div>`)}
 function hpSave(){const t=$('#ht').value.trim();if(!t)return fieldError($('#ht'),'Опишите задание');S.hw.push({id:id(),subj:$('#hp').value,title:t,desc:'',due:$('#hd').value,status:0,subs:[],photos:[]});S.fired[today()+'h']=1;save();close_();render()}
-function migrate(){S=normalizeProfile(S);if(!S.settings.weekAnchor){S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=((isoWeek(new Date())+(S.settings.shift||0))%2==1?'odd':'even')}S.sched=S.sched||{odd:{},even:{},work:{},fixed:{},cycle:{},dates:{}};['odd','even','work','fixed','cycle','dates'].forEach(k=>S.sched[k]=S.sched[k]||{});S.scheduleConfig=S.scheduleConfig||{studyMode:'alternating',cycleWeeks:2,cycleAnchor:'',selectedDate:''};if(!['alternating','fixed','cycle','dates','hybrid'].includes(S.scheduleConfig.studyMode))S.scheduleConfig.studyMode='alternating';S.scheduleConfig.cycleWeeks=Math.max(2,Math.min(4,Number(S.scheduleConfig.cycleWeeks)||2));S.workConfig=S.workConfig||{mode:'weekly',pattern:['work','work','off','off'],anchorDate:'',start:'09:00',end:'18:00',title:'Рабочая смена',exceptions:{}};if(!['weekly','rotation'].includes(S.workConfig.mode))S.workConfig.mode='weekly';if(!Array.isArray(S.workConfig.pattern)||!S.workConfig.pattern.length)S.workConfig.pattern=['work','work','off','off'];S.workConfig.exceptions=S.workConfig.exceptions||{};S.habits=Array.isArray(S.habits)?S.habits:[];S.settings.dashboard=S.settings.dashboard||{workShift:true,habits:false,notes:false};S.settings.dashboardOrder=Array.isArray(S.settings.dashboardOrder)?S.settings.dashboardOrder:['workShift','habits','notes'];S.subjects=S.subjects||[];S.hw=S.hw||[];S.exc=S.exc||[];S.events=S.events||[];save()}
+function migrate(){S=normalizeProfile(S);if(!S.settings.weekAnchor){S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=((isoWeek(new Date())+(S.settings.shift||0))%2==1?'odd':'even')}S.sched=S.sched||{odd:{},even:{},work:{},fixed:{},cycle:{},dates:{}};['odd','even','work','fixed','cycle','dates'].forEach(k=>S.sched[k]=S.sched[k]||{});S.scheduleConfig=S.scheduleConfig||{studyMode:'alternating',cycleWeeks:2,cycleAnchor:'',selectedDate:''};if(!['alternating','fixed','cycle','dates','hybrid'].includes(S.scheduleConfig.studyMode))S.scheduleConfig.studyMode='alternating';S.scheduleConfig.cycleWeeks=Math.max(2,Math.min(4,Number(S.scheduleConfig.cycleWeeks)||2));S.workConfig=S.workConfig||{mode:'weekly',pattern:['work','work','off','off'],anchorDate:'',start:'09:00',end:'18:00',title:'Рабочая смена',exceptions:{}};if(!['weekly','rotation'].includes(S.workConfig.mode))S.workConfig.mode='weekly';if(!Array.isArray(S.workConfig.pattern)||!S.workConfig.pattern.length)S.workConfig.pattern=['work','work','off','off'];S.workConfig.exceptions=S.workConfig.exceptions||{};S.habits=Array.isArray(S.habits)?S.habits:[];S.settings.notifications={study:true,work:true,personal:true,...(S.settings.notifications||{})};S.settings.dashboard=S.settings.dashboard||{workShift:true,habits:false,notes:false};S.settings.dashboardOrder=Array.isArray(S.settings.dashboardOrder)?S.settings.dashboardOrder:['workShift','habits','notes'];S.subjects=S.subjects||[];S.hw=S.hw||[];S.exc=S.exc||[];S.events=S.events||[];save()}
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}migrate();render();try{const mq=window.matchMedia('(prefers-color-scheme: light)');mq.addEventListener?mq.addEventListener('change',()=>{if(S.settings.theme==='auto'&&!(tgApp&&tgApp.colorScheme))render()}):mq.addListener&&mq.addListener(()=>{if(S.settings.theme==='auto'&&!(tgApp&&tgApp.colorScheme))render()});tgApp&&tgApp.onEvent&&tgApp.onEvent('themeChanged',()=>{if(S.settings.theme==='auto')render()})}catch(_){}initCloud();setTimeout(()=>tick(),400);setInterval(tick,30000);setInterval(()=>{if(!document.hidden)cloudPull()},20000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){tick();render();cloudPull()}});
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('./sw.js').catch(()=>{});
 </script><script src="./apple-ui.js" defer></script><script src="./schedule-lab.js" defer></script></body></html>
