@@ -1,5 +1,5 @@
 function assertEquals(actual: unknown, expected: unknown) { if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error("Expected " + JSON.stringify(expected) + ", got " + JSON.stringify(actual)); }
-import { inferDate, inferTimeRange, parseClock, isDateOnlyReply, isCancellation, validDate } from "../supabase/functions/myday-bot/language.ts";
+import { inferDate, inferTime, inferTimeRange, parseClock, isDateOnlyReply, isCancellation, validDate } from "../supabase/functions/myday-bot/language.ts";
 
 Deno.test("relative Russian dates resolve from the supplied local date", () => {
   assertEquals(inferDate("сегодня", "2026-11-27"), "2026-11-27");
@@ -30,6 +30,7 @@ Deno.test("spoken Russian time ranges preserve both endpoints", () => {
 Deno.test("spoken half-hours and time-only follow-ups are recognized", () => {
   assertEquals(parseClock("полвосьмого"), "07:30");
   assertEquals(parseClock("полдвенадцатого"), "11:30");
+  assertEquals(inferTime("сдать завтра до 18:00"), "18:00");
   assertEquals(isDateOnlyReply("завтра"), true);
   assertEquals(isDateOnlyReply("в пятницу"), true);
   assertEquals(isDateOnlyReply("в эту пятницу"), true);
