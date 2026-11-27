@@ -93,6 +93,30 @@ jobs:
       - name: Deploy MYDAY document analyzer
         run: supabase functions deploy myday-document-analyze --project-ref "$SUPABASE_PROJECT_REF"
 
+      - name: Verify document analyzer authentication boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          (async () => {
+            const fs = require('node:fs');
+            const config = fs.readFileSync('backend-config.js', 'utf8');
+            const base = config.match(/supabaseUrl:\s*"([^"]+)"/)?.[1];
+            const anon = config.match(/supabaseAnonKey:\s*"([^"]+)"/)?.[1];
+            if (!base || !anon) throw new Error('Public MYDAY backend configuration is missing.');
+            const response = await fetch(base.replace(/\/+$/, '') + '/functions/v1/myday-document-analyze', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', apikey: anon },
+              body: JSON.stringify({ initData: 'invalid-test-signature', filename: 'smoke.pdf', text: 'This is a sufficiently long document text for an authentication smoke test.' })
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (response.status !== 401 || payload.code !== 'AUTH_REQUIRED') {
+              throw new Error('Document analyzer auth boundary failed: HTTP ' + response.status + ', code=' + (payload.code || 'none'));
+            }
+            console.log('Document analyzer is deployed and rejects unsigned Telegram sessions.');
+          })().catch(error => { console.error(error); process.exit(1); });
+          NODE
+
       - name: Verify Telegram bot token identity
         shell: bash
         env:
