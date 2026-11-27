@@ -94,7 +94,10 @@ function isoWeek(d){d=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()
 const subjNames=['Основы взаимозаменяемости и технические изменения','Сельскохозяйственные машины','Тракторы и автомобили','Детали машин, основы конструирования и ПТМ','Теоретические основы подготовки трактористов-машинистов','Теплотехника','Повышение надежности сельскохозяйственных машин','Техническое оборудование для переработки сельскохозяйственной продукции','Электротехника и электроника','Машины и оборудование в животноводстве'];
 function seed(){
  return {v:2,settings:{theme:'auto',morning:'07:30',shift:0,notif:true,hwDelay:60},
- sched:{odd:{},even:{},work:{}},tasks:[],inbox:[],fired:{},done:[],
+ sched:{odd:{},even:{},work:{},fixed:{},cycle:{},dates:{}},
+ scheduleConfig:{studyMode:'alternating',cycleWeeks:2,cycleAnchor:'',selectedDate:''},
+ workConfig:{mode:'weekly',pattern:['work','work','off','off'],anchorDate:'',start:'09:00',end:'18:00',title:'Рабочая смена',exceptions:{}},
+ habits:[],tasks:[],inbox:[],fired:{},done:[],
  uni:{name:'',url:'',login:'',notes:'',links:'',teachers:''},subjects:[],hw:[],exc:[],events:[]};
 }
 function normalizeProfile(data){
@@ -102,7 +105,10 @@ function normalizeProfile(data){
  return {...base,...d,
   settings:{...base.settings,...(d.settings&&typeof d.settings==='object'?d.settings:{})},
   uni:{...base.uni,...(d.uni&&typeof d.uni==='object'?d.uni:{})},
-  sched:{odd:d.sched&&d.sched.odd&&typeof d.sched.odd==='object'?d.sched.odd:{},even:d.sched&&d.sched.even&&typeof d.sched.even==='object'?d.sched.even:{},work:d.sched&&d.sched.work&&typeof d.sched.work==='object'?d.sched.work:{}},
+  sched:{odd:d.sched&&d.sched.odd&&typeof d.sched.odd==='object'?d.sched.odd:{},even:d.sched&&d.sched.even&&typeof d.sched.even==='object'?d.sched.even:{},work:d.sched&&d.sched.work&&typeof d.sched.work==='object'?d.sched.work:{},fixed:d.sched&&d.sched.fixed&&typeof d.sched.fixed==='object'?d.sched.fixed:{},cycle:d.sched&&d.sched.cycle&&typeof d.sched.cycle==='object'?d.sched.cycle:{},dates:d.sched&&d.sched.dates&&typeof d.sched.dates==='object'?d.sched.dates:{}},
+  scheduleConfig:{...base.scheduleConfig,...(d.scheduleConfig&&typeof d.scheduleConfig==='object'?d.scheduleConfig:{})},
+  workConfig:{...base.workConfig,...(d.workConfig&&typeof d.workConfig==='object'?d.workConfig:{})},
+  habits:Array.isArray(d.habits)?d.habits:[],
   tasks:Array.isArray(d.tasks)?d.tasks.map(t=>({...t,space:t.space||(t.cat==='Работа и проекты'?'work':t.cat==='Учёба'?'study':'personal')})):[],inbox:Array.isArray(d.inbox)?d.inbox:[],
   fired:d.fired&&typeof d.fired==='object'&&!Array.isArray(d.fired)?d.fired:{},
   done:Array.isArray(d.done)?d.done:[],subjects:Array.isArray(d.subjects)?d.subjects:[],
@@ -284,8 +290,29 @@ const weekStartKey=(d=new Date())=>{const x=new Date(d);x.setHours(12,0,0,0);x.s
 const wk=(d=new Date())=>{const anchor=S.settings.weekAnchor||weekStartKey(new Date()),base=S.settings.weekAnchorType||(((isoWeek(new Date())+(S.settings.shift||0))%2)==1?'odd':'even');const a=anchor.split('-').map(Number),b=weekStartKey(d).split('-').map(Number),weeks=Math.floor((Date.UTC(b[0],b[1]-1,b[2])-Date.UTC(a[0],a[1]-1,a[2]))/604800000);return ((base=='odd'?0:1)+weeks%2+2)%2==0?'odd':'even'};
 function setWeekType(type){if(type!='odd'&&type!='even')return;S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=type;S.settings.shift=0;save();render()}
 const wkName=t=>t=='odd'?'нечётная (нижняя)':'чётная (верхняя)';
-const scheduleBucket=(space='study',week=wk())=>{if(space==='work'){S.sched.work=S.sched.work||{};return S.sched.work}return S.sched[week]||(S.sched[week]={})};
-const lessons=(d=new Date(),t=wk(d))=>{const k=ds(d),X=S.exc||[];let L=((scheduleBucket('study',t)[d.getDay()]||[])).map(l=>{const z=X.find(z=>z.date==k&&z.lid==l.id);return z?(z.type=='cancel'?null:{...l,...z.o,chg:1}):l}).filter(Boolean);L=L.concat(X.filter(z=>z.date==k&&z.type=='add').map(z=>({id:z.id,...z.o,chg:1})));return L.sort((a,b)=>a.s.localeCompare(b.s))};
+function cycleIndexForDate(d){const cfg=S.scheduleConfig||{},anchor=cfg.cycleAnchor||S.settings.weekAnchor||weekStartKey(d),a=new Date(anchor+'T12:00:00'),b=new Date(weekStartKey(d)+'T12:00:00'),weeks=Math.floor((b-a)/604800000),n=Math.max(2,Math.min(4,Number(cfg.cycleWeeks)||2));return ((weeks%n)+n)%n}
+function scheduleBucket(space='study',week=wk()){
+ if(space==='work'){S.sched.work=S.sched.work||{};return S.sched.work}
+ S.sched.fixed=S.sched.fixed||{};S.sched.cycle=S.sched.cycle||{};S.sched.dates=S.sched.dates||{};
+ if(typeof week==='string'&&week.startsWith('date:'))return S.sched.dates[week.slice(5)]||(S.sched.dates[week.slice(5)]={});
+ if(week==='fixed')return S.sched.fixed;
+ if(typeof week==='string'&&week.startsWith('cycle:')){const i=Number(week.slice(6))||0;return S.sched.cycle[i]||(S.sched.cycle[i]={})}
+ const mode=(S.scheduleConfig&&S.scheduleConfig.studyMode)||'alternating';
+ if(mode==='fixed')return S.sched.fixed;
+ if(mode==='cycle'){const i=cycleIndexForDate(new Date((S.scheduleConfig.selectedDate||today())+'T12:00:00'));return S.sched.cycle[i]||(S.sched.cycle[i]={})}
+ if(mode==='dates'){const k=S.scheduleConfig.selectedDate||today();return S.sched.dates[k]||(S.sched.dates[k]={})}
+ const key=(week==='odd'||week==='even')?week:wk();return S.sched[key]||(S.sched[key]={});
+}
+function lessons(d=new Date(),t=wk(d)){
+ const k=ds(d),day=d.getDay(),X=S.exc||[],mode=(S.scheduleConfig&&S.scheduleConfig.studyMode)||'alternating';let base=[];
+ if(mode==='fixed')base=(S.sched.fixed&&S.sched.fixed[day]||[]).slice();
+ else if(mode==='cycle'){const i=cycleIndexForDate(d);base=((S.sched.cycle||{})[i]||{})[day]||[];base=base.slice()}
+ else if(mode==='dates'){const specific=(S.sched.dates||{})[k];base=(specific&&specific[day]||((S.sched.fixed||{})[day])||[]).slice()}
+ else if(mode==='hybrid'){base=[...((S.sched.fixed||{})[day]||[]),...((S.sched[t]||{})[day]||[])].map(x=>({...x}))}
+ else base=((S.sched[t]||{})[day]||[]).slice();
+ let L=base.map(l=>{const z=X.find(z=>z.date==k&&z.lid==l.id);return z?(z.type==='cancel'?null:{...l,...z.o,chg:1}):l}).filter(Boolean);
+ L=L.concat(X.filter(z=>z.date==k&&z.type==='add').map(z=>({id:z.id,...z.o,chg:1})));return L.sort((a,b)=>a.s.localeCompare(b.s));
+}
 const subj=i=>(S.subjects.find(s=>s.id==i)||{}).name||'—';
 const ruCount=(n,one,few,many)=>`${n} ${n%100>=11&&n%100<=14?many:n%10==1?one:n%10>=2&&n%10<=4?few:many}`;
 let tab='today',tf={cat:'',show:'open'},taskSpace='study',schedSpace='study',sd=new Date().getDay()||1,st=null,openSubj=null,studyFilter='open',moreOpen=new Set(['appearance']);
@@ -491,7 +518,7 @@ function normalizeBackup(d){
  if(d.sched!==undefined&&(!d.sched||typeof d.sched!='object'||!d.sched.odd||!d.sched.even||typeof d.sched.odd!='object'||typeof d.sched.even!='object'))throw 0;
  const time=/^([01]\d|2[0-3]):[0-5]\d$/;
  for(const week of ['odd','even'])for(const [day,lessons] of Object.entries(d.sched?.[week]||{})){if(!/^[1-6]$/.test(day)||!Array.isArray(lessons))throw 0;for(const l of lessons)if(!l||typeof l.id!='string'||!/^[A-Za-z0-9]{1,40}$/.test(l.id)||typeof l.subj!='string'||!time.test(l.s)||!time.test(l.e)||l.e<=l.s)throw 0}
- const base=seed(),out={...base,...d,settings:{...base.settings,...d.settings},uni:{...base.uni,...(d.uni||{})},sched:{odd:d.sched?.odd||{},even:d.sched?.even||{}},subjects:d.subjects||base.subjects,inbox:Array.isArray(d.inbox)?d.inbox:[],fired:d.fired&&typeof d.fired=='object'?d.fired:{},done:Array.isArray(d.done)?d.done:[],exc:Array.isArray(d.exc)?d.exc:[],focus:Array.isArray(d.focus)?d.focus:[]};
+ const base=seed(),out={...base,...d,settings:{...base.settings,...d.settings},uni:{...base.uni,...(d.uni||{})},sched:{odd:d.sched?.odd||{},even:d.sched?.even||{},work:d.sched?.work||{},fixed:d.sched?.fixed||{},cycle:d.sched?.cycle||{},dates:d.sched?.dates||{}},scheduleConfig:{...base.scheduleConfig,...(d.scheduleConfig||{})},workConfig:{...base.workConfig,...(d.workConfig||{})},habits:Array.isArray(d.habits)?d.habits:[],subjects:d.subjects||base.subjects,inbox:Array.isArray(d.inbox)?d.inbox:[],fired:d.fired&&typeof d.fired=='object'?d.fired:{},done:Array.isArray(d.done)?d.done:[],exc:Array.isArray(d.exc)?d.exc:[],focus:Array.isArray(d.focus)?d.focus:[]};
  const validDate=v=>{if(typeof v!='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;const z=new Date(v+'T12:00:00');return !Number.isNaN(z.getTime())&&z.getFullYear()+'-'+String(z.getMonth()+1).padStart(2,'0')+'-'+String(z.getDate()).padStart(2,'0')===v};
  const safeId=x=>{if(typeof x.id!='string'||!/^[A-Za-z0-9]{1,40}$/.test(x.id))throw 0;if(typeof x.desc!='string')x.desc='';if(!validDate(x.due))x.due='';if(!validDate(x.doneAt))x.doneAt='';if(!Number.isInteger(x.status)||x.status<0||x.status>2)x.status=0;if(!Number.isFinite(x.mins)||x.mins<0)x.mins=0;if(!Array.isArray(x.subs))x.subs=[];x.subs=x.subs.filter(s=>s&&typeof s.t=='string').map(s=>({t:s.t.slice(0,500),d:!!s.d}));if(!Array.isArray(x.photos))x.photos=[];if(!Array.isArray(x.files))x.files=[];if(x.photos.some(p=>typeof p!='string'||!/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=\r\n]+$/i.test(p)))throw 0;if(x.files.some(f=>!f||typeof f.name!='string'||f.name.length>120||typeof f.data!='string'||!/^data:(image\/(jpeg|png|webp|gif)|application\/(pdf|msword|vnd\.openxmlformats-officedocument\.wordprocessingml\.document|vnd\.oasis\.opendocument\.text|octet-stream)|text\/plain);base64,[A-Za-z0-9+/=\r\n]+$/i.test(f.data)))throw 0};
  for(const x of out.tasks){safeId(x);if(!CATS.includes(x.cat))x.cat='Другое';if(!Number.isInteger(x.prio)||x.prio<0||x.prio>2)x.prio=1;if(!['','d','w','m'].includes(x.repeat))x.repeat=''}
@@ -548,7 +575,7 @@ function hwPrompt(){S.fired[today()+'s']=Date.now()+18e5;save();notify('Заня
  <label>Задание</label><textarea id="ht"></textarea><label>Срок</label><input type="date" id="hd"><button class="btn" style="width:100%" onclick="hpSave()">Записать</button>
  <div class="row" style="margin-top:8px"><button class="btn g grow" onclick="S.fired[today()+'h']=1;save();close_()">Заданий нет</button><button class="btn g grow" onclick="S.fired[today()+'s']=Date.now()+18e5;save();close_()">Позже (30 мин)</button></div>`)}
 function hpSave(){const t=$('#ht').value.trim();if(!t)return fieldError($('#ht'),'Опишите задание');S.hw.push({id:id(),subj:$('#hp').value,title:t,desc:'',due:$('#hd').value,status:0,subs:[],photos:[]});S.fired[today()+'h']=1;save();close_();render()}
-function migrate(){S=normalizeProfile(S);if(!S.settings.weekAnchor){S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=((isoWeek(new Date())+(S.settings.shift||0))%2==1?'odd':'even')}S.sched=S.sched||{odd:{},even:{},work:{}};S.sched.odd=S.sched.odd||{};S.sched.even=S.sched.even||{};S.sched.work=S.sched.work||{};S.subjects=S.subjects||[];S.hw=S.hw||[];S.exc=S.exc||[];S.events=S.events||[];save()}
+function migrate(){S=normalizeProfile(S);if(!S.settings.weekAnchor){S.settings.weekAnchor=weekStartKey();S.settings.weekAnchorType=((isoWeek(new Date())+(S.settings.shift||0))%2==1?'odd':'even')}S.sched=S.sched||{odd:{},even:{},work:{},fixed:{},cycle:{},dates:{}};['odd','even','work','fixed','cycle','dates'].forEach(k=>S.sched[k]=S.sched[k]||{});S.scheduleConfig=S.scheduleConfig||{studyMode:'alternating',cycleWeeks:2,cycleAnchor:'',selectedDate:''};S.workConfig=S.workConfig||{mode:'weekly',pattern:['work','work','off','off'],anchorDate:'',start:'09:00',end:'18:00',title:'Рабочая смена',exceptions:{}};S.workConfig.exceptions=S.workConfig.exceptions||{};S.habits=Array.isArray(S.habits)?S.habits:[];S.subjects=S.subjects||[];S.hw=S.hw||[];S.exc=S.exc||[];S.events=S.events||[];save()}
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}migrate();render();try{const mq=window.matchMedia('(prefers-color-scheme: light)');mq.addEventListener?mq.addEventListener('change',()=>{if(S.settings.theme==='auto'&&!(tgApp&&tgApp.colorScheme))render()}):mq.addListener&&mq.addListener(()=>{if(S.settings.theme==='auto'&&!(tgApp&&tgApp.colorScheme))render()});tgApp&&tgApp.onEvent&&tgApp.onEvent('themeChanged',()=>{if(S.settings.theme==='auto')render()})}catch(_){}initCloud();setTimeout(()=>tick(),400);setInterval(tick,30000);setInterval(()=>{if(!document.hidden)cloudPull()},20000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){tick();render();cloudPull()}});
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('./sw.js').catch(()=>{});
-</script><script src="./apple-ui.js" defer></script></body></html>
+</script><script src="./apple-ui.js" defer></script><script src="./schedule-lab.js" defer></script></body></html>
