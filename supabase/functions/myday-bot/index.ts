@@ -163,7 +163,7 @@ async function handleText(chatId: number, userId: number, text: string) {
   const payload = await aiInterpret(cmd, today) || { intent: "add", tasks: [{ title: cmd, desc: "", space: guessSpace(cmd), cat: guessCategory(guessSpace(cmd)), due: inferDate(cmd, today), prio: 1 }] };
   if (payload.intent === "clarify") { await send(chatId, escapeHtml(payload.reply || "Уточни, пожалуйста, дату или к какому разделу относится задача.")); return; }
   if (payload.intent === "list_today" || payload.intent === "list_tasks" || payload.intent === "list_week") { await send(chatId, "Напиши /today, /week или /tasks."); return; }
-  if (payload.intent === "note") { p.data.inbox = Array.isArray(p.data.inbox) ? p.data.inbox : []; p.data.inbox.unshift({ text: String(payload.note || cmd), d: today }); await saveProfile(userId, p.data); await send(chatId, "Сохранил в заметки."); return; }
+  if (payload.intent === "note") { p.data.inbox = Array.isArray(p.data.inbox) ? p.data.inbox : []; p.data.inbox.unshift({ text: String(payload.note || cmd), d: today }); await saveProfile(userId, p.data, p.baseData); await send(chatId, "Сохранил в заметки."); return; }
   if (payload.intent === "help") { await send(chatId, "Напиши задачу обычным текстом, отправь голосовое или используй /today, /week, /tasks."); return; }
   const incoming = Array.isArray(payload.tasks) ? payload.tasks : [];
   if (!incoming.length) { await send(chatId, "Не понял, что сохранить. Попробуй сформулировать как задачу."); return; }
@@ -176,7 +176,7 @@ async function handleText(chatId: number, userId: number, text: string) {
     p.data.tasks.push(task); created.push(task);
   }
   if (!created.length) { await send(chatId, "Не смог выделить название задачи."); return; }
-  await saveProfile(userId, p.data);
+  await saveProfile(userId, p.data, p.baseData);
   const summary = created.map((x, i) => (i + 1) + ". <b>" + escapeHtml(x.title) + "</b>" + (x.due ? " · " + x.due : "")).join("\n");
   await send(chatId, "Сохранил в MYDAY и синхронизировал с приложением:\n" + summary, taskKeyboard(created.map((x): [string, string] => [String(x.id), String(x.title)])));
 }
@@ -188,8 +188,8 @@ async function handleCallback(q: AnyRecord) {
   const p = await getProfile(userId), parts = data.split(":"), id = parts.slice(1).join(":");
   const task = (p.data.tasks || []).find((x: AnyRecord) => String(x.id) === id);
   if (!task) { await send(chatId, "Эта задача уже не найдена."); return; }
-  if (parts[0] === "done") { task.status = 2; await saveProfile(userId, p.data); await send(chatId, "✓ Выполнено: <b>" + escapeHtml(task.title) + "</b>"); }
-  else if (parts[0] === "tomorrow") { task.due = shiftDate(isoToday(p.data.settings?.timezone || TZ), 1); await saveProfile(userId, p.data); await send(chatId, "Перенёс на завтра: <b>" + escapeHtml(task.title) + "</b>"); }
+  if (parts[0] === "done") { task.status = 2; await saveProfile(userId, p.data, p.baseData); await send(chatId, "✓ Выполнено: <b>" + escapeHtml(task.title) + "</b>"); }
+  else if (parts[0] === "tomorrow") { task.due = shiftDate(isoToday(p.data.settings?.timezone || TZ), 1); await saveProfile(userId, p.data, p.baseData); await send(chatId, "Перенёс на завтра: <b>" + escapeHtml(task.title) + "</b>"); }
 }
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
