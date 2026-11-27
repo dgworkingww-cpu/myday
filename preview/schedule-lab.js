@@ -482,7 +482,7 @@
       const result=await extractFile(file);
       importDraft.records=result.records.slice(0,2000);
       importDraft.groups=result.groups;
-      importDraft.selectedGroup='';
+      importDraft.selectedGroup=result.groups.includes(S.settings.studyGroup||'')?(S.settings.studyGroup||''):'';
       importDraft.sourceType=result.groups.length?'university':'';
       if(result.groups.length)importDraft.status='Найдено групп: '+result.groups.length+'. Выбери свою группу: чужие занятия в импорт не попадут.';
       else importDraft.status=result.records.length?'Группы не обнаружены. Похоже, файл содержит личное расписание. Проверь предпросмотр.':'Не удалось уверенно распознать расписание. Проверь формат файла или используй Excel/CSV с названиями групп в заголовках.';
@@ -517,7 +517,10 @@
     const target=d.target||'study',mode=d.mode==='auto'?(selectedRecords.some(x=>x.week)?'alternating':'fixed'):d.mode;
     if(target==='study'&&mode==='dates'&&selectedRecords.some(x=>!x.date)){alert('В режиме конкретных дат у каждой записи должна быть дата. Открой строки без даты и укажи её.');return}
     if(d.replace&&!confirm('Заменить существующие записи в выбранных днях? Это действие нельзя отменить.'))return;
-    if(target==='study')cfg().studyMode=mode;
+    if(target==='study'){
+      cfg().studyMode=mode;
+      if(d.selectedGroup)S.settings.studyGroup=d.selectedGroup;
+    }
     const changed=new Set(),cleared=new Set();
     selectedRecords.forEach(r=>{
       if(!r.subj||!r.s||!r.e||r.e<=r.s)return;
