@@ -46,7 +46,7 @@ function makePdf(lines) {
   page.on('requestfailed',r=>failed.push(r.url()+': '+(r.failure()?.errorText||'failed')));
   await page.route('https://telegram.org/**',route=>route.fulfill({
     status:200,contentType:'application/javascript',
-    body:'window.Telegram={WebApp:{initData:"test-init-data",ready(){},expand(){},showAlert(){},close(){}}};'
+    body:'window.Telegram={WebApp:{initData:"test-init-data",initDataUnsafe:{user:{id:12345}},ready(){},expand(){},showAlert(){},close(){}}};'
   }));
   await page.route('https://rzgsctbvgzerqizfjhuq.supabase.co/functions/v1/myday-document-analyze',async route=>{
     const body=route.request().postDataJSON();
@@ -88,6 +88,8 @@ function makePdf(lines) {
     await page.locator('#save').click();
     await page.getByText(/Сохранено в MYDAY: 1/).waitFor({timeout:15000});
     if(!savedProfile || savedProfile.tasks.length!==1 || savedProfile.events.length!==0) throw new Error('Selected-item import did not save the expected profile');
+    const cache=await page.evaluate(()=>({profile:localStorage.getItem('myday2:user:12345'),base:localStorage.getItem('myday2:sync-base:12345'),revision:localStorage.getItem('myday2:sync-revision:12345')}));
+    if(!cache.profile||!cache.base||cache.revision!=='1') throw new Error('Local MYDAY cache was not aligned after cloud save');
     const pngBase64=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=1800;c.height=500;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.fillStyle='#000';x.font='bold 130px Arial';x.fillText('MYDAY OCR TEST 123',90,300);return c.toDataURL('image/png').split(',')[1]});
     await page.locator('#file').setInputFiles({name:'ocr-sample.png',mimeType:'image/png',buffer:Buffer.from(pngBase64,'base64')});
     await page.getByText('Изображение готово к распознаванию.').waitFor();
