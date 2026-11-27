@@ -40,8 +40,8 @@ const server = http.createServer((req,res) => {
     await page.locator('#app .page-title').waitFor({timeout:5000});
     await page.locator('#app .hero-card').waitFor({timeout:5000});
     if(await page.locator('#nav button svg').count()!==5) throw new Error('New SVG navigation icons did not render');
-    await page.locator('#app .app-header').waitFor();
-    const quickCapture=page.locator('#app .app-header button[onclick="capture()"]');
+    await page.locator('#app .page-top').waitFor();
+    const quickCapture=page.locator('#app .page-top button[onclick="capture()"]');
     if(await quickCapture.count()!==1) throw new Error('Today screen did not expose the quick-capture action: '+JSON.stringify(await page.locator('#app').innerText()));
     await quickCapture.click();
     const sheet=page.locator('#ov .sheet');
@@ -54,7 +54,7 @@ const server = http.createServer((req,res) => {
     await page.locator('.ov').waitFor({state:'detached'});
 
     // Arbitrary text is captured as an inbox note by default, without forcing a task category.
-    await page.locator('#app .app-header button[onclick="capture()"]').click();
+    await page.locator('#app .page-top button[onclick="capture()"]').click();
     await page.locator('#ov #cq').waitFor();
     await page.locator('#ov #cq').fill('MYDAY freeform note with a link https://example.com');
     const captureDefault=await page.locator('#ov #capture-kind').inputValue();
