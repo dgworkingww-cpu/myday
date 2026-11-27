@@ -83,6 +83,12 @@ async function markUpdate(updateId: number) {
   const rows = await r.json();
   return Array.isArray(rows) && rows.length > 0;
 }
+function inferTime(text: string) {
+  const m = text.toLowerCase().match(/(?:в|на)\\s*(\\d{1,2})[:.](\\d{2})/);
+  if (!m) return "";
+  const h = Number(m[1]), min = Number(m[2]);
+  return h <= 23 && min <= 59 ? String(h).padStart(2, "0") + ":" + String(min).padStart(2, "0") : "";
+}
 function inferDate(text: string, today: string) {
   const t = text.toLowerCase();
   if (/\bпослезавтра\b/.test(t)) return shiftDate(today, 2);
@@ -102,7 +108,7 @@ function guessCategory(space: string) { return space === "study" ? "Учёба" 
 async function aiInterpret(text: string, today: string, mode = "text"): Promise<AnyRecord | null> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) return null;
-  const prompt = `Ты — парсер личного планировщика MYDAY. Сегодня ${today}. Извлеки намерение из сообщения на русском языке. Верни только JSON: {"intent":"add|add_event|list_today|list_week|list_tasks|complete|delete|reschedule|note|help|clarify","tasks":[{"title":"...","desc":"","space":"study|work|personal","cat":"Учёба|Работа и проекты|Другое","due":"YYYY-MM-DD или пусто","prio":0}],"events":[{"title":"...","type":"Экзамен|Зачёт|Консультация|Сдача работы|Событие","date":"YYYY-MM-DD"}],"task_query":"","note":"","reply":""}. Не выдумывай сроки: ставь дату только если она явно следует из текста. При нескольких делах создай несколько tasks. При неоднозначном намерении выбери clarify и задай один короткий вопрос. prio: 0 высокий, 1 обычный, 2 низкий. ${mode === "voice" ? "Текст получен из голосового сообщения." : ""}`;
+  const prompt = `Ты — парсер личного планировщика MYDAY. Сегодня ${today}. Извлеки намерение из сообщения на русском языке. Верни только JSON: {"intent":"add|add_event|list_today|list_week|list_tasks|complete|delete|reschedule|note|help|clarify","tasks":[{"title":"...","desc":"","space":"study|work|personal","cat":"Учёба|Работа и проекты|Другое","due":"YYYY-MM-DD или пусто","prio":0}],"events":[{"title":"...","type":"Экзамен|Зачёт|Консультация|Сдача работы|Событие","date":"YYYY-MM-DD","time":"HH:MM или пусто"}],"task_query":"","note":"","reply":""}. Не выдумывай сроки: ставь дату только если она явно следует из текста. При нескольких делах создай несколько tasks. При неоднозначном намерении выбери clarify и задай один короткий вопрос. prio: 0 высокий, 1 обычный, 2 низкий. ${mode === "voice" ? "Текст получен из голосового сообщения." : ""}`;
   const r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ model: "gpt-4o-mini", temperature: 0.1, response_format: { type: "json_object" }, messages: [{ role: "system", content: prompt }, { role: "user", content: text.slice(0, 8000) }] }) });
   if (!r.ok) throw new Error("AI parsing failed: " + r.status);
   const d = await r.json();
@@ -153,7 +159,7 @@ async function handleText(chatId: number, userId: number, text: string) {
     const label = mode === "today" ? "План на сегодня" : mode === "week" ? "План на ближайшие 7 дней" : "Все открытые задачи";
     if (!list.length && !events.length) { await send(chatId, label + ": пока пусто. Подозрительно, но пользуйся моментом."); return; }
     const taskLines = list.slice(0, 20).map((x: AnyRecord, i: number) => (i + 1) + ". " + escapeHtml(x.title) + (x.due ? " · " + x.due : ""));
-    const eventLines = events.slice(0, 10).map((x: AnyRecord) => "📌 " + escapeHtml(x.title) + " · " + x.date);
+    const eventLines = events.slice(0, 10).map((x: AnyRecord) => "📌 " + escapeHtml(x.title) + " · " + x.date + (x.time ? " · " + x.time : ""));
     await send(chatId, "<b>" + label + "</b>\n" + [...taskLines, ...eventLines].join("\n"), taskKeyboard(list.slice(0, 8).map((x: AnyRecord): [string, string] => [String(x.id), String(x.title)])));
     return;
   }
@@ -175,7 +181,7 @@ async function handleText(chatId: number, userId: number, text: string) {
     const incomingEvents = Array.isArray(payload.events) ? payload.events : [];
     if (!incomingEvents.length) { await send(chatId, "Не смог определить событие и дату. Напиши, например: «Экзамен по теплотехнике 12.12»."); return; }
     p.data.events = Array.isArray(p.data.events) ? p.data.events : [];
-    const createdEvents = incomingEvents.slice(0, 10).map((x: AnyRecord) => ({ id: uid(), title: String(x.title || cmd).slice(0, 240), type: String(x.type || "Событие"), date: /^\\d{4}-\\d{2}-\\d{2}$/.test(String(x.date || "")) ? x.date : inferDate(cmd, today) || today }));
+    const createdEvents = incomingEvents.slice(0, 10).map((x: AnyRecord) => ({ id: uid(), title: String(x.title || cmd).slice(0, 240), type: String(x.type || "Событие"), date: /^\\d{4}-\\d{2}-\\d{2}$/.test(String(x.date || "")) ? x.date : inferDate(cmd, today) || today, time: /^\\d{2}:\\d{2}$/.test(String(x.time || "")) ? x.time : inferTime(cmd) }));
     p.data.events.push(...createdEvents);
     await saveProfile(userId, p.data, p.baseData);
     await send(chatId, "Добавил событие в календарь MYDAY:\\n" + createdEvents.map((x: AnyRecord) => "📌 <b>" + escapeHtml(x.title) + "</b> · " + x.date).join("\\n"));
