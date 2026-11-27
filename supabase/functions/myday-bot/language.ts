@@ -132,7 +132,7 @@ export function inferTimeRange(text: string): { start: string; end: string } | n
   const startRaw = spoken ? spoken[1] : numeric?.[1];
   const endRaw = spoken ? spoken[2] : numeric?.[2];
   if (!startRaw || !endRaw) return null;
-  const start = parseClock(startRaw);
+  let start = parseClock(startRaw);
   let end = parseClock(endRaw);
   if (!start || !end) return null;
   let startHour = Number(start.slice(0, 2));
