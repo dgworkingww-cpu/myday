@@ -574,7 +574,7 @@ function tick(){
   if(L.length||due.length||shift){
    const parts=[];
    if(L.length)parts.push((S.scheduleConfig&&S.scheduleConfig.studyMode==='alternating'?wkName(wk()).split(' ')[0]+' неделя. ':'')+L.map(l=>l.s+' — '+l.subj).join('\n'));
-   if(shift)parts.push('Работа: '+shift.s+'–'+shift.e+' · '+shift.subj);
+   if(shift)parts.push(shift._shiftKind==='recovery'?'Работа: отсыпной день':'Работа: '+shift.s+'–'+shift.e+' · '+shift.subj);
    if(due.length)parts.push('Задачи: '+due.map(x=>x.title).slice(0,5).join(', '));
    const txt='Сегодня '+DAYS[n.getDay()].toLowerCase()+'.\n'+parts.join('\n\n');
    if(!notify('Доброе утро!',txt))sheet('<h1>Доброе утро!</h1><p style="white-space:pre-line">'+e(txt)+'</p><button class="btn" onclick="close_()">Ок</button>');
