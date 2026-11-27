@@ -47,6 +47,7 @@ jobs:
           node tests/ui-smoke.cjs
           BROWSER=webkit node tests/ui-smoke.cjs
           node tests/ocr-smoke.cjs
+          BROWSER=webkit node tests/ocr-smoke.cjs
       - name: Check JavaScript syntax
         run: |
           node <<'NODE'
