@@ -125,22 +125,18 @@ export async function extractScheduleDocument(
   }
 
   if (ext === "pdf" || /application\/pdf/i.test(mime)) {
-    // Load the large PDF engine only for PDF uploads so it does not inflate the main bot deployment bundle.
-    const pdfjs = await import("npm:pdfjs-dist@4.10.38/legacy/build/pdf.mjs");
-    const pdf = await pdfjs.getDocument({ data: bytes, useSystemFonts: true, isEvalSupported: false }).promise;
-    const pages = Math.min(pdf.numPages, 40);
-    if (pdf.numPages > pages) warnings.push("Обработаны первые 40 страниц PDF.");
-    const chunks: string[] = [];
-    for (let pageNumber = 1; pageNumber <= pages; pageNumber++) {
-      const page = await pdf.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const items = content.items as unknown as Array<{ str?: string; hasEOL?: boolean }>;
-      const line = items.map((item) => String(item.str || "") + (item.hasEOL ? "\n" : " ")).join("");
-      if (line.trim()) chunks.push("СТРАНИЦА " + pageNumber + "\n" + line);
-    }
-    const text = chunks.join("\n\n").replace(/[ \t]+\n/g, "\n").trim();
-    if (text.length < 40) throw new Error("В PDF не удалось извлечь текст. Похоже, это скан или документ из изображений. Пришли страницы PDF отдельными фотографиями, тогда распознаю их.");
-    return { text: text.slice(0, 45000), format: "PDF", warnings };
+    // PDF.js is isolated in its own Edge Function to keep the main bot bundle below Supabase's upload limit.
+    const base = (Deno.env.get("SUPABASE_URL") || "").replace(/\/+$/, "");
+    const secret = Deno.env.get("MYDAY_WEBHOOK_SECRET") || "";
+    if (!base || !secret) throw new Error("Не настроен внутренний сервис обработки PDF.");
+    const response = await fetch(base + "/functions/v1/myday-pdf-parser", {
+      method: "POST",
+      headers: { "Content-Type": "application/pdf", "x-myday-internal-secret": secret, "x-myday-filename": encodeURIComponent(filename) },
+      body: bytes,
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result?.text) throw new Error(String(result?.error || "Не удалось извлечь текст из PDF."));
+    return { text: String(result.text).slice(0, 45000), format: "PDF", warnings: Array.isArray(result.warnings) ? result.warnings : warnings };
   }
 
   if (ext === "doc") throw new Error("Старый формат DOC не поддерживается напрямую. Сохрани документ как DOCX или PDF и отправь ещё раз.");
