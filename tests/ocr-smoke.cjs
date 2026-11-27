@@ -1,0 +1,92 @@
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const { chromium } = require('playwright');
+
+const root = process.cwd();
+const mime = { '.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'application/javascript; charset=utf-8','.json':'application/json; charset=utf-8','.webmanifest':'application/manifest+json; charset=utf-8','.svg':'image/svg+xml','.png':'image/png' };
+const server = http.createServer((req,res) => {
+  const pathname = decodeURIComponent(new URL(req.url,'http://127.0.0.1').pathname);
+  const relative = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+  const file = path.resolve(root,relative);
+  if (!file.startsWith(root + path.sep)) { res.writeHead(403).end(); return; }
+  fs.readFile(file,(err,data) => {
+    if (err) { res.writeHead(404).end('Not found'); return; }
+    res.writeHead(200,{'content-type':mime[path.extname(file)] || 'application/octet-stream'}); res.end(data);
+  });
+});
+
+function makePdf(lines) {
+  const pageCount = lines.length, fontId = 3 + pageCount * 2, objects = [];
+  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objects[2] = '<< /Type /Pages /Kids [' + lines.map((_,i)=>(3+i*2)+' 0 R').join(' ') + '] /Count ' + pageCount + ' >>';
+  lines.forEach((line,i) => {
+    const pageId=3+i*2, contentId=pageId+1;
+    objects[pageId]='<< /Type /Page /Parent 2 0 R /MediaBox [0 0 420 300] /Resources << /Font << /F1 '+fontId+' 0 R >> >> /Contents '+contentId+' 0 R >>';
+    const stream='BT /F1 20 Tf 40 180 Td ('+line+') Tj ET';
+    objects[contentId]='<< /Length '+Buffer.byteLength(stream)+' >>\nstream\n'+stream+'\nendstream';
+  });
+  objects[fontId]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+  let pdf='%PDF-1.4\n%MYDAY\n', offsets=[0];
+  for(let i=1;i<objects.length;i++){offsets[i]=Buffer.byteLength(pdf);pdf+=i+' 0 obj\n'+objects[i]+'\nendobj\n'}
+  const xref=Buffer.byteLength(pdf);pdf+='xref\n0 '+objects.length+'\n0000000000 65535 f \n';
+  for(let i=1;i<objects.length;i++)pdf+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
+  pdf+='trailer\n<< /Size '+objects.length+' /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF';
+  return Buffer.from(pdf,'binary');
+}
+
+(async () => {
+  await new Promise(resolve => server.listen(4174,'127.0.0.1',resolve));
+  const browser=await chromium.launch({headless:true});
+  const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
+  const page=await context.newPage();
+  const errors=[],failed=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  page.on('requestfailed',r=>failed.push(r.url()+': '+(r.failure()?.errorText||'failed')));
+  await page.route('https://telegram.org/**',route=>route.fulfill({
+    status:200,contentType:'application/javascript',
+    body:'window.Telegram={WebApp:{initData:"test-init-data",ready(){},expand(){},showAlert(){},close(){}}};'
+  }));
+  await page.route('https://rzgsctbvgzerqizfjhuq.supabase.co/functions/v1/myday-document-analyze',async route=>{
+    const body=route.request().postDataJSON();
+    if(!body.text || !body.text.includes('MYDAY PDF PAGE ONE')) return route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({error:'Test text missing'})});
+    return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,analysis:{
+      documentType:'Учебный документ',title:'Тестовый документ',summary:'Проверка сквозного сценария MYDAY.',
+      keyPoints:['В документе две страницы.'],warnings:[],
+      proposals:{tasks:[{title:'Проверочная задача',description:'Из PDF',dueDate:null,priority:'medium',category:'Учёба'}],
+        homework:[],events:[{title:'Проверочное событие',date:'2026-12-01',time:'12:00',endTime:'13:00',type:'Учёба'}],schedule:[]}
+    }})});
+  });
+  let savedProfile=null;
+  await page.route('https://rzgsctbvgzerqizfjhuq.supabase.co/functions/v1/myday-sync',async route=>{
+    const body=route.request().postDataJSON();
+    if(body.action==='load') return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({data:{tasks:[],hw:[],events:[],sched:{odd:{},even:{}}},revision:0})});
+    if(body.action==='save'){savedProfile=body.data;return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,revision:1})})}
+    return route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:'Unknown action'})});
+  });
+  try {
+    await page.goto('http://127.0.0.1:4174/ocr.html',{waitUntil:'domcontentloaded'});
+    await page.locator('#file').waitFor();
+    if(await page.locator('#extract').isDisabled()!==true) throw new Error('Extract must be disabled until a file is selected');
+    await page.locator('#file').setInputFiles({name:'two-pages.pdf',mimeType:'application/pdf',buffer:makePdf(['MYDAY PDF PAGE ONE','MYDAY PDF PAGE TWO'])});
+    await page.getByText(/PDF открыт\. Страниц: 2/).waitFor({timeout:15000});
+    if(await page.locator('#pageNo').inputValue()!=='1') throw new Error('PDF preview did not start at page 1');
+    await page.locator('#next').click();
+    if(await page.locator('#pageNo').inputValue()!=='2') throw new Error('Next page control did not work');
+    await page.locator('#prev').click();
+    if(await page.locator('#pageNo').inputValue()!=='1') throw new Error('Previous page control did not work');
+    await page.locator('#extract').click();
+    await page.locator('#textPanel').waitFor({state:'visible',timeout:20000});
+    const extracted=await page.locator('#output').inputValue();
+    if(!extracted.includes('MYDAY PDF PAGE ONE')||!extracted.includes('MYDAY PDF PAGE TWO')) throw new Error('PDF text extraction failed: '+extracted);
+    await page.locator('#analyze').click();
+    await page.locator('#resultPanel').waitFor({state:'visible',timeout:15000});
+    await page.getByText('Проверочная задача',{exact:true}).waitFor();
+    await page.locator('input[data-kind="events"]').uncheck();
+    await page.locator('#save').click();
+    await page.getByText(/Сохранено в MYDAY: 1/).waitFor({timeout:15000});
+    if(!savedProfile || savedProfile.tasks.length!==1 || savedProfile.events.length!==0) throw new Error('Selected-item import did not save the expected profile');
+    if(errors.length) throw new Error('Browser runtime errors: '+errors.join(' | '));
+    console.log(JSON.stringify({result:'passed',tests:['file selection','PDF preview','next/previous page controls','two-page text extraction','AI analysis UI','selective import','cloud profile save'],savedTasks:savedProfile.tasks.length,savedEvents:savedProfile.events.length,errors,failedRequests:failed},null,2));
+  } finally { await context.close();await browser.close();await new Promise(resolve=>server.close(resolve)); }
+})().catch(error=>{console.error(error);process.exitCode=1;server.close();});
