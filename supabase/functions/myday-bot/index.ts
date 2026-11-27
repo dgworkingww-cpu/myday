@@ -101,7 +101,7 @@ async function markUpdate(updateId: number) {
   const base = Deno.env.get("SUPABASE_URL")!.replace(/\/+$/, "");
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || (() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}").default || ""; } catch { return ""; } })();
   const r = await fetch(base + "/rest/v1/myday_bot_updates?on_conflict=update_id", { method: "POST", headers: { apikey: key, "Content-Type": "application/json", Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify({ update_id: updateId }) });
-  if (!r.ok) throw new Error("Update deduplication failed");
+  if (!r.ok) { const details = (await r.text()).slice(0, 500); throw new Error("Update deduplication failed: HTTP " + r.status + (details ? " · " + details : "")); }
   const rows = await r.json();
   return Array.isArray(rows) && rows.length > 0;
 }
