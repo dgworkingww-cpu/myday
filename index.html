@@ -562,7 +562,7 @@ function close_(){const o=$('#ov');if(o){o.id='';o.classList.add('bye');setTimeo
 function capture(){
  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
  sheet(`<h1>Быстрая запись</h1><textarea id="cq" oninput="capHint()" placeholder="Напиши что угодно: мысль, просьбу, идею, ссылку, черновик…"></textarea><div id="chint" style="min-height:26px;margin-bottom:6px"></div><div id="tpl" style="margin-bottom:6px">${tplHtml()}</div>
- <label>Срок (необязательно)</label><input type="date" id="cd">${dch('cd')}<label>Сохранить как</label><select id="ck"><option value="i">Входящие · любой текст</option><option value="t">Задача</option></select>
+ <label>Срок (необязательно)</label><input type="date" id="cd">${dch('cd')}<label>Сохранить как</label><select id="ck"><option value="i" selected>Входящие · любой текст</option><option value="t">Задача</option></select>
  <div class="row">${SR?'<button class="btn g" onclick="voice()">🎤 Голос</button>':''}<button class="btn g" onclick="tplAdd()">★</button><button class="btn grow" onclick="capSave()">Сохранить</button></div>
  ${SR?'':'<div class="tag">Голосовой ввод в браузере недоступен — используйте значок микрофона на клавиатуре iPhone.</div>'}
  <div class="tag">Если в тексте несколько дел через «и» / «;», можно разбить на отдельные задачи. Срок ставится, только если вы выбрали дату или написали «сегодня», «завтра», «послезавтра».</div>
