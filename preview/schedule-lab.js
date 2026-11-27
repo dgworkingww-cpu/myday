@@ -249,7 +249,7 @@
     const out=[];
     matches.forEach((m,index)=>{
       let s=normalizeTime(m[1],m[2]),eTime=normalizeTime(m[3],m[4]);if(eTime<=s)return;
-      let rest=text.replace(m[0],' ').replace(/\b(понедельник|вторник|среда|четверг|пятница|суббота|воскресенье|пн|вт|ср|чт|пт|сб|вс)\b/ig,' ').replace(/неч[её]тн(?:ая|ой)?|ч[её]тн(?:ая|ой)?|нижн(?:яя|ей)?|верхн(?:яя|ей)?/ig,' ').replace(/\b(20\d{2}[-.]\d{1,2}[-.]\d{1,2}|\d{1,2}[.]\d{1,2}[.]20\d{2})\b/g,' ').replace(/^\s*\d+[.)]?\s*/,'').trim();
+      let rest=text.replace(m[0],' ').replace(/(^|[^а-яё])(?:понедельник|вторник|среда|четверг|пятница|суббота|воскресенье|пн|вт|ср|чт|пт|сб|вс)(?=$|[^а-яё])/ig,' ').replace(/неч[её]тн(?:ая|ой)?|ч[её]тн(?:ая|ой)?|нижн(?:яя|ей)?|верхн(?:яя|ей)?/ig,' ').replace(/\b(20\d{2}[-.]\d{1,2}[-.]\d{1,2}|\d{1,2}[.]\d{1,2}[.]20\d{2})\b/g,' ').replace(/^\s*\d+[.)]?\s*/,'').trim();
       const parts=rest.split(/\s*[|;]\s*|\s*,\s*/).filter(Boolean);
       let subj=(parts[0]||rest||'Занятие').replace(/^(предмет|дисциплина)\s*[:\-]\s*/i,'').trim();
       const roomMatch=rest.match(/(?:ауд\.?|каб\.?|кабинет|корпус)\s*([А-ЯA-Z0-9\-\/]+)/i);
@@ -320,7 +320,13 @@
       }
       if(records.length)return records;
     }
-    for(const row of matrix)parseLine(row.filter(Boolean).join(' | '),{day:null,week:''}).forEach(add);
+    let contextDay=null,contextWeek='';
+    for(const row of matrix){
+      const joined=row.filter(Boolean).join(' | '),lower=joined.toLowerCase();
+      for(const [name,n] of Object.entries(DAY_NAMES)){if(new RegExp('(^|[^а-яё])'+name+'(?=$|[^а-яё])','i').test(lower)){contextDay=n;break}}
+      if(/неч[её]тн|нижн/.test(lower))contextWeek='odd';else if(/ч[её]тн|верхн/.test(lower))contextWeek='even';
+      parseLine(joined,{day:contextDay,week:contextWeek}).forEach(add);
+    }
     return records;
   }
   function normalizeClock(value) {
@@ -351,11 +357,11 @@
       pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;let lines=[];
       for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p),tc=await page.getTextContent();lines.push(tc.items.map(x=>x.str+(x.hasEOL?'\n':' ')).join('').split(/\r?\n/).filter(Boolean).join('\n'))}
-      records=lines.flatMap(x=>parseLine(x,{day:null,week:''}));if(!records.length)records=parseRows(lines.map(x=>[x]));
+      records=parseRows(lines.map(x=>[x]));
     } else if(['jpg','jpeg','png'].includes(ext)){
       await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',()=>!!window.Tesseract);
       const result=await Tesseract.recognize(file,'rus+eng',{logger:m=>{if(importDraft)importDraft.status=m.status==='recognizing text'?'Распознаю изображение…':'Подготавливаю распознавание…';}});
-      records=result.data.text.split(/\r?\n/).flatMap(x=>parseLine(x,{day:null,week:''}));
+      records=parseRows(result.data.text.split(/\r?\n/).map(x=>[x]));
     } else throw new Error('Формат файла не поддерживается.');
     return records;
   }
@@ -482,7 +488,7 @@
   window.MYDAY_LAB={
     readFile, setDraft, editDraft, saveDraftItem, removeDraftItem, applyImport, clearDraft(){importDraft=null;render()},
     setStudyMode,setCycleWeeks,setCycleAnchor,setLayer,selectDate,selectWorkDate,setWorkMode,setWorkPreset,saveWorkSettings,toggleWorkException,
-    toggleWidget,moveWidget,addHabit,toggleHabit,deleteHabit,workShiftForDate,workShiftList
+    toggleWidget,moveWidget,addHabit,toggleHabit,deleteHabit,workShiftForDate,workShiftList,parseRows,parseLine
   };
   window.MYDAY_LAB_VERSION=LAB_VERSION;
   window.render();
