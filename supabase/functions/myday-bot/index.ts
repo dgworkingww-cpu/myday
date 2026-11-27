@@ -677,7 +677,7 @@ Deno.serve(async (req: Request) => {
         } else { await send(chatId, "Файл получил. Для импорта Excel/DOCX пока используй раздел импорта внутри Mini App."); return json({ ok: true }); }
       }
       if (text) { failureStage = "обработка текстового сообщения"; await handleText(chatId, userId, text); }
-      else if (!m.voice && !m.audio && !m.photo && !m.document) await send(chatId, "Напиши задачу текстом или отправь голосовое. Команды: /today, /week, /tasks, /app.");
+      else if (!m.voice && !m.audio && !m.photo && !m.document) await send(chatId, "Напиши задачу, событие или домашнюю работу текстом либо отправь голосовое/фото. Команды: /today, /tomorrow, /day дата, /week, /tasks, /events, /homework, /app.");
     }
     return json({ ok: true });
   } catch (error) {
