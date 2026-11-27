@@ -14,7 +14,7 @@ on:
       - 'tests/**'
       - '.github/workflows/frontend-checks.yml'
   push:
-    branches: [main, redesign/myday-apple-2026-v2]
+    branches: [main, redesign/myday-apple-2026-v2, feature/myday-telegram-assistant]
     paths:
       - 'index.html'
       - 'schedule-lab.js'
