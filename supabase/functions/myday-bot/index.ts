@@ -147,11 +147,14 @@ async function handleText(chatId: number, userId: number, text: string) {
   if (/^\/(today|week|tasks)\b/i.test(cmd)) {
     const mode = cmd.match(/^\/(\w+)/)![1];
     const tasks = (Array.isArray(p.data.tasks) ? p.data.tasks : []).filter((x: AnyRecord) => Number(x.status || 0) !== 2);
-    const list = mode === "today" ? tasks.filter((x: AnyRecord) => !x.due || x.due <= today) : mode === "week" ? tasks.filter((x: AnyRecord) => !x.due || x.due <= shiftDate(today, 7)) : tasks;
-    const label = mode === "today" ? "Задачи на сегодня" : mode === "week" ? "Задачи на ближайшие 7 дней" : "Все открытые задачи";
-    if (!list.length) { await send(chatId, label + ": пока пусто. Подозрительно, но пользуйся моментом."); return; }
-    const lines = list.slice(0, 20).map((x: AnyRecord, i: number) => (i + 1) + ". " + escapeHtml(x.title) + (x.due ? " · " + x.due : "")).join("\n");
-    await send(chatId, "<b>" + label + "</b>\n" + lines, taskKeyboard(list.slice(0, 8).map((x: AnyRecord): [string, string] => [String(x.id), String(x.title)])));
+    const end = mode === "today" ? today : shiftDate(today, 7);
+    const list = mode === "today" ? tasks.filter((x: AnyRecord) => !x.due || x.due <= today) : mode === "week" ? tasks.filter((x: AnyRecord) => !x.due || x.due <= end) : tasks;
+    const events = mode === "tasks" ? [] : (Array.isArray(p.data.events) ? p.data.events : []).filter((x: AnyRecord) => x.date >= today && x.date <= end).sort((a: AnyRecord, b: AnyRecord) => a.date.localeCompare(b.date));
+    const label = mode === "today" ? "План на сегодня" : mode === "week" ? "План на ближайшие 7 дней" : "Все открытые задачи";
+    if (!list.length && !events.length) { await send(chatId, label + ": пока пусто. Подозрительно, но пользуйся моментом."); return; }
+    const taskLines = list.slice(0, 20).map((x: AnyRecord, i: number) => (i + 1) + ". " + escapeHtml(x.title) + (x.due ? " · " + x.due : ""));
+    const eventLines = events.slice(0, 10).map((x: AnyRecord) => "📌 " + escapeHtml(x.title) + " · " + x.date);
+    await send(chatId, "<b>" + label + "</b>\n" + [...taskLines, ...eventLines].join("\n"), taskKeyboard(list.slice(0, 8).map((x: AnyRecord): [string, string] => [String(x.id), String(x.title)])));
     return;
   }
   if (/^\/done\s+/i.test(cmd)) {
