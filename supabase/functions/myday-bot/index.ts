@@ -920,7 +920,7 @@ Deno.serve(async (req: Request) => {
         const declaredSize = Number(m.document.file_size || 0);
         const maxFileSize = 20 * 1024 * 1024;
         if (declaredSize > maxFileSize) {
-          await send(chatId, "Файл весит " + (declaredSize / 1024 / 1024).toFixed(1) + " МБ. Через Telegram Bot API сейчас можно скачать документ размером до 20 МБ. Раздели файл на части или отправь только страницы с расписанием.");
+          await send(chatId, "Файл весит " + (declaredSize / 1024 / 1024).toFixed(1) + " МБ. Бот не может скачать его напрямую из Telegram, но MYDAY может обработать файл на твоём устройстве без платного API. Открой локальный распознаватель, выбери этот PDF через приложение «Файлы», затем отправь полученный TXT обратно сюда.", [[{ text: "Открыть бесплатное распознавание", web_app: { url: "https://dgworkingww-cpu.github.io/myday/ocr.html" } }]]);
           return json({ ok: true });
         }
         failureStage = "скачивание документа из Telegram";
@@ -975,10 +975,15 @@ Deno.serve(async (req: Request) => {
     }
     if (fallbackChatId) {
       try {
-        const message = String(error).includes("MYDAY_AI_DAILY_LIMIT")
-          ? "На сегодня исчерпан лимит AI-запросов MYDAY (100). Голосовые и фото временно недоступны; обычные команды и текстовые задачи продолжают работать в базовом режиме."
-          : "Не получилось обработать сообщение.\nЭтап: " + failureStage + ".\nПричина: " + (error instanceof Error ? error.message : "неизвестная ошибка") + ".\nПроверь /tasks, чтобы не создать дубликат.";
-        await send(fallbackChatId, message);
+        const errorText = error instanceof Error ? error.message : "неизвестная ошибка";
+        if (errorText.includes("MYDAY_LOCAL_OCR_REQUIRED")) {
+          await send(fallbackChatId, "📄 Похоже, это скан или изображение. Платный OCR не нужен: распознаем документ прямо на твоём устройстве.\n\n1. Открой локальный распознаватель.\n2. Выбери исходный PDF или фото из приложения «Файлы».\n3. Скачай распознанный TXT и отправь его сюда.\n\nНичего не добавлено в расписание или задачи.", [[{ text: "Открыть бесплатное распознавание", web_app: { url: "https://dgworkingww-cpu.github.io/myday/ocr.html" } }]]);
+        } else {
+          const message = String(error).includes("MYDAY_AI_DAILY_LIMIT")
+            ? "На сегодня исчерпан лимит AI-запросов MYDAY (100). Голосовые и фото временно недоступны; обычные команды и текстовые задачи продолжают работать в базовом режиме."
+            : "Не получилось обработать сообщение.\nЭтап: " + failureStage + ".\nПричина: " + errorText + ".\nПроверь /tasks, чтобы не создать дубликат.";
+          await send(fallbackChatId, message);
+        }
       } catch { /* Telegram may be temporarily unavailable */ }
     }
     return json({ ok: false, retry: true }, 500);
