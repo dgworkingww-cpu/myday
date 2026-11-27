@@ -48,26 +48,40 @@ export function inferDate(text: string, today: string): string {
   if (/(?:^|[^а-яё])сегодня(?=$|[^а-яё])/.test(t)) return today;
   const numeric = t.match(/(?:до|к|на|в|от)\s*(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/);
   if (numeric) {
-    let year = numeric[3] ? Number(numeric[3].length === 2 ? "20" + numeric[3] : numeric[3]) : Number(today.slice(0, 4));
+    const year = numeric[3] ? Number(numeric[3].length === 2 ? "20" + numeric[3] : numeric[3]) : Number(today.slice(0, 4));
     let candidate = year + "-" + numeric[2].padStart(2, "0") + "-" + numeric[1].padStart(2, "0");
     if (!numeric[3] && candidate < today) candidate = (year + 1) + candidate.slice(4);
     return validDate(candidate) ? candidate : "";
   }
-  const inWeeks = t.match(/через\s+(\d+)\s+недел/);\n  if (inWeeks) return shiftIsoDate(today, Math.min(365, Number(inWeeks[1]) * 7));\n  const inDays = t.match(/через\s+(\d+)\s+д(?:ень|ня|ней)/);
+  const inWeeks = t.match(/через\s+(\d+)\s+недел/);
+  if (inWeeks) return shiftIsoDate(today, Math.min(365, Number(inWeeks[1]) * 7));
+  const inDays = t.match(/через\s+(\d+)\s+д(?:ень|ня|ней)/);
   if (inDays) return shiftIsoDate(today, Math.min(365, Number(inDays[1])));
   if (/через\s+недел/.test(t)) return shiftIsoDate(today, 7);
-  const dayWord = t.match(/(?:^|[^а-яё])(в|на|к|до)\s+(следующ(?:ий|ую|ем|его)|эту|этот)\s+(понедельник|вторник|среду?|четверг|пятниц(?:у|а)|субботу?|воскресенье|пн|вт|ср|чт|пт|сб|вс)(?=$|[^а-яё])/);\n  const shortDayWord = dayWord || t.match(/(?:^|[^а-яё])(в|на|к|до)\s+(понедельник|вторник|среду?|четверг|пятниц(?:у|а)|субботу?|воскресенье|пн|вт|ср|чт|пт|сб|вс)(?=$|[^а-яё])/);
-  if (dayWord) {
-    const key = dayWord[3] === "среду" ? "среда" : dayWord[3] === "пятницу" ? "пятница" : dayWord[3] === "субботу" ? "суббота" : dayWord[3];
+
+  const dayMatch = t.match(/(?:^|[^а-яё])(в|на|к|до)\s+(?:(следующ(?:ий|ую|ем|его)|эту|этот)\s+)?(понедельник|вторник|среду?|четверг|пятниц(?:у|а)|субботу?|воскресенье|пн|вт|ср|чт|пт|сб|вс)(?=$|[^а-яё])/);
+  if (dayMatch) {
+    const dayToken = dayMatch[3];
+    const qualifier = dayMatch[2] || "";
+    const key = dayToken === "среду" ? "среда" : dayToken === "пятницу" ? "пятница" : dayToken === "субботу" ? "суббота" : dayToken;
     const target = WEEKDAYS[key];
     if (target !== undefined) {
       const current = new Date(today + "T12:00:00Z").getUTCDay();
       let delta = (target - current + 7) % 7;
-      const nextWeek = /следующ(?:ей|ую)\\s+недел/.test(t);\n      if (/^следующ/.test(qualifier) || nextWeek || (delta === 0 && !/^эту|^этот/.test(qualifier))) delta += 7;
+      const nextWeek = /следующ(?:ей|ую)\s+недел/.test(t);
+      if (/^следующ/.test(qualifier) || nextWeek || (delta === 0 && !/^эту|^этот/.test(qualifier))) delta += 7;
       return shiftIsoDate(today, delta);
     }
   }
-  if (/начал(?:е|а)\s+следующ(?:ей|ую)\s+недел/.test(t)) {\n    const current = new Date(today + "T12:00:00Z").getUTCDay();\n    return shiftIsoDate(today, ((1 - current + 7) % 7) + 7);\n  }\n  if (/выходн|к\s+выходным/.test(t)) {\n    const current = new Date(today + "T12:00:00Z").getUTCDay();\n    return shiftIsoDate(today, ((6 - current + 7) % 7) || 7);\n  }\n  if (/конц(?:е|а)\s+недел|к\s+концу\s+недели|к\s+выходным/.test(t)) {
+  if (/начал(?:е|а)\s+следующ(?:ей|ую)\s+недел/.test(t)) {
+    const current = new Date(today + "T12:00:00Z").getUTCDay();
+    return shiftIsoDate(today, ((1 - current + 7) % 7) || 7);
+  }
+  if (/выходн|к\s+выходным/.test(t)) {
+    const current = new Date(today + "T12:00:00Z").getUTCDay();
+    return shiftIsoDate(today, ((6 - current + 7) % 7) || 7);
+  }
+  if (/конц(?:е|а)\s+недел|к\s+концу\s+недели/.test(t)) {
     const current = new Date(today + "T12:00:00Z").getUTCDay();
     return shiftIsoDate(today, ((5 - current + 7) % 7) || 7);
   }
