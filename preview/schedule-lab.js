@@ -10,6 +10,7 @@
     S.scheduleConfig = S.scheduleConfig || { studyMode:'alternating', cycleWeeks:2, cycleAnchor:'', selectedDate:'' };
     S.workConfig = S.workConfig || { mode:'weekly', pattern:['work','work','off','off'], anchorDate:'', start:'09:00', end:'18:00', title:'Рабочая смена', exceptions:{} };
     S.workConfig.exceptions = S.workConfig.exceptions || {};
+    S.settings.notifications = { study:true, work:true, personal:true, ...(S.settings.notifications||{}) };
     S.settings.dashboard = S.settings.dashboard || { workShift:true, habits:false, notes:false };
     S.settings.dashboardOrder = Array.isArray(S.settings.dashboardOrder) ? S.settings.dashboardOrder : ['workShift','habits','notes'];
     S.habits = Array.isArray(S.habits) ? S.habits : [];
@@ -89,6 +90,13 @@
   }
 
   function injectTools(html) {
+    if(st!==null)return html;
+    const N=S.settings.notifications||{study:true,work:true,personal:true};
+    const notificationPanel='<section class="section"><div class="section-head"><div><h2>Уведомления по разделам</h2><p class="section-caption">Можно отключать независимо друг от друга.</p></div></div><div class="surface-panel">'+
+      '<label class="lab-check"><input type="checkbox" '+(N.study===false?'':'checked')+' onchange="MYDAY_LAB.toggleNotification(\'study\',this.checked)"> Учёба: пары и домашние задания</label>'+
+      '<label class="lab-check"><input type="checkbox" '+(N.work===false?'':'checked')+' onchange="MYDAY_LAB.toggleNotification(\'work\',this.checked)"> Работа: смены и рабочие задачи</label>'+
+      '<label class="lab-check"><input type="checkbox" '+(N.personal===false?'':'checked')+' onchange="MYDAY_LAB.toggleNotification(\'personal\',this.checked)"> Личное: задачи и напоминания</label>'+
+      '<p class="page-sub">Напоминания работают, пока приложение активно. iOS может приостанавливать их в фоне.</p></div></section>';
     const extra = '<section class="section lab-tools"><div class="section-head"><div><h2>Расширенные возможности</h2><p class="section-caption">Импорт, графики и личная настройка</p></div></div><div class="settings-list">' +
       labTool('schedule-settings','Тип расписания','Фиксированное, сменное по неделям, цикл или даты','calendar') +
       labTool('schedule-import','Импорт расписания','Excel, PDF, Word, CSV и фотографии','inbox') +
@@ -96,7 +104,7 @@
       labTool('personalize','Главный экран','Виджеты и порядок блоков','settings') +
       labTool('habits','Привычки','Небольшой трекер ежедневных действий','stats') +
       '</div></section>';
-    return html.replace('</main>', extra + '</main>');
+    return html.replace('</main>', notificationPanel + extra + '</main>');
   }
   function labTool(route,title,desc,icon) {
     return '<button class="settings-card" type="button" onclick="st=\''+route+'\';render()"><span class="settings-icon">'+mydayIcon(icon,16)+'</span><span class="settings-copy"><b>'+title+'</b><small>'+desc+'</small></span><span class="settings-arrow">'+mydayIcon('chevron',16)+'</span></button>';
@@ -443,6 +451,7 @@
     c.exceptions[date]=has?'off':{off:false,title:c.title||'Рабочая смена',start:c.start||'09:00',end:c.end||'18:00'};
     save();render();
   }
+  function toggleNotification(key,value){S.settings.notifications=S.settings.notifications||{study:true,work:true,personal:true};S.settings.notifications[key]=!!value;save();render()}
   function toggleWidget(key,value){S.settings.dashboard[key]=!!value;save();render()}
   function moveWidget(index,delta){const a=S.settings.dashboardOrder,j=index+delta;if(j<0||j>=a.length)return;[a[index],a[j]]=[a[j],a[index]];save();render()}
   function addHabit(){const name=document.querySelector('#habit-name').value.trim();if(!name)return;S.habits.push({id:id(),name,log:{}});save();render()}
@@ -488,7 +497,7 @@
   window.MYDAY_LAB={
     readFile, setDraft, editDraft, saveDraftItem, removeDraftItem, applyImport, clearDraft(){importDraft=null;render()},
     setStudyMode,setCycleWeeks,setCycleAnchor,setLayer,selectDate,selectWorkDate,setWorkMode,setWorkPreset,saveWorkSettings,toggleWorkException,
-    toggleWidget,moveWidget,addHabit,toggleHabit,deleteHabit,workShiftForDate,workShiftList,parseRows,parseLine
+    toggleNotification,toggleWidget,moveWidget,addHabit,toggleHabit,deleteHabit,workShiftForDate,workShiftList,parseRows,parseLine
   };
   window.MYDAY_LAB_VERSION=LAB_VERSION;
   window.render();
