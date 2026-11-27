@@ -450,7 +450,8 @@ async function handleText(chatId: number, userId: number, text: string) {
   else if (/^(?:запомни|сохрани заметку|заметка:|идея:)/i.test(cmd)) fallbackPayload = { intent: "note", note: cmd.replace(/^(?:запомни|сохрани заметку|заметка:|идея:)\s*/i, "") };
   else if (fallbackHomework) fallbackPayload = { intent: "add_homework", homework: [{ subject: fallbackSubject, title: cmd, desc: "", due: inferDate(cmd, today) }] };
   else if (eventLike || hasSpokenTimeRange) fallbackPayload = { intent: "add_event", tasks: [], events: [{ title: guessEventTitle(cmd), type: guessEventTitle(cmd), date: inferDate(cmd, today), time: timeRange?.start || inferTime(cmd), endTime: timeRange?.end || "" }] };
-  else fallbackPayload = { intent: "add", tasks: [{ title: cmd, desc: inferTime(cmd) ? "Время дедлайна: " + inferTime(cmd) : "", space: fallbackSpace, cat: guessCategory(fallbackSpace), due: inferDate(cmd, today), prio: 1 }] };
+  else if (/^(?:сдать|сделать|подготовить|купить|позвонить|отправить|оплатить|заказать|проверить|прочитать|написать|выполнить|закончить|повторить|переписать|переделать|доделать|решить|выучить|убрать|забрать|отнести|сходить|съездить)\b/i.test(cmd) || /\b(?:мне нужно|мне надо|надо не забыть|поставь задачу|добавь задачу)\b/i.test(cmd)) fallbackPayload = { intent: "add", tasks: [{ title: cmd, desc: inferTime(cmd) ? "Время дедлайна: " + inferTime(cmd) : "", space: fallbackSpace, cat: guessCategory(fallbackSpace), due: inferDate(cmd, today), prio: 1 }] };
+  else fallbackPayload = { intent: "chat", reply: "Похоже, ты хочешь просто обсудить это, а не записать задачу. Сейчас ИИ временно недоступен, поэтому не буду ничего добавлять в MYDAY наугад. Попробуй ещё раз чуть позже." };
   failureStage = "распознавание текста";
   const payload = await aiInterpret(cmd, today, userId, "text", profileContext, chatHistory) || fallbackPayload;
 
