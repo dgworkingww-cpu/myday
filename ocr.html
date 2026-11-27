@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#efeae2"><title>MYDAY · Распознавание документов</title>
+<link rel="stylesheet" href="./design-system.css">
+<style>
+body{margin:0;background:var(--bg,#efeae2);color:var(--text,#252522);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:24px 16px 48px}.panel{background:var(--card,#fff);border:1px solid var(--line,#ddd);border-radius:22px;padding:20px;margin:14px 0}
+h1{font-size:26px;letter-spacing:-.7px;margin:8px 0}.muted{opacity:.68;font-size:14px;line-height:1.5}.btn{border:0;border-radius:14px;padding:14px 18px;font-weight:650;font-size:15px;background:#282824;color:white;width:100%;margin-top:10px}.btn:disabled{opacity:.4}
+input[type=file]{width:100%;padding:14px;border:1px dashed #aaa;border-radius:14px;background:transparent}
+.progress{height:8px;border-radius:8px;background:#ddd;overflow:hidden;margin:12px 0}.progress i{display:block;height:100%;width:0;background:#6c8d78;transition:width .2s}
+#output{width:100%;min-height:180px;box-sizing:border-box;border:1px solid var(--line,#ddd);border-radius:14px;padding:12px;background:transparent;color:inherit;font:13px/1.5 ui-monospace,monospace}
+.steps{padding-left:20px;line-height:1.6}.status{font-size:14px;min-height:22px;margin-top:8px}.tag{display:inline-block;border-radius:20px;padding:5px 10px;background:#6c8d781c;font-size:12px}
+</style></head>
+<body><main class="wrap">
+<div class="muted">MYDAY · ЛОКАЛЬНАЯ ОБРАБОТКА</div>
+<h1>Распознавание документа</h1>
+<p class="muted">Текст извлекается прямо на этом устройстве. Без OCR API, платных ключей и отправки исходного документа стороннему OCR-сервису. Первый запуск скачает языковую модель русского языка.</p>
+<section class="panel">
+<b>1. Выбери PDF или изображение</b>
+<p class="muted">Поддерживаются PDF, JPG, PNG и WEBP. Большие файлы можно обрабатывать здесь, даже если Telegram-бот не может их скачать. На iPhone выбери документ через «Обзор» в приложении «Файлы».</p>
+<input id="file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/*">
+<label class="muted" style="display:block;margin-top:14px">Максимум страниц PDF: <b id="pageLimitLabel">20</b></label>
+<input id="pageLimit" type="range" min="1" max="40" value="20" style="width:100%">
+<button class="btn" id="start">Распознать на устройстве</button>
+<div class="progress"><i id="bar"></i></div><div class="status" id="status">Ожидаю файл.</div>
+</section>
+<section class="panel">
+<b>2. Проверь распознанный текст</b>
+<p class="muted">После распознавания скачай TXT-файл и отправь его этому боту. MYDAY обработает его как обычный документ и предложит импорт, не добавляя ничего без подтверждения.</p>
+<textarea id="output" placeholder="Здесь появится распознанный текст…" readonly></textarea>
+<button class="btn" id="download" disabled>Скачать распознанный TXT</button>
+<button class="btn" id="copy" disabled style="background:transparent;color:inherit;border:1px solid var(--line,#ccc)">Скопировать текст</button>
+</section>
+<section class="panel muted">
+<b>Как это работает</b>
+<ol class="steps"><li>PDF открывается в браузере и разбивается на страницы.</li><li>Каждая страница распознаётся локальным движком Tesseract.</li><li>Результат собирается в TXT, который можно отправить боту.</li></ol>
+<p>Распознавание больших документов может занять несколько минут. Не закрывай эту страницу до завершения.</p>
+</section>
+</main>
+<script type="module">
+import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs';
+import { createWorker } from 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js';
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+const $=id=>document.getElementById(id);
+let recognized='';
+$('pageLimit').addEventListener('input',()=> $('pageLimitLabel').textContent=$('pageLimit').value);
+function progress(p,msg){$('bar').style.width=Math.max(0,Math.min(100,p))+'%';$('status').textContent=msg}
+async function recognize(){
+ const file=$('file').files?.[0];if(!file){progress(0,'Сначала выбери файл.');return}
+ $('start').disabled=true;$('download').disabled=true;$('copy').disabled=true;recognized='';$('output').value='';
+ let worker=null;
+ try{
+  progress(2,'Загружаю бесплатный движок распознавания…');
+  worker=await createWorker('rus+eng',1,{logger:m=>{if(m.status==='recognizing text')progress(8+Math.round((m.progress||0)*85),'Распознаю страницу… '+Math.round((m.progress||0)*100)+'%')}});
+  const chunks=[];
+  if(file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf')){
+   progress(5,'Открываю PDF…');
+   const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer(),useSystemFonts:true,isEvalSupported:false}).promise;
+   const total=Math.min(pdf.numPages,Number($('pageLimit').value));
+   for(let n=1;n<=total;n++){
+    progress(5+(n-1)/total*90,'Обрабатываю страницу '+n+' из '+total+'…');
+    const page=await pdf.getPage(n),viewport=page.getViewport({scale:1.8});
+    const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
+    canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+    await page.render({canvasContext:ctx,viewport}).promise;
+    const result=await worker.recognize(canvas);
+    const text=String(result.data.text||'').trim();if(text)chunks.push('СТРАНИЦА '+n+'\n'+text);
+    canvas.width=1;canvas.height=1;page.cleanup();
+   }
+   if(pdf.numPages>total)chunks.push('[ОБРЕЗАНО: обработаны первые '+total+' страниц из '+pdf.numPages+']');
+  }else{
+   progress(10,'Распознаю изображение…');
+   const result=await worker.recognize(file);chunks.push(String(result.data.text||'').trim());
+  }
+  recognized=chunks.join('\n\n').trim();
+  if(recognized.length<20)throw new Error('Не удалось уверенно распознать текст. Попробуй более чёткий скан.');
+  $('output').value=recognized;$('download').disabled=false;$('copy').disabled=false;
+  progress(100,'Готово. Распознано символов: '+recognized.length+'.');
+ }catch(err){progress(0,'Ошибка: '+(err?.message||err))}
+ finally{if(worker)try{await worker.terminate()}catch{}$('start').disabled=false}
+}
+$('start').addEventListener('click',recognize);
+$('download').addEventListener('click',()=>{
+ const blob=new Blob(['\ufeff'+recognized],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download='MYDAY-распознанный-документ.txt';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
+});
+$('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(recognized);progress(100,'Текст скопирован.')}catch{ $('output').readOnly=false;$('output').focus();$('output').select();progress(100,'Выделил текст. Скопируй его вручную.');$('output').readOnly=true}});
+</script></body></html>
