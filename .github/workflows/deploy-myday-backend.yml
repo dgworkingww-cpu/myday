@@ -57,20 +57,33 @@ jobs:
       - name: Apply database migrations
         run: supabase db push --linked --yes
 
-      - name: Set Telegram bot token
+      - name: Set Telegram bot and assistant secrets
         shell: bash
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
           umask 077
           secret_file="$RUNNER_TEMP/myday-function-secrets.env"
-          printf 'TELEGRAM_BOT_TOKEN=%s\n' "$TELEGRAM_BOT_TOKEN" > "$secret_file"
+          webhook_secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$webhook_secret"
+          {
+            printf 'TELEGRAM_BOT_TOKEN=%s\n' "$TELEGRAM_BOT_TOKEN"
+            printf 'MYDAY_WEBHOOK_SECRET=%s\n' "$webhook_secret"
+            if [[ -n "${OPENAI_API_KEY:-}" ]]; then
+              printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
+            fi
+          } > "$secret_file"
           supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$secret_file" --yes
           rm -f "$secret_file"
+          printf '%s' "$webhook_secret" > "$RUNNER_TEMP/myday-webhook-secret"
 
       - name: Deploy Telegram-authenticated sync function
         run: supabase functions deploy myday-sync --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Deploy MYDAY Telegram assistant
+        run: supabase functions deploy myday-bot --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Verify Telegram bot token identity
         shell: bash
@@ -94,6 +107,21 @@ jobs:
             console.log('Verified Telegram bot: @' + actualUsername + ' (id ' + result.result.id + ')');
           })().catch(error => { console.error(error); process.exit(1); });
           NODE
+
+      - name: Register MYDAY Telegram webhook
+        shell: bash
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ env.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          webhook_secret="$(cat "$RUNNER_TEMP/myday-webhook-secret")"
+          response="$(curl --fail --silent --show-error \
+            -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+            -H 'Content-Type: application/json' \
+            --data "$(jq -n --arg url "https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/myday-bot" --arg secret "$webhook_secret" '{url:$url,secret_token:$secret,allowed_updates:["message","callback_query"],drop_pending_updates:false}')")"
+          echo "$response" | jq -e '.ok == true' >/dev/null
+          echo "MYDAY webhook registered successfully."
 
       - name: Check frontend JavaScript syntax
         shell: bash
