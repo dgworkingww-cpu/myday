@@ -1,0 +1,206 @@
+// MYDAY Telegram assistant webhook.
+// Receives private bot messages, writes into the same per-user profile as the Mini App.
+const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type,x-telegram-bot-api-secret-token", "Access-Control-Allow-Methods": "POST,OPTIONS" };
+const enc = new TextEncoder();
+const TZ = "Europe/Moscow";
+
+type AnyRecord = Record<string, any>;
+const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { ...cors, "Content-Type": "application/json" } });
+const isoToday = (tz = TZ) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+function shiftDate(date: string, days: number) { const d = new Date(date + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
+function uid() { return crypto.randomUUID(); }
+function escapeHtml(s: unknown) { return String(s ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]!)); }
+function profileSeed(): AnyRecord {
+  return { v: 2, settings: { theme: "auto", morning: "07:30", shift: 0, notif: true, hwDelay: 60, notifications: { study: true, work: true, personal: true } }, sched: { odd: {}, even: {}, work: {}, fixed: {}, cycle: {}, dates: {} }, scheduleConfig: { studyMode: "alternating", cycleWeeks: 2, cycleAnchor: "", selectedDate: "" }, workConfig: { mode: "weekly", pattern: ["work", "work", "off", "off"], anchorDate: "", start: "09:00", end: "18:00", title: "Рабочая смена", exceptions: {} }, habits: [], tasks: [], inbox: [], fired: {}, done: [], uni: { name: "", url: "", login: "", notes: "", links: "", teachers: "" }, subjects: [], hw: [], exc: [], events: [] };
+}
+async function tg(method: string, body: AnyRecord) {
+  const token = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
+  const r = await fetch("https://api.telegram.org/bot" + token + "/" + method, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await r.json();
+  if (!r.ok || !data.ok) throw new Error("Telegram " + method + " failed: " + (data.description || r.status));
+  return data.result;
+}
+async function send(chatId: number, text: string, keyboard?: AnyRecord[][]) {
+  return await tg("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}) });
+}
+async function getProfile(telegramId: number) {
+  const base = Deno.env.get("SUPABASE_URL")!.replace(/\/+$/, "");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || (() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}").default || ""; } catch { return ""; } })();
+  if (!key) throw new Error("Supabase server key missing");
+  const headers = { apikey: key, "Content-Type": "application/json" };
+  const url = base + "/rest/v1/myday_profiles?telegram_id=eq." + telegramId + "&select=data,revision";
+  const r = await fetch(url, { headers });
+  if (!r.ok) throw new Error("Profile load failed: " + r.status);
+  const rows = await r.json();
+  return { data: rows[0]?.data || profileSeed(), revision: Number(rows[0]?.revision || 0), base, key, headers };
+}
+async function saveProfile(telegramId: number, p: AnyRecord) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const current = await getProfile(telegramId);
+    const r = await fetch(current.base + "/rest/v1/rpc/myday_sync_profile", { method: "POST", headers: current.headers, body: JSON.stringify({ p_telegram_id: telegramId, p_data: p, p_expected_revision: current.revision }) });
+    if (!r.ok) throw new Error("Profile save failed: " + r.status);
+    const rows = await r.json();
+    const result = Array.isArray(rows) ? rows[0] : rows;
+    if (result && !result.conflict) return;
+  }
+  throw new Error("Не удалось сохранить: профиль одновременно изменяется в приложении. Повторите действие.");
+}
+async function markUpdate(updateId: number) {
+  const base = Deno.env.get("SUPABASE_URL")!.replace(/\/+$/, "");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || (() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}").default || ""; } catch { return ""; } })();
+  const r = await fetch(base + "/rest/v1/myday_bot_updates?on_conflict=update_id", { method: "POST", headers: { apikey: key, "Content-Type": "application/json", Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify({ update_id: updateId }) });
+  if (!r.ok) throw new Error("Update deduplication failed");
+  const rows = await r.json();
+  return Array.isArray(rows) && rows.length > 0;
+}
+function inferDate(text: string, today: string) {
+  const t = text.toLowerCase();
+  if (/\bпослезавтра\b/.test(t)) return shiftDate(today, 2);
+  if (/\bзавтра\b/.test(t)) return shiftDate(today, 1);
+  if (/\bсегодня\b/.test(t)) return today;
+  const m = t.match(/(?:до|к|на)\s+(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/);
+  if (m) { const y = m[3] ? Number(m[3].length === 2 ? "20" + m[3] : m[3]) : Number(today.slice(0,4)); return y + "-" + m[2].padStart(2,"0") + "-" + m[1].padStart(2,"0"); }
+  return "";
+}
+function guessSpace(text: string) {
+  const t = text.toLowerCase();
+  if (/пара|лекци|лаборатор|курсов|преподав|зач[её]т|экзамен|универ|предмет|домашн/.test(t)) return "study";
+  if (/работ|смен|заказ|клиент|проект|офис/.test(t)) return "work";
+  return "personal";
+}
+function guessCategory(space: string) { return space === "study" ? "Учёба" : space === "work" ? "Работа и проекты" : "Другое"; }
+async function aiInterpret(text: string, today: string, mode = "text"): Promise<AnyRecord | null> {
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) return null;
+  const prompt = `Ты — парсер личного планировщика MYDAY. Сегодня ${today}. Извлеки намерение из сообщения на русском языке. Верни только JSON: {"intent":"add|list_today|list_week|list_tasks|complete|delete|reschedule|note|help|clarify","tasks":[{"title":"...","desc":"","space":"study|work|personal","cat":"Учёба|Работа и проекты|Другое","due":"YYYY-MM-DD или пусто","prio":0,"time":"HH:MM или пусто"}],"task_query":"","note":"","reply":""}. Не выдумывай сроки: ставь дату только если она явно следует из текста. При нескольких делах создай несколько tasks. При неоднозначном намерении выбери clarify и задай один короткий вопрос. prio: 0 высокий, 1 обычный, 2 низкий. ${mode === "voice" ? "Текст получен из голосового сообщения." : ""}`;
+  const r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ model: "gpt-4o-mini", temperature: 0.1, response_format: { type: "json_object" }, messages: [{ role: "system", content: prompt }, { role: "user", content: text.slice(0, 8000) }] }) });
+  if (!r.ok) throw new Error("AI parsing failed: " + r.status);
+  const d = await r.json();
+  try { return JSON.parse(d.choices?.[0]?.message?.content || "{}"); } catch { return null; }
+}
+async function telegramFile(fileId: string) {
+  const token = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
+  const meta = await (await fetch("https://api.telegram.org/bot" + token + "/getFile?file_id=" + encodeURIComponent(fileId))).json();
+  if (!meta.ok || !meta.result?.file_path) throw new Error("Не удалось получить файл из Telegram");
+  const r = await fetch("https://api.telegram.org/file/bot" + token + "/" + meta.result.file_path);
+  if (!r.ok) throw new Error("Не удалось скачать файл из Telegram");
+  return { blob: await r.blob(), name: meta.result.file_path.split("/").pop() || "voice.ogg" };
+}
+async function transcribe(fileId: string) {
+  if (!Deno.env.get("OPENAI_API_KEY")) return "";
+  const { blob, name } = await telegramFile(fileId);
+  const form = new FormData(); form.append("file", new File([blob], name, { type: blob.type || "audio/ogg" })); form.append("model", "whisper-1"); form.append("language", "ru");
+  const r = await fetch("https://api.openai.com/v1/audio/transcriptions", { method: "POST", headers: { Authorization: "Bearer " + Deno.env.get("OPENAI_API_KEY")! }, body: form });
+  if (!r.ok) throw new Error("Не удалось распознать голос: " + r.status);
+  const d = await r.json(); return String(d.text || "");
+}
+async function vision(fileId: string) {
+  if (!Deno.env.get("OPENAI_API_KEY")) return "";
+  const { blob } = await telegramFile(fileId);
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = ""; for (const b of bytes) binary += String.fromCharCode(b);
+  const dataUrl = "data:" + (blob.type || "image/jpeg") + ";base64," + btoa(binary);
+  const r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { Authorization: "Bearer " + Deno.env.get("OPENAI_API_KEY")!, "Content-Type": "application/json" }, body: JSON.stringify({ model: "gpt-4o-mini", response_format: { type: "json_object" }, messages: [{ role: "system", content: "Извлеки с изображения задания, сроки, предметы и события. Верни JSON {intent:'add',tasks:[{title,desc,space,cat,due,prio}]} . Не выдумывай нечитаемый текст и даты." }, { role: "user", content: [{ type: "text", text: "Разбери фото как входящее задание для MYDAY." }, { type: "image_url", image_url: { url: dataUrl } }] }] }) });
+  if (!r.ok) throw new Error("Не удалось разобрать фото: " + r.status);
+  const d = await r.json(); try { return JSON.parse(d.choices?.[0]?.message?.content || "{}"); } catch { return ""; }
+}
+function taskKeyboard(tasks: AnyRecord[][]) { return tasks.map(([id, title]) => [{ text: "✓ " + String(title).slice(0, 35), callback_data: "done:" + id }, { text: "Завтра", callback_data: "tomorrow:" + id }]); }
+async function handleText(chatId: number, userId: number, text: string) {
+  const cmd = text.trim();
+  if (/^\/(start|help)(\s|$)/i.test(cmd)) {
+    await send(chatId, "Привет! Я <b>MYDAY Assistant</b> — твой планировщик прямо в Telegram.\n\nНапиши задачу обычными словами или отправь голосовое. Например: «Сдать лабораторную по теплотехнике до пятницы» или «Завтра в 18:00 тренировка».\n\nКоманды: /today, /week, /tasks, /app, /help", [[{ text: "Сегодня", callback_data: "view:today" }, { text: "Мои задачи", callback_data: "view:tasks" }], [{ text: "Открыть MYDAY", url: "https://dgworkingww-cpu.github.io/myday/" }]]);
+    return;
+  }
+  const p = await getProfile(userId);
+  const today = isoToday(p.data.settings?.timezone || TZ);
+  if (/^\/app\b/i.test(cmd)) { await send(chatId, "Открыть приложение:", [[{ text: "Запустить MYDAY", url: "https://dgworkingww-cpu.github.io/myday/" }]]); return; }
+  if (/^\/(today|week|tasks)\b/i.test(cmd)) {
+    const mode = cmd.match(/^\/(\w+)/)![1];
+    const tasks = (Array.isArray(p.data.tasks) ? p.data.tasks : []).filter((x: AnyRecord) => Number(x.status || 0) !== 2);
+    const list = mode === "today" ? tasks.filter((x: AnyRecord) => !x.due || x.due <= today) : mode === "week" ? tasks.filter((x: AnyRecord) => !x.due || x.due <= shiftDate(today, 7)) : tasks;
+    const label = mode === "today" ? "Задачи на сегодня" : mode === "week" ? "Задачи на ближайшие 7 дней" : "Все открытые задачи";
+    if (!list.length) { await send(chatId, label + ": пока пусто. Подозрительно, но пользуйся моментом."); return; }
+    const lines = list.slice(0, 20).map((x: AnyRecord, i: number) => (i + 1) + ". " + escapeHtml(x.title) + (x.due ? " · " + x.due : "")).join("\n");
+    await send(chatId, "<b>" + label + "</b>\n" + lines, taskKeyboard(list.slice(0, 8).map((x: AnyRecord) => [x.id, x.title])));
+    return;
+  }
+  if (/^\/done\s+/i.test(cmd)) {
+    const id = cmd.replace(/^\/done\s+/i, "").trim();
+    const t = (p.data.tasks || []).find((x: AnyRecord) => String(x.id) === id);
+    if (!t) { await send(chatId, "Не нашёл такую задачу."); return; }
+    t.status = 2; await saveProfile(userId, p.data); await send(chatId, "Готово: <b>" + escapeHtml(t.title) + "</b> отмечена выполненной."); return;
+  }
+  const payload = await aiInterpret(cmd, today) || { intent: "add", tasks: [{ title: cmd, desc: "", space: guessSpace(cmd), cat: guessCategory(guessSpace(cmd)), due: inferDate(cmd, today), prio: 1 }] };
+  if (payload.intent === "clarify") { await send(chatId, escapeHtml(payload.reply || "Уточни, пожалуйста, дату или к какому разделу относится задача.")); return; }
+  if (payload.intent === "list_today" || payload.intent === "list_tasks" || payload.intent === "list_week") { await send(chatId, "Напиши /today, /week или /tasks."); return; }
+  if (payload.intent === "note") { p.data.inbox = Array.isArray(p.data.inbox) ? p.data.inbox : []; p.data.inbox.unshift({ text: String(payload.note || cmd), d: today }); await saveProfile(userId, p.data); await send(chatId, "Сохранил в заметки."); return; }
+  if (payload.intent === "help") { await send(chatId, "Напиши задачу обычным текстом, отправь голосовое или используй /today, /week, /tasks."); return; }
+  const incoming = Array.isArray(payload.tasks) ? payload.tasks : [];
+  if (!incoming.length) { await send(chatId, "Не понял, что сохранить. Попробуй сформулировать как задачу."); return; }
+  p.data.tasks = Array.isArray(p.data.tasks) ? p.data.tasks : [];
+  const created: AnyRecord[] = [];
+  for (const raw of incoming.slice(0, 10)) {
+    const title = String(raw.title || "").trim(); if (!title) continue;
+    const space = ["study", "work", "personal"].includes(raw.space) ? raw.space : guessSpace(title);
+    const task = { id: uid(), title: title.slice(0, 240), desc: String(raw.desc || "").slice(0, 2000), cat: String(raw.cat || guessCategory(space)), space, due: /^\d{4}-\d{2}-\d{2}$/.test(String(raw.due || "")) ? raw.due : inferDate(title, today), prio: [0,1,2].includes(Number(raw.prio)) ? Number(raw.prio) : 1, status: 0, subs: [], repeat: "", created: today };
+    p.data.tasks.push(task); created.push(task);
+  }
+  if (!created.length) { await send(chatId, "Не смог выделить название задачи."); return; }
+  await saveProfile(userId, p.data);
+  const summary = created.map((x, i) => (i + 1) + ". <b>" + escapeHtml(x.title) + "</b>" + (x.due ? " · " + x.due : "")).join("\n");
+  await send(chatId, "Сохранил в MYDAY и синхронизировал с приложением:\n" + summary, taskKeyboard(created.map(x => [x.id, x.title])));
+}
+async function handleCallback(q: AnyRecord) {
+  const userId = Number(q.from?.id), chatId = Number(q.message?.chat?.id), data = String(q.data || "");
+  if (!userId || !chatId) return;
+  await tg("answerCallbackQuery", { callback_query_id: q.id });
+  if (data.startsWith("view:")) { await handleText(chatId, userId, "/" + data.slice(5)); return; }
+  const p = await getProfile(userId), parts = data.split(":"), id = parts.slice(1).join(":");
+  const task = (p.data.tasks || []).find((x: AnyRecord) => String(x.id) === id);
+  if (!task) { await send(chatId, "Эта задача уже не найдена."); return; }
+  if (parts[0] === "done") { task.status = 2; await saveProfile(userId, p.data); await send(chatId, "✓ Выполнено: <b>" + escapeHtml(task.title) + "</b>"); }
+  else if (parts[0] === "tomorrow") { task.due = shiftDate(isoToday(p.data.settings?.timezone || TZ), 1); await saveProfile(userId, p.data); await send(chatId, "Перенёс на завтра: <b>" + escapeHtml(task.title) + "</b>"); }
+}
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  const secret = Deno.env.get("MYDAY_WEBHOOK_SECRET") || "";
+  if (!secret || req.headers.get("x-telegram-bot-api-secret-token") !== secret) return json({ error: "Unauthorized" }, 401);
+  try {
+    const update = await req.json();
+    if (Number.isSafeInteger(update.update_id)) {
+      const fresh = await markUpdate(Number(update.update_id));
+      if (!fresh) return json({ ok: true, duplicate: true });
+    }
+    if (update.callback_query) await handleCallback(update.callback_query);
+    else if (update.message) {
+      const m = update.message, chatId = Number(m.chat?.id), userId = Number(m.from?.id);
+      if (!chatId || !userId || m.chat?.type !== "private") return json({ ok: true });
+      let text = String(m.text || m.caption || "").trim();
+      if (m.voice?.file_id || m.audio?.file_id) {
+        const transcript = await transcribe(m.voice?.file_id || m.audio.file_id);
+        if (!transcript) { await send(chatId, "Голосовое получил, но распознавание пока не подключено. Для него нужен OPENAI_API_KEY в секретах проекта."); return json({ ok: true }); }
+        await send(chatId, "🎙 Распознал: «" + escapeHtml(transcript) + "»\nСекунду, добавляю…");
+        text = transcript;
+      } else if (m.photo?.length) {
+        const parsed = await vision(m.photo[m.photo.length - 1].file_id);
+        if (!parsed || !Array.isArray(parsed.tasks) || !parsed.tasks.length) { await send(chatId, "Фото получил, но не смог уверенно выделить задачи. Пришли более чёткий снимок или текстом."); return json({ ok: true }); }
+        text = parsed.tasks.map((x: AnyRecord) => x.title + (x.due ? " до " + x.due : "")).join("; ");
+      } else if (m.document) {
+        const mime = String(m.document.mime_type || "");
+        if (/text\/(plain|csv)|application\/(json|pdf)/i.test(mime)) {
+          const { blob } = await telegramFile(m.document.file_id);
+          if (blob.size > 1_000_000) { await send(chatId, "Файл слишком большой для быстрой обработки в чате. Максимум 1 МБ."); return json({ ok: true }); }
+          if (/text\/(plain|csv)|application\/json/i.test(mime)) text = await blob.text();
+          else { await send(chatId, "PDF получил. Для точного импорта расписания открой Mini App → Расписание → Импорт. Прямой разбор PDF в чате добавим отдельным этапом."); return json({ ok: true }); }
+        } else { await send(chatId, "Файл получил. Для импорта Excel/DOCX пока используй раздел импорта внутри Mini App."); return json({ ok: true }); }
+      }
+      if (text) await handleText(chatId, userId, text);
+      else if (!m.voice && !m.audio && !m.photo && !m.document) await send(chatId, "Напиши задачу текстом или отправь голосовое. Команды: /today, /week, /tasks, /app.");
+    }
+    return json({ ok: true });
+  } catch (error) {
+    console.error("MYDAY bot webhook error:", error);
+    return json({ ok: true });
+  }
+});
