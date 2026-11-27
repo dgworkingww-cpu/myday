@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feature/multi-user-myday
+      - feature/myday-telegram-assistant
       - main
     paths:
       - '.github/workflows/deploy-myday-backend.yml'
@@ -42,9 +43,10 @@ jobs:
         shell: bash
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           set -euo pipefail
-          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD TELEGRAM_BOT_TOKEN; do
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD TELEGRAM_BOT_TOKEN GROQ_API_KEY; do
             if [[ -z "${!name:-}" ]]; then
               echo "::error::Missing GitHub Actions secret: $name"
               exit 1
