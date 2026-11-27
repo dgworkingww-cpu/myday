@@ -134,8 +134,9 @@ const server = http.createServer((req,res) => {
     await page.locator('#work-night-start').fill('20:00');
     await page.locator('#work-night-end').fill('08:00');
     await page.getByRole('button',{name:'Сохранить цикл'}).click();
-    await page.locator('#nav button').nth(1).click();
-    await page.getByRole('button',{name:'Работа',exact:true}).click();
+    await page.locator('#nav button').nth(4).click();
+    await page.getByRole('button',{name:/Сменный график/}).click();
+    await page.getByRole('button',{name:/Открыть рабочий план/}).click();
     await page.evaluate(()=>MYDAY_LAB.selectWorkDate('2026-11-28'));
     await page.getByText('Дневная смена',{exact:true}).waitFor();
     await page.getByText('08:00–20:00',{exact:true}).waitFor();
