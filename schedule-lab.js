@@ -121,7 +121,14 @@
       '<section class="section"><div class="section-head"><div><h2>Сохранность данных</h2><p class="section-caption">Переключение режима не удаляет старые пары.</p></div></div><div class="empty-state"><b>Ничего не стирается автоматически</b><span>Старые расписания остаются в профиле. Новый режим начинает использовать свой отдельный набор записей.</span></div></section>'+
       '<button class="btn g" type="button" style="width:100%" onclick="st=null;render()">Назад</button></main>';
   }
+  function renderWorkWeeklyPage() {
+    const date=selectedDate(),day=fromIso(date).getDay()||1,bucket=scheduleBucket('work','work'),list=(bucket[day]||[]).slice().sort((a,b)=>a.s.localeCompare(b.s));
+    const dates=selectedWeekDates(date);
+    return '<main class="page">'+mydayHeader('Рабочее расписание','Повторяющийся график по дням недели.',true,true)+'<div class="row lab-date-row"><label for="lab-date">Дата просмотра</label><input id="lab-date" type="date" value="'+date+'" onchange="MYDAY_LAB.selectDate(this.value)"></div><section class="schedule-control"><div class="day-strip">'+dates.map(x=>{const n=fromIso(x).getDay();return '<button class="day-pill '+(n===day?'on ':'')+(x===today()?'today':'')+'" onclick="MYDAY_LAB.selectDate(\\''+x+'\\')"><strong>'+DAYS_SHORT[n]+'</strong><small>'+x.slice(8,10)+'</small></button>'}).join('')+'</div></section><div class="schedule-day-head"><div><div class="eyebrow">'+DAYS_SHORT[day].toUpperCase()+' · '+date+'</div><h2>'+DAYS_SHORT[day]+'</h2><p>'+list.length+' записей</p></div><button class="btn" onclick="lessonForm(\\'work\\')">'+mydayIcon('plus',16)+' Добавить</button></div>'+(list.length?'<section class="schedule-wrap">'+mydayLessons(list,null,l=>'lessonForm(\\'work\\',\\''+l.id+'\\')')+'</section>':mydayEmpty('На этот день записей нет','Добавь рабочее время, встречу или смену.'))+'<div class="schedule-actions"><button class="btn g" onclick="st=\\'work-shifts\\';go(\\'more\\');render()">Настроить смены</button><button class="btn g" onclick="st=\\'schedule-import\\';go(\\'more\\');render()">Импорт файла</button></div></main>';
+  }
+
   function renderSchedulePage() {
+    if(schedSpace==='work')return renderWorkWeeklyPage();
     const c=cfg(),date=selectedDate(),mode=c.studyMode||'alternating';
     const d=fromIso(date),day=d.getDay()||1;
     const bucketKey=editorKey(date);
@@ -356,7 +363,8 @@
     const target=d.target||'study',mode=d.mode==='auto'?(d.records.some(x=>x.week)?'alternating':'fixed'):d.mode;
     if(target==='study'&&mode==='dates'&&d.records.some(x=>!x.date)){alert('В режиме конкретных дат у каждой записи должна быть дата. Открой строки без даты и укажи её.');return}
     if(target==='study')cfg().studyMode=mode;
-    const changed=new Set();
+    if(d.replace&&!confirm('Заменить существующие записи в выбранных днях? Это действие нельзя отменить.'))return;
+    const changed=new Set(),cleared=new Set();
     d.records.forEach(r=>{
       if(!r.subj||!r.s||!r.e||r.e<=r.s)return;
       let key='work';
@@ -364,13 +372,13 @@
         if(mode==='fixed')key='fixed';
         else if(mode==='dates')key='date:'+r.date;
         else if(mode==='cycle')key='cycle:0';
-        else if(mode==='hybrid')key=r.week==='fixed'?'fixed':(r.week==='odd'||r.week==='even'?r.week:wk());
+        else if(mode==='hybrid')key=r.week==='odd'||r.week==='even'?r.week:'fixed';
         else key=r.week==='odd'||r.week==='even'?r.week:wk();
       }
-      const bucket=scheduleBucket(target,key),day=Number(r.day);
+      const bucket=scheduleBucket(target,key),day=Number(r.day),slot=key+'|'+day;
       if(!bucket[day])bucket[day]=[];
-      if(d.replace){bucket[day]=bucket[day].filter(x=>x._importBatch!==true)}
-      bucket[day].push({id:id(),subj:r.subj,s:r.s,e:r.e,room:r.room||'',teacher:r.teacher||'',_importBatch:true});
+      if(d.replace&&!cleared.has(slot)){bucket[day]=[];cleared.add(slot)}
+      bucket[day].push({id:id(),subj:r.subj,s:r.s,e:r.e,room:r.room||'',teacher:r.teacher||''});
       changed.add(key+'|'+day);
     });
     if(!changed.size){alert('В файле нет готовых строк с предметом, днём и временем. Проверь предпросмотр.');return}
@@ -419,6 +427,8 @@
       return '';
     }).join('');
   }
+
+  const labStyle=document.createElement('style');labStyle.textContent='.lab-tools{margin-top:24px}.lab-mode-list{display:grid;gap:8px;margin-top:14px}.lab-mode-item{padding:12px;border:1px solid var(--line);border-radius:14px;display:grid;gap:4px}.lab-mode-item.active{border-color:var(--accent);background:var(--accent-soft)}.lab-mode-item span,.import-drop .page-sub{font-size:13px;color:var(--muted)}.lab-date-row{align-items:center;gap:12px;margin:12px 0}.lab-date-row label{flex:1;margin:0}.lab-date-row input{max-width:180px}.import-drop{position:relative;display:grid;justify-items:center;gap:8px;padding:22px;border:1px dashed var(--line-strong);border-radius:18px;text-align:center;margin-bottom:12px}.import-drop input{width:100%;max-width:100%;font-size:14px}.lab-check{display:flex;align-items:center;gap:10px;margin:14px 0}.lab-check input{width:18px;height:18px}.import-row{width:100%;text-align:left;background:transparent;border:0}.work-shift-card{display:grid;gap:8px;padding:16px;margin-top:14px;border-radius:16px;background:var(--accent-soft)}.work-shift-card strong{font-size:24px}.settings-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}.dashboard-lab-card{margin-top:12px}.dashboard-lab-card .lab-check{margin:8px 0}';document.head.appendChild(labStyle);
 
   const baseSched=window.vSched;
   window.vSched=function(){
