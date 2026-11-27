@@ -4,6 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'ocr.html'
       - 'index.html'
       - 'design-system.css'
       - 'apple-ui.js'
@@ -44,11 +45,13 @@ jobs:
         run: |
           node tests/ui-smoke.cjs
           BROWSER=webkit node tests/ui-smoke.cjs
+          node tests/ocr-smoke.cjs
       - name: Check JavaScript syntax
         run: |
           node <<'NODE'
           const fs = require('node:fs');
           const html = fs.readFileSync('index.html', 'utf8');
+          const ocr = fs.readFileSync('ocr.html', 'utf8');
           const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
             .filter(([, attrs, body]) => !/\bsrc\s*=/.test(attrs) && body.trim())
             .map(([, , body]) => body);
@@ -56,6 +59,10 @@ jobs:
           fs.writeFileSync('/tmp/myday.js', scripts.join('\n;\n'));
           NODE
           node --check /tmp/myday.js
+          const ocrScripts = [...ocr.matchAll(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script>/gi)].filter(([,attrs,body])=>!/\\bsrc\\s*=/.test(attrs)&&body.trim()).map(([, ,body])=>body);
+          if (!ocrScripts.length) throw new Error('OCR page has no inline application script');
+          fs.writeFileSync('/tmp/myday-ocr.js', ocrScripts.join('\\n;\\n'));
+          node --check /tmp/myday-ocr.js
           node --check apple-ui.js
           node --check sw.js
           node --check backend-config.js
