@@ -72,7 +72,7 @@ jobs:
             printf 'TELEGRAM_BOT_TOKEN=%s\n' "$TELEGRAM_BOT_TOKEN"
             printf 'MYDAY_WEBHOOK_SECRET=%s\n' "$webhook_secret"
             if [[ -n "${GROQ_API_KEY:-}" ]]; then
-              printf 'GROQ_API_KEY=%s\\n' "$GROQ_API_KEY"
+              printf 'GROQ_API_KEY=%s\n' "$GROQ_API_KEY"
             fi
           } > "$secret_file"
           supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$secret_file" --yes
