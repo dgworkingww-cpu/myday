@@ -200,6 +200,75 @@ async function vision(fileId: string, userId: number, today: string, subjectName
   if (!r.ok) throw new Error("Не удалось разобрать фото: " + r.status);
   const d = await r.json(); try { return JSON.parse(d.choices?.[0]?.message?.content || "{}"); } catch { return ""; }
 }
+function dateWeekStart(date: string) {
+  const d = new Date(date + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+function isoWeekNumber(date: string) {
+  const d = new Date(date + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+}
+function studyWeekType(data: AnyRecord, date: string) {
+  const settings = data.settings || {};
+  const anchor = settings.weekAnchor || dateWeekStart(isoToday(settings.timezone || TZ));
+  const base = settings.weekAnchorType || (((isoWeekNumber(isoToday(settings.timezone || TZ)) + Number(settings.shift || 0)) % 2) === 1 ? "odd" : "even");
+  const weeks = Math.floor((Date.parse(dateWeekStart(date) + "T12:00:00Z") - Date.parse(dateWeekStart(anchor) + "T12:00:00Z")) / 604800000);
+  return (((base === "odd" ? 0 : 1) + weeks % 2 + 2) % 2) === 0 ? "odd" : "even";
+}
+function scheduleItemsForDate(data: AnyRecord, date: string) {
+  const sched = data.sched || {};
+  const cfg = data.scheduleConfig || {};
+  const day = new Date(date + "T12:00:00Z").getUTCDay();
+  const mode = cfg.studyMode || "alternating";
+  let study: AnyRecord[] = [];
+  if (mode === "fixed") study = [...((sched.fixed || {})[day] || [])];
+  else if (mode === "dates") study = [...((sched.dates || {})[date] || {})[day] || []];
+  else if (mode === "cycle") {
+    const n = Math.max(2, Math.min(4, Number(cfg.cycleWeeks) || 2));
+    const anchor = dateWeekStart(cfg.cycleAnchor || data.settings?.weekAnchor || isoToday(data.settings?.timezone || TZ));
+    const weeks = Math.floor((Date.parse(dateWeekStart(date) + "T12:00:00Z") - Date.parse(anchor + "T12:00:00Z")) / 604800000);
+    const index = ((weeks % n) + n) % n;
+    study = [...(((sched.cycle || {})[index] || {})[day] || [])];
+  } else if (mode === "hybrid") {
+    const type = studyWeekType(data, date);
+    study = [...((sched.fixed || {})[day] || []), ...((sched[type] || {})[day] || [])];
+  } else {
+    const type = studyWeekType(data, date);
+    study = [...((sched[type] || {})[day] || [])];
+  }
+  const exceptions = (Array.isArray(data.exc) ? data.exc : []).filter((x: AnyRecord) => x.date === date);
+  for (const ex of exceptions) {
+    if (ex.type === "cancel") study = study.filter((x: AnyRecord) => String(x.id) !== String(ex.lid));
+    else if (ex.type === "edit") study = study.map((x: AnyRecord) => String(x.id) === String(ex.lid) ? { ...x, ...(ex.o || {}) } : x);
+    else if (ex.type === "add" && ex.o) study.push({ id: ex.id, ...ex.o });
+  }
+  study.sort((a: AnyRecord, b: AnyRecord) => String(a.s || "").localeCompare(String(b.s || "")));
+  const workConfig = data.workConfig || {};
+  let work: AnyRecord[] = [];
+  if (workConfig.mode === "rotation") {
+    const exception = (workConfig.exceptions || {})[date];
+    if (exception && exception.off === false) work = [{ subj: exception.title || workConfig.title || "Рабочая смена", s: exception.start || workConfig.start || "09:00", e: exception.end || workConfig.end || "18:00" }];
+    else if (exception !== "off" && !(exception && exception.off === true)) {
+      const pattern = Array.isArray(workConfig.pattern) && workConfig.pattern.length ? workConfig.pattern : ["work", "work", "off", "off"];
+      const anchor = workConfig.anchorDate || isoToday(data.settings?.timezone || TZ);
+      const days = Math.round((Date.parse(date + "T12:00:00Z") - Date.parse(anchor + "T12:00:00Z")) / 86400000);
+      const item = pattern[((days % pattern.length) + pattern.length) % pattern.length];
+      const isWork = item === "work" || item === 1 || item === "1" || (item && typeof item === "object" && item.type === "work");
+      if (isWork) {
+        const obj = item && typeof item === "object" ? item : {};
+        work = [{ subj: obj.title || workConfig.title || "Рабочая смена", s: obj.start || workConfig.start || "09:00", e: obj.end || workConfig.end || "18:00" }];
+      }
+    }
+  } else work = [...((sched.work || {})[day] || [])];
+  work.sort((a: AnyRecord, b: AnyRecord) => String(a.s || "").localeCompare(String(b.s || "")));
+  return [
+    ...study.map((x: AnyRecord) => ({ kind: "Учёба", title: String(x.subj || "Занятие"), start: String(x.s || ""), end: String(x.e || ""), room: String(x.room || "") })),
+    ...work.map((x: AnyRecord) => ({ kind: "Работа", title: String(x.subj || workConfig.title || "Рабочая смена"), start: String(x.s || ""), end: String(x.e || ""), room: String(x.room || "") }))
+  ];
+}
 function taskKeyboard(tasks: Array<[string, string]>) { return tasks.map(([id, title]) => [{ text: "✓ " + String(title).slice(0, 28), callback_data: "done:" + id }, { text: "Завтра", callback_data: "tomorrow:" + id }, { text: "Удалить", callback_data: "delete:" + id }]); }
 async function handleText(chatId: number, userId: number, text: string) {
   failureStage = "разбор команды";
