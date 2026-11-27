@@ -35,7 +35,7 @@ jobs:
       - name: Type-check document analyzer
         run: deno check supabase/functions/myday-document-analyze/index.ts
       - name: Test Russian assistant date and time parsing
-        run: deno test tests/myday-bot-language.test.ts
+        run: deno test tests/myday-bot-language.test.ts tests/myday-profile-merge.test.ts
       - name: Validate bot deployment configuration
         run: |
           node <<'NODE'
