@@ -61,7 +61,7 @@ jobs:
         shell: bash
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           set -euo pipefail
           umask 077
@@ -71,8 +71,8 @@ jobs:
           {
             printf 'TELEGRAM_BOT_TOKEN=%s\n' "$TELEGRAM_BOT_TOKEN"
             printf 'MYDAY_WEBHOOK_SECRET=%s\n' "$webhook_secret"
-            if [[ -n "${OPENAI_API_KEY:-}" ]]; then
-              printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
+            if [[ -n "${GROQ_API_KEY:-}" ]]; then
+              printf 'GROQ_API_KEY=%s\\n' "$GROQ_API_KEY"
             fi
           } > "$secret_file"
           supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$secret_file" --yes
