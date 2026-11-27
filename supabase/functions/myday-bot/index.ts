@@ -313,7 +313,7 @@ async function handleText(chatId: number, userId: number, text: string) {
   const chatHistory: Array<{ role: "user" | "assistant"; content: string }> = storedHistory.filter((x: AnyRecord) => (x.role === "user" || x.role === "assistant") && typeof x.content === "string").slice(-10);
   if (pending?.kind === "event_details" && Date.now() - Number(pending.createdAt || 0) < 12 * 60 * 60 * 1000) {
     if (isCancellation(cmd)) {
-      p.data.botState = { pending: null };
+      p.data.botState = { ...(p.data.botState || {}), pending: null };
       await saveProfile(userId, p.data, p.baseData);
       await send(chatId, "Отменил незавершённое событие. Ничего не добавлял.");
       return;
@@ -328,13 +328,13 @@ async function handleText(chatId: number, userId: number, text: string) {
       p.data.events = Array.isArray(p.data.events) ? p.data.events : [];
       const title = String(next.title || "Занятие"), endTime = validTime(next.endTime) ? next.endTime : "";
       const duplicate = p.data.events.some((x: AnyRecord) => String(x.title || "").toLocaleLowerCase("ru") === title.toLocaleLowerCase("ru") && x.date === next.date && String(x.time || "") === next.time && String(x.endTime || "") === endTime);
-      p.data.botState = { pending: null };
+      p.data.botState = { ...(p.data.botState || {}), pending: null };
       if (!duplicate) p.data.events.push({ id: uid(), title, type: "Занятие", date: next.date, time: next.time, endTime });
       await saveProfile(userId, p.data, p.baseData);
       await send(chatId, duplicate ? "Такая запись уже есть в календаре. Дубликат не создавал." : "Добавил в календарь MYDAY:\n📌 <b>" + escapeHtml(title) + "</b> · " + next.date + " · " + next.time + (endTime ? "–" + endTime : ""));
       return;
     }
-    p.data.botState = { pending: { ...next, createdAt: Date.now() } };
+    p.data.botState = { ...(p.data.botState || {}), pending: { ...next, createdAt: Date.now() } };
     await saveProfile(userId, p.data, p.baseData);
     await send(chatId, !validDate(next.date) ? "На какой день поставить «" + escapeHtml(next.title || "событие") + "»?" : "Во сколько будет «" + escapeHtml(next.title || "событие") + "»?");
     return;
@@ -342,7 +342,7 @@ async function handleText(chatId: number, userId: number, text: string) {
   if (pending?.kind === "event_date" || pending?.kind === "homework_subject") {
     const age = Date.now() - Number(pending.createdAt || 0);
     if (age < 12 * 60 * 60 * 1000 && isCancellation(cmd)) {
-      p.data.botState = { pending: null };
+      p.data.botState = { ...(p.data.botState || {}), pending: null };
       await saveProfile(userId, p.data, p.baseData);
       await send(chatId, "Отменил незавершённую запись. Ничего не добавлял.");
       return;
@@ -354,10 +354,10 @@ async function handleText(chatId: number, userId: number, text: string) {
     if (age < 12 * 60 * 60 * 1000 && isFollowUp) {
       if (pending.kind === "event_date") cmd = String(pending.raw || "") + " " + cmd;
       else cmd = String(pending.raw || "") + (/^по\s+/i.test(cmd) ? " " : " по ") + cmd;
-      p.data.botState = { pending: null };
+      p.data.botState = { ...(p.data.botState || {}), pending: null };
       await saveProfile(userId, p.data, p.baseData);
     } else if (age >= 12 * 60 * 60 * 1000 || !isFollowUp) {
-      p.data.botState = { pending: null };
+      p.data.botState = { ...(p.data.botState || {}), pending: null };
       await saveProfile(userId, p.data, p.baseData);
     }
   }
@@ -485,27 +485,27 @@ async function handleText(chatId: number, userId: number, text: string) {
   if (eventLike && (payload.intent === "add_event" || payload.intent === "clarify") && (!candidateDate || !candidateRange?.start)) {
     const aiTitle = String(candidateEvent.title || payload.title || "").trim();
     const title = fallbackSubject || (aiTitle && !/^(?:событие|занятие|пара)$/i.test(aiTitle) ? aiTitle : guessEventTitle(cmd));
-    p.data.botState = { pending: { kind: "event_details", title: String(title || "Занятие"), date: candidateDate, time: candidateRange?.start || "", endTime: candidateRange?.end || "", createdAt: Date.now() } };
+    p.data.botState = { ...(p.data.botState || {}), pending: { kind: "event_details", title: String(title || "Занятие"), date: candidateDate, time: candidateRange?.start || "", endTime: candidateRange?.end || "", createdAt: Date.now() } };
     await saveProfile(userId, p.data, p.baseData);
     await send(chatId, !candidateDate ? "На какой день поставить «" + escapeHtml(title) + "»?" : "Во сколько будет пара по " + escapeHtml(title) + "?");
     return;
   }
   if ((payload.intent === "add_event" || (eventLike && (hasSpokenTimeRange || payload.intent === "clarify"))) && !inferDate(cmd, today) && !(Array.isArray(payload.events) && payload.events.some((x: AnyRecord) => validDate(x.date)))) {
-    p.data.botState = { pending: { kind: "event_date", raw: cmd, createdAt: Date.now() } };
+    p.data.botState = { ...(p.data.botState || {}), pending: { kind: "event_date", raw: cmd, createdAt: Date.now() } };
     await saveProfile(userId, p.data, p.baseData);
     await send(chatId, hasSpokenTimeRange ? "Понял: " + escapeHtml(timeRange!.start + "–" + timeRange!.end) + ". На какой день поставить? Можешь ответить просто «завтра», «в пятницу» или датой. Я сохраню интервал, повторять его не придётся." : "Событие понял. На какой день его поставить? Напиши «сегодня», «завтра», день недели или дату.");
     return;
   }
   if (payload.intent === "clarify") {
     if (/домашн|лаборатор|курсов|реферат|задан/i.test(cmd) && !/по\s+[а-яё]/i.test(cmd)) {
-      p.data.botState = { pending: { kind: "homework_subject", raw: cmd, createdAt: Date.now() } };
+      p.data.botState = { ...(p.data.botState || {}), pending: { kind: "homework_subject", raw: cmd, createdAt: Date.now() } };
       await saveProfile(userId, p.data, p.baseData);
       const names = subjects.length ? subjects.join("; ") : "предметы пока не добавлены в приложение";
       await send(chatId, "Сохранил смысл запроса. По какому предмету записать? Твои дисциплины: " + escapeHtml(names) + ". Можно ответить одним названием.");
       return;
     }
     if (eventLike && !inferDate(cmd, today) && (hasSpokenTimeRange || payload.intent === "clarify")) {
-      p.data.botState = { pending: { kind: "event_date", raw: cmd, createdAt: Date.now() } };
+      p.data.botState = { ...(p.data.botState || {}), pending: { kind: "event_date", raw: cmd, createdAt: Date.now() } };
       await saveProfile(userId, p.data, p.baseData);
       await send(chatId, "Запомнил интервал " + escapeHtml(timeRange!.start + "–" + timeRange!.end) + ". На какой день поставить запись? Ответь просто датой или днём недели.");
       return;
@@ -537,7 +537,7 @@ async function handleText(chatId: number, userId: number, text: string) {
       const subjectQuery = String(item.subject || payload.subject || "").toLocaleLowerCase("ru").trim();
       const matches = availableSubjects.filter((s: AnyRecord) => subjectQuery && (String(s.name || "").toLocaleLowerCase("ru").includes(subjectQuery) || subjectQuery.includes(String(s.name || "").toLocaleLowerCase("ru"))));
       if (matches.length !== 1) {
-        p.data.botState = { pending: { kind: "homework_subject", raw: cmd, createdAt: Date.now() } };
+        p.data.botState = { ...(p.data.botState || {}), pending: { kind: "homework_subject", raw: cmd, createdAt: Date.now() } };
         await saveProfile(userId, p.data, p.baseData);
         await send(chatId, matches.length > 1 ? "Нашёл несколько похожих предметов: " + matches.map((s: AnyRecord) => escapeHtml(s.name)).join(", ") + ". Уточни точное название." : "Для какой дисциплины записать? Твои предметы: " + (availableSubjects.map((s: AnyRecord) => escapeHtml(s.name)).join("; ") || "список предметов пока пуст") + ". Можно ответить одним названием.");
         return;
