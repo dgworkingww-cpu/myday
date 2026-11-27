@@ -126,7 +126,7 @@ async function aiInterpret(text: string, today: string, userId: number, mode = "
   const prompt = [
     "Ты — внимательный, точный персональный помощник-планировщик MYDAY. Сегодня " + today + ". Общайся на русском, естественно и коротко. Понимай разговорную речь, опечатки, обрывки фраз и расшифровки голосовых сообщений.",
     "Верни ТОЛЬКО один JSON-объект без Markdown. Схема: {intent, tasks:[{title,desc,space,cat,due,prio}], events:[{title,type,date,time,endTime}], homework:[{subject,title,desc,due}], task_query, event_query, homework_query, subject, due, title, time, endTime, prio, note, reply}.",
-    "Допустимые intent: add, add_event, add_homework, list_today, list_week, list_tasks, list_events, list_homework, complete, delete, reschedule, update_task, complete_homework, delete_homework, reschedule_homework, delete_event, reschedule_event, update_event, note, help, clarify.",
+    "Допустимые intent: add, add_event, add_homework, list_today, list_date, list_week, list_tasks, list_events, list_homework, complete, delete, reschedule, update_task, complete_homework, delete_homework, reschedule_homework, delete_event, reschedule_event, update_event, note, help, clarify.",
     "КЛАССИФИКАЦИЯ: задача — действие, которое нужно выполнить (сдать, купить, позвонить, подготовить); событие — то, что происходит в конкретный день/время (пары, работа/смена, встреча, тренировка, врач, поездка, экзамен, консультация); домашняя работа — учебное задание, явно связанное с предметом из списка пользователя. Заметка — информация, которую просят просто сохранить, а не выполнить.",
     "Если пользователь просит добавить несколько дел, создай несколько объектов. Не склеивай независимые дела в одну задачу. Если это список заданий по предмету, используй add_homework и укажи subject для каждого.",
     "ДАТЫ: относительные даты считай от сегодняшней даты. Понимай сегодня, завтра, послезавтра, через N дней, через неделю, в этот/следующий понедельник-воскресенье, к концу недели и даты 12.12 / 12.12.2026. Для задачи дата — срок выполнения (due). Для события date — день события. Не подменяй срок задачи датой события. Если дата неоднозначна, уточни. Не выдумывай год, если дата невозможна.",
@@ -134,7 +134,7 @@ async function aiInterpret(text: string, today: string, userId: number, mode = "
     "ИНТЕРВАЛЫ: фраза «с ... до ...» с работой, сменой, тренировкой или другим занятием означает событие, а не задачу. Всегда заполняй ОБА поля time и endTime. Пример «Работа завтра с 7 вечера до полдвенадцатого» = событие «Работа», date завтра, time 19:00, endTime 23:30. «С 9 до 11 утра» = 09:00–11:00. «С 8 вечера до 12 ночи» = 20:00–00:00. Не теряй время окончания.",
     "НЕПОЛНЫЕ ДАННЫЕ: если событию не хватает даты, выбери clarify, сохрани смысл и спроси только дату. Если домашней работе не хватает предмета, спроси предмет и перечисли варианты из контекста. Если непонятно, какую задачу/событие изменить, спроси один конкретный вопрос. Не создавай запись до получения обязательных данных.",
     "ДЕЙСТВИЯ С ЗАПИСЯМИ: «готово/сделал/выполнил» = complete; «удали/убери» = delete; «перенеси на пятницу/завтра» = reschedule; «переименуй/измени срок/сделай приоритетной» = update_task. Для домашки используй complete_homework, delete_homework, reschedule_homework и homework_query. Для событий используй delete_event, reschedule_event или update_event и event_query. Всегда заполняй task_query/event_query/homework_query фразой, которая поможет найти существующую запись. Не заявляй, что действие выполнено, если оно не было сохранено.",
-    "СПИСКИ: «что сегодня/план на день» = list_today; «что на неделе» = list_week; «покажи задачи» = list_tasks; «какие события/встречи» = list_events; «какая домашка/что задали» = list_homework.",
+    "СПИСКИ: «что сегодня/план на день» = list_today; «что завтра/какие пары в пятницу/покажи расписание на дату» = list_date и заполни due датой; «что на неделе» = list_week; «покажи задачи» = list_tasks; «какие события/встречи» = list_events; «какая домашка/что задали» = list_homework.",
     "ПРИОРИТЕТ: prio 0 высокий, 1 обычный, 2 низкий. Если приоритет не назван, ставь 1. space: study, work или personal. cat: Учёба, Работа и проекты или Другое.",
     "КОНТЕКСТ ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ (используй для распознавания названий предметов и поиска существующих записей):",
     profileContext || "Контекст пока пуст.",
@@ -304,11 +304,16 @@ async function handleText(chatId: number, userId: number, text: string) {
     }
   }
 
-  if (/^\/(today|week|tasks|events|homework)\b/i.test(cmd)) {
+  if (/^/(today|tomorrow|day|week|tasks|events|homework)/i.test(cmd)) {
     const mode = cmd.match(/^\/(\w+)/)![1];
     const openTasks = (Array.isArray(p.data.tasks) ? p.data.tasks : []).filter((x: AnyRecord) => Number(x.status || 0) !== 2);
     const openHw = (Array.isArray(p.data.hw) ? p.data.hw : []).filter((x: AnyRecord) => Number(x.status || 0) !== 2);
-    const end = mode === "today" ? today : shiftDate(today, 7);
+    const dayArg = cmd.replace(/^\/day\s*/i, "").trim();
+    const planDate = mode === "tomorrow" ? shiftDate(today, 1) : mode === "day" ? (validDate(dayArg) ? dayArg : inferDate("на " + dayArg, today)) : today;
+    if (mode === "day" && !planDate) { await send(chatId, "На какой день показать расписание? Например: /day завтра или /day 2026-12-04."); return; }
+    const singleDay = mode === "today" || mode === "tomorrow" || mode === "day";
+    const rangeStart = singleDay ? planDate : today;
+    const end = singleDay ? rangeStart : shiftDate(today, 7);
     if (mode === "homework") {
       const subjects = Array.isArray(p.data.subjects) ? p.data.subjects : [];
       const lines = openHw.slice(0, 30).map((x: AnyRecord, i: number) => {
@@ -324,21 +329,21 @@ async function handleText(chatId: number, userId: number, text: string) {
       await send(chatId, lines.length ? "<b>Предстоящие события</b>\n" + lines.join("\n") : "Предстоящих событий нет.");
       return;
     }
-    const list = mode === "today" ? openTasks.filter((x: AnyRecord) => !x.due || x.due <= today) : mode === "week" ? openTasks.filter((x: AnyRecord) => !x.due || x.due <= end) : openTasks;
-    const homeworkDue = mode === "today" ? openHw.filter((x: AnyRecord) => x.due && x.due <= today) : mode === "week" ? openHw.filter((x: AnyRecord) => x.due && x.due <= end) : [];
-    const events = mode === "tasks" ? [] : (Array.isArray(p.data.events) ? p.data.events : []).filter((x: AnyRecord) => x.date >= today && x.date <= end).sort((a: AnyRecord, b: AnyRecord) => a.date.localeCompare(b.date) || String(a.time || "").localeCompare(String(b.time || "")));
+    const list = singleDay ? openTasks.filter((x: AnyRecord) => !x.due || x.due <= rangeStart) : mode === "week" ? openTasks.filter((x: AnyRecord) => !x.due || x.due <= end) : openTasks;
+    const homeworkDue = singleDay ? openHw.filter((x: AnyRecord) => x.due && x.due <= rangeStart) : mode === "week" ? openHw.filter((x: AnyRecord) => x.due && x.due <= end) : [];
+    const events = mode === "tasks" ? [] : (Array.isArray(p.data.events) ? p.data.events : []).filter((x: AnyRecord) => x.date >= rangeStart && x.date <= end).sort((a: AnyRecord, b: AnyRecord) => a.date.localeCompare(b.date) || String(a.time || "").localeCompare(String(b.time || "")));
     const scheduleLines: string[] = [];
-    if (mode === "today" || mode === "week") {
-      const days = mode === "today" ? 1 : 7;
+    if (singleDay || mode === "week") {
+      const days = singleDay ? 1 : 7;
       const weekdayFmt = new Intl.DateTimeFormat("ru-RU", { weekday: "short", timeZone: "UTC" });
       for (let offset = 0; offset < days; offset++) {
-        const date = shiftDate(today, offset);
+        const date = shiftDate(rangeStart, offset);
         for (const item of scheduleItemsForDate(p.data, date)) {
           scheduleLines.push("🕘 " + date + " · " + weekdayFmt.format(new Date(date + "T12:00:00Z")) + " · " + item.kind + ": " + escapeHtml(item.title) + (item.start ? " · " + item.start + (item.end ? "–" + item.end : "") : "") + (item.room ? " · " + escapeHtml(item.room) : ""));
         }
       }
     }
-    const label = mode === "today" ? "План на сегодня" : mode === "week" ? "План на ближайшие 7 дней" : "Все открытые задачи";
+    const label = mode === "today" ? "План на сегодня" : mode === "tomorrow" ? "План на завтра" : mode === "day" ? "План на " + rangeStart : mode === "week" ? "План на ближайшие 7 дней" : "Все открытые задачи";
     if (!list.length && !homeworkDue.length && !events.length && !scheduleLines.length) { await send(chatId, label + ": пока пусто."); return; }
     const taskLines = list.slice(0, 20).map((x: AnyRecord, i: number) => (i + 1) + ". " + escapeHtml(x.title) + (x.due ? " · срок " + x.due : ""));
     const homeworkLines = homeworkDue.slice(0, 15).map((x: AnyRecord) => "📚 " + escapeHtml(x.title) + (x.due ? " · срок " + x.due : ""));
@@ -395,8 +400,10 @@ async function handleText(chatId: number, userId: number, text: string) {
     await send(chatId, escapeHtml(payload.reply || "Уточни, пожалуйста, дату или к какому разделу относится запись."));
     return;
   }
-  if (payload.intent === "list_today" || payload.intent === "list_tasks" || payload.intent === "list_week" || payload.intent === "list_events" || payload.intent === "list_homework") {
-    const route = payload.intent === "list_today" ? "/today" : payload.intent === "list_week" ? "/week" : payload.intent === "list_events" ? "/events" : payload.intent === "list_homework" ? "/homework" : "/tasks";
+  if (payload.intent === "list_today" || payload.intent === "list_date" || payload.intent === "list_tasks" || payload.intent === "list_week" || payload.intent === "list_events" || payload.intent === "list_homework") {
+    const date = validDate(payload.due) ? payload.due : inferDate(cmd, today);
+    if (payload.intent === "list_date" && !date) { await send(chatId, "На какой день показать расписание? Назови дату или день недели."); return; }
+    const route = payload.intent === "list_today" ? "/today" : payload.intent === "list_date" ? "/day " + date : payload.intent === "list_week" ? "/week" : payload.intent === "list_events" ? "/events" : payload.intent === "list_homework" ? "/homework" : "/tasks";
     await handleText(chatId, userId, route);
     return;
   }
