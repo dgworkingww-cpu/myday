@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.myday-bot]
 verify_jwt = false
+
+[functions.myday-pdf-parser]
+verify_jwt = false
