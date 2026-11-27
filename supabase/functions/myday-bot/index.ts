@@ -114,13 +114,13 @@ function guessSpace(text: string) {
 }
 function guessCategory(space: string) { return space === "study" ? "Учёба" : space === "work" ? "Работа и проекты" : "Другое"; }
 async function aiInterpret(text: string, today: string, mode = "text"): Promise<AnyRecord | null> {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  const apiKey = Deno.env.get("GROQ_API_KEY");
   if (!apiKey) return null;
   const prompt = `Ты — персональный помощник-планировщик MYDAY. Сегодня ${today}. Понимай русскую разговорную речь, в том числе голосовую расшифровку. Верни только JSON: {"intent":"add|add_event|list_today|list_week|list_tasks|complete|delete|reschedule|note|help|clarify","tasks":[{"title":"...","desc":"","space":"study|work|personal","cat":"Учёба|Работа и проекты|Другое","due":"YYYY-MM-DD или пусто","prio":0}],"events":[{"title":"...","type":"Экзамен|Зачёт|Консультация|Сдача работы|Событие","date":"YYYY-MM-DD","time":"HH:MM или пусто"}],"task_query":"","due":"YYYY-MM-DD или пусто","note":"","reply":""}. При создании события обязательно укажи дату только если она явно названа или однозначно следует из слов сегодня/завтра/послезавтра/день недели. Не придумывай дату и время. При нескольких делах создай несколько tasks. Для завершения, удаления или переноса существующей задачи используй task_query с её названием; для переноса также заполни due. Если задачу нельзя однозначно определить, выбери clarify и задай один короткий вопрос. prio: 0 высокий, 1 обычный, 2 низкий. ${mode === "voice" ? "Текст получен из голосового сообщения." : ""}`;
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
-    const r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", signal: controller.signal, headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ model: Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini", temperature: 0.1, response_format: { type: "json_object" }, messages: [{ role: "system", content: prompt }, { role: "user", content: text.slice(0, 8000) }] }) });
+    const r = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: "POST", signal: controller.signal, headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ model: Deno.env.get("GROQ_CHAT_MODEL") || "openai/gpt-oss-120b", temperature: 0.1, response_format: { type: "json_object" }, messages: [{ role: "system", content: prompt }, { role: "user", content: text.slice(0, 8000) }] }) });
     clearTimeout(timeout);
     if (!r.ok) { console.error("MYDAY AI parsing failed:", r.status, (await r.text()).slice(0, 300)); return null; }
     const d = await r.json();
@@ -140,20 +140,20 @@ async function telegramFile(fileId: string) {
   return { blob: await r.blob(), name: meta.result.file_path.split("/").pop() || "voice.ogg" };
 }
 async function transcribe(fileId: string) {
-  if (!Deno.env.get("OPENAI_API_KEY")) return "";
+  if (!Deno.env.get("GROQ_API_KEY")) return "";
   const { blob, name } = await telegramFile(fileId);
-  const form = new FormData(); form.append("file", new File([blob], name, { type: blob.type || "audio/ogg" })); form.append("model", Deno.env.get("OPENAI_TRANSCRIPTION_MODEL") || "whisper-1"); form.append("language", "ru");
-  const r = await fetch("https://api.openai.com/v1/audio/transcriptions", { method: "POST", headers: { Authorization: "Bearer " + Deno.env.get("OPENAI_API_KEY")! }, body: form });
+  const form = new FormData(); form.append("file", new File([blob], name, { type: blob.type || "audio/ogg" })); form.append("model", Deno.env.get("GROQ_TRANSCRIPTION_MODEL") || "whisper-large-v3-turbo"); form.append("language", "ru");
+  const r = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", { method: "POST", headers: { Authorization: "Bearer " + Deno.env.get("GROQ_API_KEY")! }, body: form });
   if (!r.ok) throw new Error("Не удалось распознать голос: " + r.status);
   const d = await r.json(); return String(d.text || "");
 }
 async function vision(fileId: string) {
-  if (!Deno.env.get("OPENAI_API_KEY")) return "";
+  if (!Deno.env.get("GROQ_API_KEY")) return "";
   const { blob } = await telegramFile(fileId);
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let binary = ""; for (const b of bytes) binary += String.fromCharCode(b);
   const dataUrl = "data:" + (blob.type || "image/jpeg") + ";base64," + btoa(binary);
-  const r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { Authorization: "Bearer " + Deno.env.get("OPENAI_API_KEY")!, "Content-Type": "application/json" }, body: JSON.stringify({ model: Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini", response_format: { type: "json_object" }, messages: [{ role: "system", content: "Извлеки с изображения задания, сроки, предметы и события. Верни JSON {intent:'add',tasks:[{title,desc,space,cat,due,prio}]} . Не выдумывай нечитаемый текст и даты." }, { role: "user", content: [{ type: "text", text: "Разбери фото как входящее задание для MYDAY." }, { type: "image_url", image_url: { url: dataUrl } }] }] }) });
+  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: "POST", headers: { Authorization: "Bearer " + Deno.env.get("GROQ_API_KEY")!, "Content-Type": "application/json" }, body: JSON.stringify({ model: Deno.env.get("GROQ_VISION_MODEL") || "qwen/qwen3.8-27b", response_format: { type: "json_object" }, messages: [{ role: "system", content: "Извлеки с изображения задания, сроки, предметы и события. Верни JSON {intent:'add',tasks:[{title,desc,space,cat,due,prio}]} . Не выдумывай нечитаемый текст и даты." }, { role: "user", content: [{ type: "text", text: "Разбери фото как входящее задание для MYDAY." }, { type: "image_url", image_url: { url: dataUrl } }] }] }) });
   if (!r.ok) throw new Error("Не удалось разобрать фото: " + r.status);
   const d = await r.json(); try { return JSON.parse(d.choices?.[0]?.message?.content || "{}"); } catch { return ""; }
 }
@@ -286,7 +286,7 @@ Deno.serve(async (req: Request) => {
       let text = String(m.text || m.caption || "").trim();
       if (m.voice?.file_id || m.audio?.file_id) {
         const transcript = await transcribe(m.voice?.file_id || m.audio.file_id);
-        if (!transcript) { await send(chatId, "Голосовое получил, но распознавание пока не подключено. Для него нужен OPENAI_API_KEY в секретах проекта."); return json({ ok: true }); }
+        if (!transcript) { await send(chatId, "Голосовое получил, но распознавание пока не подключено. Для него нужен бесплатный GROQ_API_KEY в секретах проекта."); return json({ ok: true }); }
         await send(chatId, "🎙 Распознал: «" + escapeHtml(transcript) + "»\nСекунду, добавляю…");
         text = transcript;
       } else if (m.photo?.length) {
