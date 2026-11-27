@@ -586,7 +586,7 @@
     return order.filter(k=>c[k]).map(k=>{
       if(k==='workShift'){
         const shift=workShiftForDate(today());
-        return '<section class="surface-panel dashboard-lab-card"><div class="section-head"><div><h2>Работа сегодня</h2><p class="section-caption">'+(shift?'Рабочая смена':'По графику выходной')+'</p></div><button class="text-link" onclick="go(\'sched\');schedSpace=\'work\';render()">План</button></div>'+(shift?'<b>'+esc(shift.subj)+'</b><p class="page-sub">'+shift.s+'–'+shift.e+'</p>':'<p class="page-sub">Смена не запланирована.</p>')+'</section>';
+        return '<section class="surface-panel dashboard-lab-card"><div class="section-head"><div><h2>Работа сегодня</h2><p class="section-caption">'+(shift?(shift._shiftKind==='recovery'?'Отсыпной':'Рабочая смена'):'По графику выходной')+'</p></div><button class="text-link" onclick="go(\'sched\');schedSpace=\'work\';render()">План</button></div>'+(shift?'<b>'+esc(shift.subj)+'</b><p class="page-sub">'+(shift._shiftKind==='recovery'?'Восстановление после ночной смены':shift.s+'–'+shift.e)+'</p>':'<p class="page-sub">Смена не запланирована.</p>')+'</section>';
       }
       if(k==='habits'){
         const list=S.habits||[];
