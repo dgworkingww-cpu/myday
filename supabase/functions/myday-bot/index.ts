@@ -115,7 +115,7 @@ async function markUpdate(updateId: number) {
 }
 
 async function releaseFailedUpdate(updateId: number) {
-  const base = Deno.env.get("SUPABASE_URL")!.replace(/\\/+$/, "");
+  const base = Deno.env.get("SUPABASE_URL")!.replace(/\/+$/, "");
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || (() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}").default || ""; } catch { return ""; } })();
   const response = await fetch(base + "/rest/v1/myday_bot_updates?update_id=eq." + updateId, {
     method: "DELETE",
