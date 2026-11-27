@@ -207,7 +207,9 @@ async function extractText(){
    activeWorker=worker;const canvas=await imageToCanvas(file);const result=await worker.recognize(canvas);parts.push(String(result.data.text||"").trim());canvas.width=1;canvas.height=1;
   }
   if(cancelRequested)throw new Error("Обработка остановлена пользователем.");
-  recognized=parts.join("\n\n").trim();
+  const rawText=parts.join("\n\n").trim();
+  const wasTruncated=rawText.length>42000;
+  recognized=rawText.slice(0,42000);
   if(recognized.length<20)throw new Error("Текст не найден. Возможно, PDF пустой, защищён паролем или качество изображения слишком низкое.");
   $("output").value=recognized;$("textMeta").textContent="Извлечено символов: "+recognized.length+" · "+(worker?"с OCR":"текстовый слой PDF")+(wasTruncated?" · Для анализа взяты первые 42 000 символов":"");$("textPanel").classList.remove("hidden");
   progress(100,"Текст извлечён. Следующий шаг — анализ ИИ.","success");
