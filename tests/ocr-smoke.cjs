@@ -96,7 +96,7 @@ function makePdf(lines) {
     await page.getByText('Проверочная задача',{exact:true}).waitFor();
     await page.locator('input[data-kind="events"]').uncheck();
     await page.locator('#save').click();
-    await page.getByText(/Сохранено в MYDAY: 1/).waitFor({timeout:15000});
+    await page.getByText(/Сохранено в MYDAY: 2/).waitFor({timeout:15000});
     if(!savedProfile || savedProfile.tasks.length!==1 || savedProfile.events.length!==0 || savedProfile.hw.length!==1) throw new Error('Selected-item import did not save the expected profile');
     if(!savedProfile.subjects.length || savedProfile.hw[0].subj!==savedProfile.subjects[0].id) throw new Error('Homework was not linked to its MYDAY subject ID');
     if(savedProfile.sched.odd['1'].length!==1) throw new Error('Conflicting timetable entry was not skipped');
