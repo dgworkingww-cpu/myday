@@ -1,62 +1,123 @@
 # MYDAY Telegram Assistant
 
-## Product direction
+## Назначение
 
-The Telegram bot is the conversational front door to the same personal MYDAY profile used by the Mini App. A task created in chat is written to `myday_profiles.data.tasks`; the Mini App reads the same record after cloud sync. Each Telegram user is isolated by their Telegram numeric ID.
+Telegram-бот — разговорный интерфейс к тому же персональному профилю MYDAY, который использует Mini App. Он не ведёт отдельный список: записи сохраняются в Supabase в профиль пользователя и синхронизируются с приложением. Данные разных Telegram-пользователей изолированы по Telegram ID.
 
-## Available in this implementation
+## Что уже понимает
 
-1. Natural-language task entry in a private bot chat.
-2. AI extraction of multiple tasks from one message (requires `GROQ_API_KEY`).
-3. Voice-message transcription in Russian (requires `GROQ_API_KEY`).
-4. Photo understanding for handwritten/printed assignment snapshots (requires `GROQ_API_KEY`).
-5. Forwarded teacher messages can be processed as ordinary text.
-6. Automatic study/work/personal category suggestion.
-7. Explicit and relative due-date extraction (today/tomorrow/day after tomorrow and numeric dates).
-8. Multiple tasks can be created from one message.
-9. Personal notes can be sent to the inbox when the AI identifies a note intent.
-10. `/today` view.
-11. `/week` view.
-12. `/tasks` view.
-13. Inline completion button on each task.
-14. Inline postpone-until-tomorrow button.
-15. `/done ID` completion command.
-16. `/app` deep link to open the Mini App.
-17. `/start` and `/help` onboarding.
-18. Optimistic revision-safe writes shared with the Mini App.
-19. Telegram update deduplication to avoid duplicate tasks on webhook retries.
-20. Private-chat-only handling; group messages are ignored.
-21. One message may create up to ten separate tasks.
-22. Bot replies confirm what was saved and show quick actions.
-23. Calendar events (appointments, training, exams and consultations) can be captured from a message, including a date and time.
-24. The /today and /week agenda combines tasks and calendar events.
-25. Event times are displayed in the Mini App calendar and upcoming-events list.
+### 1. Обычные задачи
+- Создание одной или нескольких задач из одного сообщения.
+- Сроки: сегодня, завтра, послезавтра, через N дней/недель, день недели, конец недели, числовая дата.
+- Категории: учёба, работа и проекты, личное.
+- Приоритет: высокий, обычный, низкий.
+- Защита от очевидных повторов.
+- Изменение названия, срока и приоритета.
+- Отметка выполненной, перенос и удаление с подтверждением.
 
-## Additional product innovations to build next
+Примеры:
+- «Сдать лабораторную по теплотехнике до пятницы».
+- «Купить тетради и распечатать курсовую завтра».
+- «Поставь курсовую по деталям машин в высокий приоритет».
+- «Перенеси лабораторную на следующий понедельник».
+- «Отметь задачу про отчёт выполненной».
+- «Удали задачу подготовить презентацию».
 
-- Ask a follow-up question and retain a short-lived pending action when the date or subject is genuinely ambiguous.
-- Edit, rename, delete, reprioritize and reassign tasks through conversational commands and inline controls.
-- Parse PDF, DOCX and XLSX attachments directly in the chat, including multi-group university timetables.
-- Extract tasks and deadlines from voice, photos, PDFs and forwarded announcements into one review queue.
-- Daily morning briefing and evening completion recap.
-- Configurable reminders with snooze, quiet hours and separate study/work/personal channels.
-- Break large assignments into subtasks and milestones.
-- Build a realistic weekly plan from the user's free time and existing calendar.
-- Detect overloaded days and suggest moving flexible tasks.
-- Search across tasks, notes, subjects and past bot messages.
-- Focus sessions with start/pause/finish controls in chat.
-- Habit check-ins and streak summaries.
-- Recurring tasks and recurring events managed conversationally.
-- Work-shift and university schedule questions in natural language.
-- Natural-language changes such as “перенеси лабораторную на пятницу” and “покажи только учёбу”.
-- Optional voice replies and spoken daily summaries.
-- User-specific timezone, language, notification and assistant-tone preferences.
-- A confirmation preview before any bulk import or destructive action.
+### 2. События и расписание
+- Встречи, тренировки, работа/смены, пары, экзамены, консультации, приёмы, поездки и другие события.
+- Дата и время начала.
+- Время окончания отдельным полем, включая ночные интервалы.
+- Понимание разговорных форм времени: «семь вечера», «полдвенадцатого», «12 ночи».
+- Если дата не названа, бот сохраняет смысл незавершённого запроса и спрашивает только дату. Можно ответить «завтра» или «в пятницу», повторять весь интервал не нужно.
+- Изменение даты/времени и удаление события с подтверждением.
+- Защита от очевидных дублей.
 
-## Deployment requirements
+Примеры:
+- «Завтра работа с 7 вечера до полдвенадцатого».
+- «Поставь тренировку на субботу в 14:30».
+- «В пятницу встреча с 10 до 11 утра».
+- «Работа с 19:00 до 23:30» — бот спросит дату и запомнит интервал.
+- «Перенеси тренировку на воскресенье».
+- «Сдвинь работу на 20:00».
+- «Удали встречу с преподавателем».
 
-- Existing GitHub Actions secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `TELEGRAM_BOT_TOKEN`.
-- Required for AI features (voice transcription, photo understanding and robust natural-language parsing): `GROQ_API_KEY` (create a GroqCloud API key and add it as a GitHub Actions repository secret; the deployment workflow forwards it to Supabase).\n- Default text model: `openai/gpt-oss-120b`; default vision model: `qwen/qwen3.8-27b`; default speech model: `whisper-large-v3-turbo`. Model IDs can be overridden with `GROQ_CHAT_MODEL`, `GROQ_VISION_MODEL` and `GROQ_TRANSCRIPTION_MODEL`.\n- Free-tier quotas are shared across the Groq organization and can change. Add per-user limits and graceful 429 handling before opening the bot to a large public audience.
-- The backend workflow applies all pending migrations, including `005_myday_bot_updates.sql` and `006_myday_bot_ai_quota.sql`, deploys `myday-bot`, generates a webhook secret server-side, and registers the Telegram webhook.
-- The webhook secret and bot token remain server-side. Never place either in frontend files.
-- Webhook registration only occurs when the backend deployment workflow runs on the protected deployment branch. A feature-branch PR does not change the live bot.
+### 3. Домашняя работа по предметам
+- Добавление заданий в раздел домашней работы с привязкой к предмету из профиля.
+- Распознавание предметов по названиям из приложения.
+- Сроки выполнения.
+- Если предмет не указан или найдено несколько совпадений, бот спрашивает уточнение и запоминает исходный запрос.
+- Просмотр, отметка выполненной, перенос срока и удаление.
+
+Примеры:
+- «Запиши домашку по теплотехнике: решить задачу до пятницы».
+- «По сельхозмашинам нужно сделать три лабораторные».
+- «Добавь курсовую по деталям машин, срок 15 декабря».
+- «Покажи домашние задания».
+- «Отметь лабораторную по теплотехнике выполненной».
+- «Перенеси курсовую на понедельник».
+
+### 4. Заметки и входящие мысли
+- «Запомни: преподаватель перенёс пару».
+- «Сохрани заметку: купить папку для документов».
+- «Это просто идея, пока не ставь задачей».
+
+### 5. Вопросы о планах
+- «Что у меня сегодня?»
+- «Покажи план на неделю».
+- «Какие задачи остались?»
+- «Какие события впереди?»
+- «Что ещё нужно сдать по учёбе?»
+
+### 6. Голос, фото и файлы
+- Голосовые сообщения и аудио: русская транскрипция через Groq Whisper.
+- Фото: распознавание текста и выделение задач, домашней работы и событий; предметы сверяются со списком пользователя.
+- Текстовые файлы, CSV и JSON: чтение содержимого и передача его в разговорный разбор.
+- PDF, DOCX и XLSX: для импорта расписания и больших документов используйте соответствующий импорт внутри Mini App. Прямой разбор этих форматов в Telegram-чате пока не реализован.
+- Пересланные текстовые сообщения преподавателей можно отправлять боту как обычный текст.
+
+## Команды
+
+| Команда | Что делает |
+|---|---|
+| /start или /help | Подсказка и примеры |
+| /today | План на сегодня |
+| /week | План на ближайшие 7 дней |
+| /tasks | Открытые задачи |
+| /events | Предстоящие события |
+| /homework | Невыполненная домашняя работа |
+| /done ID | Отметить задачу по ID выполненной |
+| /app | Открыть MYDAY Mini App |
+
+Команды необязательны: большинство действий можно описать обычным сообщением.
+
+## Как бот должен вести себя при неоднозначности
+
+1. Не выдумывать дату, время, предмет или название записи.
+2. Не создавать событие без обязательной даты, если пользователь её не называл.
+3. Для интервала всегда сохранять начало и конец.
+4. Если совпало несколько задач или событий, попросить выбрать точную запись.
+5. Перед удалением задачи или события запросить подтверждение.
+6. При повторном Telegram update не создавать вторую запись.
+7. При конфликте синхронизации повторно объединить изменения, не затирая данные приложения.
+8. После сохранения подтвердить, что именно записано, с датой и временем.
+9. Если AI недоступен или исчерпан лимит, продолжать принимать обычный текст в базовом режиме.
+10. Незавершённое уточнение хранить до 12 часов; «отмена» сбрасывает его.
+
+## Ограничения текущей версии
+
+- Понимание естественной речи зависит от доступности Groq и дневного лимита AI. Базовое текстовое добавление задач остаётся доступным без AI.
+- Голос и фото требуют настроенного GROQ_API_KEY и доступной квоты.
+- PDF/DOCX/XLSX не разбираются напрямую в Telegram; используйте импорт в Mini App.
+- Сложные повторяющиеся события, автоматическое планирование смен по циклу и произвольное редактирование всей сетки университетского расписания пока требуют отдельного интерфейса в приложении.
+- Бот не должен утверждать, что отправил push-уведомление или создал напоминание, если отдельный механизм уведомлений не подтвердил это действие.
+
+## Технические требования
+
+- GitHub Actions secrets: SUPABASE_ACCESS_TOKEN, SUPABASE_DB_PASSWORD, TELEGRAM_BOT_TOKEN, GROQ_API_KEY.
+- Backend: Supabase Edge Function `myday-bot`.
+- AI chat model по умолчанию: `openai/gpt-oss-120b`.
+- Speech model: `whisper-large-v3-turbo`.
+- Vision model: `qwen/qwen3.8-27b`.
+- Настройки модели можно переопределить переменными GROQ_CHAT_MODEL, GROQ_TRANSCRIPTION_MODEL и GROQ_VISION_MODEL.
+- Webhook secret и bot token хранятся только на сервере. Не добавлять их в клиентский код.
+- GitHub Actions проверяет типы функции и тестирует русскоязычный разбор дат/времени перед тем, как изменения считаются проверенными.
