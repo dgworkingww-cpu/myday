@@ -103,6 +103,36 @@ const server = http.createServer((req,res) => {
     await page.locator('#ov .sheet-close').click();
     await page.locator('#ov').waitFor({state:'detached'});
 
+    // Arbitrary text is captured as an inbox note by default, without forcing a task category.
+    await page.evaluate(()=>capture());
+    await page.locator('#ov #cq').fill('MYDAY freeform note with a link https://example.com');
+    if(await page.locator('#ov #ck').inputValue()!=='i') throw new Error('Freeform capture must default to the inbox');
+    await page.getByRole('button',{name:'Сохранить'}).click();
+    await page.locator('#ov').waitFor({state:'detached'});
+    const inboxText=await page.evaluate(()=>JSON.parse(localStorage.getItem('myday2')).inbox[0].text);
+    if(inboxText!=='MYDAY freeform note with a link https://example.com') throw new Error('Freeform text was not preserved in the inbox');
+
+    // Search must find the note and let the user promote it to a task.
+    await page.evaluate(()=>search());
+    await page.locator('#ov #sq').fill('MYDAY freeform note');
+    await page.getByRole('button',{name:/MYDAY freeform note/}).waitFor();
+    await page.getByRole('button',{name:/MYDAY freeform note/}).click();
+    await page.getByText('MYDAY freeform note with a link https://example.com',{exact:true}).waitFor();
+
+    // Search events by date/time as well as title, and open the event details.
+    await page.evaluate(()=>{
+      const d='2026-12-09';
+      S.events.push({title:'MYDAY searchable event',date:d,time:'14:30',note:'Event detail smoke'});
+      save();
+      search();
+    });
+    await page.locator('#ov #sq').fill('14:30');
+    await page.getByRole('button',{name:/MYDAY searchable event/}).waitFor();
+    await page.getByRole('button',{name:/MYDAY searchable event/}).click();
+    await page.getByText('Event detail smoke',{exact:true}).waitFor();
+    await page.locator('#ov .sheet-close').click();
+    await page.locator('#ov').waitFor({state:'detached'});
+
     await page.locator('#nav button').nth(2).click();
     await page.getByRole('button',{name:/Новая задача/}).click();
     await sheet.waitFor();
