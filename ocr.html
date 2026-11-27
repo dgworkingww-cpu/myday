@@ -290,7 +290,7 @@ async function saveSelected(){
  $("save").disabled=true;$("discard").disabled=true;$("saveStatus").textContent="Загружаю актуальные данные MYDAY…";
  try{
   const loaded=await postSync({action:"load"});const data=loaded.data||{tasks:[],hw:[],events:[],sched:{odd:{},even:{}}};const revision=Number(loaded.revision||0);
-  data.tasks=Array.isArray(data.tasks)?data.tasks:[];data.hw=Array.isArray(data.hw)?data.hw:[];data.events=Array.isArray(data.events)?data.events:[];data.sched=data.sched||{};data.sched.odd=data.sched.odd||{};data.sched.even=data.sched.even||{};
+  data.tasks=Array.isArray(data.tasks)?data.tasks:[];data.hw=Array.isArray(data.hw)?data.hw:[];data.events=Array.isArray(data.events)?data.events:[];data.subjects=Array.isArray(data.subjects)?data.subjects:[];data.sched=data.sched||{};data.sched.odd=data.sched.odd||{};data.sched.even=data.sched.even||{};
   let added=0,duplicates=0,conflicts=0;
   for(const input of selected){
    const kind=input.dataset.kind,index=Number(input.dataset.index);
@@ -301,9 +301,12 @@ async function saveSelected(){
     data.tasks.push({id:id(),title:x.title,desc:x.description||"",cat:x.category||"Учёба",space:"study",due:x.dueDate||"",prio:x.priority==="high"?2:x.priority==="low"?0:1,status:0,subs:[],repeat:"",created:new Date().toISOString().slice(0,10)});added++;
    }else if(kind==="homework"){
     const x=analysis.proposals.homework[index];if(!x)continue;
-    const duplicate=data.hw.some(h=>String(h.title||"").toLowerCase()===x.title.toLowerCase()&&String(h.subj||"").toLowerCase()===x.subject.toLowerCase());
+    const subjectName=String(x.subject||"").trim();if(!subjectName)continue;
+    let subject=data.subjects.find(s=>String(s.name||"").trim().toLocaleLowerCase()===subjectName.toLocaleLowerCase());
+    if(!subject){subject={id:id(),name:subjectName,closed:false};data.subjects.push(subject)}
+    const duplicate=data.hw.some(h=>String(h.title||"").toLowerCase()===x.title.toLowerCase()&&String(h.subj||"")===String(subject.id));
     if(duplicate){duplicates++;continue}
-    data.hw.push({id:id(),subj:x.subject||"Не указан предмет",title:x.title,desc:x.description||"",due:x.dueDate||"",status:0,subs:[],photos:[]});added++;
+    data.hw.push({id:id(),subj:subject.id,title:x.title,desc:x.description||"",due:x.dueDate||"",status:0,subs:[],photos:[]});added++;
    }else if(kind==="events"){
     const x=analysis.proposals.events[index];if(!x)continue;
     const duplicate=data.events.some(e=>String(e.title||"").toLowerCase()===x.title.toLowerCase()&&e.date===x.date);
