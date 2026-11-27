@@ -18,15 +18,15 @@ A manual workflow is available at **Actions → Deploy and validate MYDAY backen
 |---|---|
 | `SUPABASE_ACCESS_TOKEN` | Personal access token created in Supabase Account → Access Tokens |
 | `SUPABASE_DB_PASSWORD` | Database password chosen when the Supabase project was created |
-| `TELEGRAM_BOT_TOKEN` | Token for the MYDAY bot from BotFather |\n| `OPENAI_API_KEY` | Optional but required for voice transcription, photo understanding and AI task parsing in the bot |
+| `TELEGRAM_BOT_TOKEN` | Token for the MYDAY bot from BotFather |\n| `GROQ_API_KEY` | Optional but required for voice transcription, photo understanding and AI task parsing in the bot |
 
 Enter each value directly into GitHub's secret form. Never commit them, put them in `backend-config.js`, or send them in chat.
 
 The workflow runs on changes to the frontend or Supabase backend and serializes deployments to avoid overlapping migrations. It:
 1. Links the CLI to the MYDAY Supabase project.
-2. Applies all pending migrations, including `001_myday_profiles.sql`, `002_myday_sync_revisions.sql`, `003_myday_service_role_grants.sql`, and `004_myday_restrict_public_access.sql`.
+2. Applies all pending migrations, including all pending migrations, including `005_myday_bot_updates.sql` and `006_myday_bot_ai_quota.sql`.
 3. Sets `TELEGRAM_BOT_TOKEN` as a server-side Edge Function secret. Supabase injects `SUPABASE_URL` and `SUPABASE_SECRET_KEYS` automatically.
-4. Deploys `myday-sync` and the Telegram conversation webhook `myday-bot`.\n5. Generates a private webhook secret, stores it only in Supabase Edge Function secrets, and registers the bot webhook with Telegram.\n6. If `OPENAI_API_KEY` is configured, enables Russian voice transcription, photo understanding and natural-language task extraction. Without it, basic text commands and simple task capture remain available.
+4. Deploys `myday-sync` and the Telegram conversation webhook `myday-bot`.\n5. Generates a private webhook secret, stores it only in Supabase Edge Function secrets, and registers the bot webhook with Telegram.\n6. If `GROQ_API_KEY` is configured as a GitHub Actions repository secret, the workflow passes it to Supabase Edge Functions and enables Russian voice transcription, photo understanding and AI task extraction. Without it, basic commands and simple task capture remain available.
 5. Checks frontend JavaScript syntax.
 6. Creates signed Telegram test data using the GitHub secret, verifies invalid signatures are rejected, performs a real profile load/save, and confirms stale writes are rejected with HTTP 409.
 
@@ -49,7 +49,7 @@ The function's platform JWT check is intentionally disabled because the frontend
 
 Never put the bot token or service-role/secret key in frontend code.
 
-## Telegram bot assistant\n\nThe `myday-bot` Edge Function handles private messages and callback buttons. It writes tasks and notes into the same `myday_profiles.data` JSON profile used by the Mini App, with revision-safe writes. The bot webhook is registered automatically by the backend deployment workflow. The bot token and generated webhook secret stay server-side. The optional `OPENAI_API_KEY` must be added as a GitHub Actions repository secret to enable voice transcription and image understanding.\n\n## Telegram launch mode
+## Telegram bot assistant\n\nThe `myday-bot` Edge Function handles private messages and callback buttons. It writes tasks and notes into the same `myday_profiles.data` JSON profile used by the Mini App, with revision-safe writes. The bot webhook is registered automatically by the backend deployment workflow. The bot token and generated webhook secret stay server-side. The optional `GROQ_API_KEY` must be added as a GitHub Actions repository secret to enable voice transcription and image understanding.\n\n## Telegram launch mode
 
 Open MYDAY from the Telegram bot's Web App menu button so `Telegram.WebApp.initData` is available. A normal browser tab cannot authenticate the Telegram profile for cloud sync.
 
