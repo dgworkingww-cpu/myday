@@ -562,14 +562,14 @@ function close_(){const o=$('#ov');if(o){o.id='';o.classList.add('bye');setTimeo
 function capture(){
  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
  sheet(`<h1>Быстрая запись</h1><textarea id="cq" oninput="capHint()" placeholder="Напиши что угодно: мысль, просьбу, идею, ссылку, черновик…"></textarea><div id="chint" style="min-height:26px;margin-bottom:6px"></div><div id="tpl" style="margin-bottom:6px">${tplHtml()}</div>
- <label>Срок (необязательно)</label><input type="date" id="cd">${dch('cd')}<label>Сохранить как</label><select id="ck"><option value="i" selected>Входящие · любой текст</option><option value="t">Задача</option></select>
+ <label>Срок (необязательно)</label><input type="date" id="cd">${dch('cd')}<label>Сохранить как</label><select id="capture-kind"><option value="i" selected>Входящие · любой текст</option><option value="t">Задача</option></select>
  <div class="row">${SR?'<button class="btn g" onclick="voice()">🎤 Голос</button>':''}<button class="btn g" onclick="tplAdd()">★</button><button class="btn grow" onclick="capSave()">Сохранить</button></div>
  ${SR?'':'<div class="tag">Голосовой ввод в браузере недоступен — используйте значок микрофона на клавиатуре iPhone.</div>'}
  <div class="tag">Если в тексте несколько дел через «и» / «;», можно разбить на отдельные задачи. Срок ставится, только если вы выбрали дату или написали «сегодня», «завтра», «послезавтра».</div>
- <label><input type="checkbox" id="cs" onchange="capHint()" style="width:auto"> Разбить на отдельные задачи</label>`);const kind=$('#ck');if(kind)kind.value='i'}
+ <label><input type="checkbox" id="cs" onchange="capHint()" style="width:auto"> Разбить на отдельные задачи</label>`);const kind=$('#capture-kind');if(kind)kind.value='i'}
 function voice(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition,r=new SR();r.lang='ru-RU';r.onresult=ev=>{$('#cq').value+=(ev.results[0][0].transcript)+' '};r.onerror=()=>alert('Не удалось распознать речь. Проверьте доступ к микрофону.');try{r.start()}catch(_){}}
 function capSave(){const v=$('#cq').value.trim();if(!v){toast('Напиши хотя бы пару слов, и я сохраню запись.');$('#cq').focus();return}const d=$('#cd').value;
- const target=$('#ck').value;
+ const target=$('#capture-kind').value;
  if(target==='i')S.inbox.unshift({text:v,d:today()});
  else{const parts=$('#cs').checked?v.split(/;|\s+и\s+|\n/).map(s=>s.trim()).filter(Boolean):[v];parts.forEach(p=>S.tasks.push(mk({title:p,due:d||guess(p)||guess(v),cat:catGuess(p)||catGuess(v)||'Другое'})))}
  if(!save()){toast('Не удалось сохранить. Запись осталась в форме, попробуй освободить память или экспортировать данные.');return}
