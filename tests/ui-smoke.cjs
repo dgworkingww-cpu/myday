@@ -106,7 +106,7 @@ const server = http.createServer((req,res) => {
     // Arbitrary text is captured as an inbox note by default, without forcing a task category.
     await page.evaluate(()=>capture());
     await page.locator('#ov #cq').fill('MYDAY freeform note with a link https://example.com');
-    const captureDefault=await page.locator('#ov #ck').inputValue();
+    const captureDefault=await page.locator('#ov #capture-kind').inputValue();
     if(captureDefault!=='i') throw new Error('Freeform capture must default to the inbox; got '+JSON.stringify(captureDefault));
     await page.getByRole('button',{name:'Сохранить'}).click();
     await page.locator('#ov').waitFor({state:'detached'});
