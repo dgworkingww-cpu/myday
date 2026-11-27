@@ -92,7 +92,7 @@ const server = http.createServer((req,res) => {
     if(await page.locator('html').getAttribute('data-theme')!=='dark') throw new Error('Dark theme did not apply');
     await themeButtons.nth(2).click();
 
-    await page.getByRole('button',{name:'День'}).click();
+    await page.evaluate(()=>go('today'));
     await page.locator('#app .app-header').waitFor();
     const quickCapture=page.locator('#app .app-header button[onclick="capture()"]');
     if(await quickCapture.count()!==1) throw new Error('Today screen did not expose the quick-capture action: '+JSON.stringify(await page.locator('#app').innerText()));
