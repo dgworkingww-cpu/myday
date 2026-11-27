@@ -269,6 +269,18 @@ function scheduleItemsForDate(data: AnyRecord, date: string) {
     ...work.map((x: AnyRecord) => ({ kind: "Работа", title: String(x.subj || workConfig.title || "Рабочая смена"), start: String(x.s || ""), end: String(x.e || ""), room: String(x.room || "") }))
   ];
 }
+function guessEventTitle(text: string) {
+  if (/работ|смен/i.test(text)) return "Работа";
+  if (/тренировк/i.test(text)) return "Тренировка";
+  if (/встреч/i.test(text)) return "Встреча";
+  if (/экзамен/i.test(text)) return "Экзамен";
+  if (/зач[её]т/i.test(text)) return "Зачёт";
+  if (/врач|при[её]м/i.test(text)) return "Приём";
+  if (/день рождения/i.test(text)) return "День рождения";
+  if (/пар[а-я]*|занят[а-я]*/i.test(text)) return "Занятие";
+  if (/поезд|вылет/i.test(text)) return "Поездка";
+  return "Событие";
+}
 function taskKeyboard(tasks: Array<[string, string]>) { return tasks.map(([id, title]) => [{ text: "✓ " + String(title).slice(0, 28), callback_data: "done:" + id }, { text: "Завтра", callback_data: "tomorrow:" + id }, { text: "Удалить", callback_data: "delete:" + id }]); }
 async function handleText(chatId: number, userId: number, text: string) {
   failureStage = "разбор команды";
@@ -390,13 +402,13 @@ async function handleText(chatId: number, userId: number, text: string) {
   const payload = await aiInterpret(cmd, today, userId, "text", profileContext) || (fallbackHomework
     ? { intent: "add_homework", homework: [{ subject: fallbackSubject, title: cmd, desc: "", due: inferDate(cmd, today) }] }
     : ((eventLike || hasSpokenTimeRange)
-      ? { intent: "add_event", tasks: [], events: [{ title: /работ|смен/i.test(cmd) ? "Работа" : cmd, type: /экзамен/i.test(cmd) ? "Экзамен" : /зач[её]т/i.test(cmd) ? "Зачёт" : "Событие", date: inferDate(cmd, today), time: timeRange?.start || inferTime(cmd), endTime: timeRange?.end || "" }] }
+      ? { intent: "add_event", tasks: [], events: [{ title: guessEventTitle(cmd), type: guessEventTitle(cmd), date: inferDate(cmd, today), time: timeRange?.start || inferTime(cmd), endTime: timeRange?.end || "" }] }
       : { intent: "add", tasks: [{ title: cmd, desc: "", space: fallbackSpace, cat: guessCategory(fallbackSpace), due: inferDate(cmd, today), prio: 1 }] }));
 
   // Strong deterministic guard: a clearly spoken work/shift interval is always a calendar event.
   if (hasSpokenTimeRange && eventLike && !["complete", "delete", "reschedule", "update_task", "delete_event", "reschedule_event", "list_today", "list_week", "list_tasks", "list_events", "list_homework", "note", "help"].includes(String(payload.intent))) {
     payload.intent = "add_event";
-    payload.events = Array.isArray(payload.events) && payload.events.length ? payload.events : [{ title: /работ|смен/i.test(cmd) ? "Работа" : cmd, type: "Событие", date: inferDate(cmd, today), time: timeRange.start, endTime: timeRange.end }];
+    payload.events = Array.isArray(payload.events) && payload.events.length ? payload.events : [{ title: guessEventTitle(cmd), type: guessEventTitle(cmd), date: inferDate(cmd, today), time: timeRange.start, endTime: timeRange.end }];
   }
   if ((payload.intent === "add_event" || (eventLike && (hasSpokenTimeRange || payload.intent === "clarify"))) && !inferDate(cmd, today) && !(Array.isArray(payload.events) && payload.events.some((x: AnyRecord) => validDate(x.date)))) {
     p.data.botState = { pending: { kind: "event_date", raw: cmd, createdAt: Date.now() } };
