@@ -304,8 +304,36 @@ async function handleText(chatId: number, userId: number, text: string) {
   const today = isoToday(p.data.settings?.timezone || TZ);
   if (/^\/app\b/i.test(cmd)) { await send(chatId, "Открыть приложение:", [[{ text: "Запустить MYDAY", web_app: { url: "https://dgworkingww-cpu.github.io/myday/" } }]]); return; }
 
-  // Keep the meaning of a clarification across messages, e.g. "Работа с 19 до 23:30" -> "завтра".
+  // Preserve structured event details between short follow-up messages.
   const pending = p.data.botState?.pending;
+  if (pending?.kind === "event_details" && Date.now() - Number(pending.createdAt || 0) < 12 * 60 * 60 * 1000) {
+    if (isCancellation(cmd)) {
+      p.data.botState = { pending: null };
+      await saveProfile(userId, p.data, p.baseData);
+      await send(chatId, "Отменил незавершённое событие. Ничего не добавлял.");
+      return;
+    }
+    const next = { ...pending };
+    const nextDate = inferDate(cmd, today);
+    const nextRange = inferTimeRange(cmd);
+    if (nextDate) next.date = nextDate;
+    if (nextRange) { next.time = nextRange.start; next.endTime = nextRange.end; }
+    else { const nextTime = inferTime(cmd); if (nextTime) next.time = nextTime; }
+    if (validDate(next.date) && validTime(next.time)) {
+      p.data.events = Array.isArray(p.data.events) ? p.data.events : [];
+      const title = String(next.title || "Занятие"), endTime = validTime(next.endTime) ? next.endTime : "";
+      const duplicate = p.data.events.some((x: AnyRecord) => String(x.title || "").toLocaleLowerCase("ru") === title.toLocaleLowerCase("ru") && x.date === next.date && String(x.time || "") === next.time && String(x.endTime || "") === endTime);
+      p.data.botState = { pending: null };
+      if (!duplicate) p.data.events.push({ id: uid(), title, type: "Занятие", date: next.date, time: next.time, endTime });
+      await saveProfile(userId, p.data, p.baseData);
+      await send(chatId, duplicate ? "Такая запись уже есть в календаре. Дубликат не создавал." : "Добавил в календарь MYDAY:\n📌 <b>" + escapeHtml(title) + "</b> · " + next.date + " · " + next.time + (endTime ? "–" + endTime : ""));
+      return;
+    }
+    p.data.botState = { pending: { ...next, createdAt: Date.now() } };
+    await saveProfile(userId, p.data, p.baseData);
+    await send(chatId, !validDate(next.date) ? "На какой день поставить «" + escapeHtml(next.title || "событие") + "»?" : "Во сколько будет «" + escapeHtml(next.title || "событие") + "»?");
+    return;
+  }
   if (pending?.kind === "event_date" || pending?.kind === "homework_subject") {
     const age = Date.now() - Number(pending.createdAt || 0);
     if (age < 12 * 60 * 60 * 1000 && isCancellation(cmd)) {
@@ -316,9 +344,7 @@ async function handleText(chatId: number, userId: number, text: string) {
     }
     const subjectNamesForReply = (Array.isArray(p.data.subjects) ? p.data.subjects : []).filter((x: AnyRecord) => !x.closed).map((x: AnyRecord) => String(x.name || "").toLocaleLowerCase("ru"));
     const replyLower = cmd.toLocaleLowerCase("ru");
-    const subjectReply = subjectNamesForReply.length
-      ? subjectNamesForReply.some((name: string) => name.includes(replyLower) || replyLower.includes(name) || name.split(/\s+/).some((word: string) => word.length > 4 && replyLower.includes(word.slice(0, Math.min(7, word.length)))))
-      : (!/^\//.test(cmd) && cmd.length <= 80);
+    const subjectReply = subjectNamesForReply.length ? subjectNamesForReply.some((name: string) => name.includes(replyLower) || replyLower.includes(name) || name.split(/\s+/).some((word: string) => word.length > 4 && replyLower.includes(word.slice(0, Math.min(7, word.length))))) : (!/^\//.test(cmd) && cmd.length <= 80);
     const isFollowUp = pending.kind === "event_date" ? isDateOnlyReply(cmd) : subjectReply;
     if (age < 12 * 60 * 60 * 1000 && isFollowUp) {
       if (pending.kind === "event_date") cmd = String(pending.raw || "") + " " + cmd;
@@ -439,6 +465,17 @@ async function handleText(chatId: number, userId: number, text: string) {
       time: timeRange.start,
       endTime: timeRange.end
     }];
+  }
+  const candidateEvent = Array.isArray(payload.events) && payload.events.length ? payload.events[0] : {};
+  const candidateDate = inferDate(cmd, today) || (validDate(candidateEvent.date) ? candidateEvent.date : "");
+  const candidateRange = timeRange || (validTime(candidateEvent.time) ? { start: candidateEvent.time, end: validTime(candidateEvent.endTime) ? candidateEvent.endTime : "" } : null);
+  if (eventLike && (payload.intent === "add_event" || payload.intent === "clarify") && (!candidateDate || !candidateRange?.start)) {
+    const aiTitle = String(candidateEvent.title || payload.title || "").trim();
+    const title = fallbackSubject || (aiTitle && !/^(?:событие|занятие|пара)$/i.test(aiTitle) ? aiTitle : guessEventTitle(cmd));
+    p.data.botState = { pending: { kind: "event_details", title: String(title || "Занятие"), date: candidateDate, time: candidateRange?.start || "", endTime: candidateRange?.end || "", createdAt: Date.now() } };
+    await saveProfile(userId, p.data, p.baseData);
+    await send(chatId, !candidateDate ? "На какой день поставить «" + escapeHtml(title) + "»?" : "Во сколько будет пара по " + escapeHtml(title) + "?");
+    return;
   }
   if ((payload.intent === "add_event" || (eventLike && (hasSpokenTimeRange || payload.intent === "clarify"))) && !inferDate(cmd, today) && !(Array.isArray(payload.events) && payload.events.some((x: AnyRecord) => validDate(x.date)))) {
     p.data.botState = { pending: { kind: "event_date", raw: cmd, createdAt: Date.now() } };
