@@ -77,7 +77,8 @@ export function parseClock(text: string): string {
   const t = text.toLocaleLowerCase("ru").replace(/ё/g, "е").trim();
   const half = t.match(/пол(?:овина)?\\s*(первого|второго|третьего|четвертого|четвёртого|пятого|шестого|седьмого|восьмого|девятого|десятого|одиннадцатого|двенадцатого)/);
   if (half) {
-    const hour = HALF_HOURS[half[1]];
+    let hour = HALF_HOURS[half[1]];
+    if ((/вечера|ночи/.test(t)) && hour < 12) hour += 12;
     return String(hour).padStart(2, "0") + ":30";
   }
   const numeric = t.match(/(\\d{1,2})(?:[:.](\\d{2}))?\\s*(утра|дня|вечера|ночи)?/);
@@ -112,11 +113,19 @@ export function inferTimeRange(text: string): { start: string; end: string } | n
   const m = text.toLocaleLowerCase("ru").match(/\\bс\\s+(.+?)\\s+до\\s+(.+?)(?=$|[,;.])/i);
   if (!m) return null;
   const start = parseClock(m[1]);
-  const end = parseClock(m[2]);
-  return start && end ? { start, end } : null;
+  let end = parseClock(m[2]);
+  if (!start || !end) return null;
+  const startHour = Number(start.slice(0, 2));
+  const endHour = Number(end.slice(0, 2));
+  // In an evening shift, an unqualified spoken half-hour such as "полдвенадцатого"
+  // normally means 23:30, not 11:30. Explicit "утра/ночи" remains authoritative.
+  if (startHour >= 18 && endHour > 0 && endHour < 12 && !/утра|ночи/.test(m[2])) {
+    end = String(endHour + 12).padStart(2, "0") + end.slice(2);
+  }
+  return { start, end };
 }
 export function isDateOnlyReply(text: string): boolean {
-  const t = text.toLocaleLowerCase("ru").trim();
+  const t = text.toLocaleLowerCase("ru").trim().replace(/[.!?]+$/, "");
   return /^(?:сегодня|завтра|послезавтра|через\\s+неделю|через\\s+\\d+\\s+д(?:ень|ня|ней)|(?:в|на|к|до)\\s+(?:следующ(?:ий|ую|ем|его)\\s+)?(?:понедельник|вторник|среду?|четверг|пятниц(?:у|а)|субботу?|воскресенье|пн|вт|ср|чт|пт|сб|вс)|(?:на\\s+)?\\d{1,2}[./]\\d{1,2}(?:[./]\\d{2,4})?)$/i.test(t);
 }
 export function isCancellation(text: string): boolean {
