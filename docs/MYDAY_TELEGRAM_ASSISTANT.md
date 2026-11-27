@@ -7,9 +7,9 @@ The Telegram bot is the conversational front door to the same personal MYDAY pro
 ## Available in this implementation
 
 1. Natural-language task entry in a private bot chat.
-2. AI extraction of multiple tasks from one message (requires `OPENAI_API_KEY`).
-3. Voice-message transcription in Russian (requires `OPENAI_API_KEY`).
-4. Photo understanding for handwritten/printed assignment snapshots (requires `OPENAI_API_KEY`).
+2. AI extraction of multiple tasks from one message (requires `GROQ_API_KEY`).
+3. Voice-message transcription in Russian (requires `GROQ_API_KEY`).
+4. Photo understanding for handwritten/printed assignment snapshots (requires `GROQ_API_KEY`).
 5. Forwarded teacher messages can be processed as ordinary text.
 6. Automatic study/work/personal category suggestion.
 7. Explicit and relative due-date extraction (today/tomorrow/day after tomorrow and numeric dates).
@@ -56,7 +56,7 @@ The Telegram bot is the conversational front door to the same personal MYDAY pro
 ## Deployment requirements
 
 - Existing GitHub Actions secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `TELEGRAM_BOT_TOKEN`.
-- Optional but required for AI features (voice transcription, photo understanding and robust natural-language parsing): `OPENAI_API_KEY`.
+- Required for AI features (voice transcription, photo understanding and robust natural-language parsing): `GROQ_API_KEY` (create a free GroqCloud API key and add it as a Supabase Edge Function secret).\n- Default text model: `openai/gpt-oss-120b`; default vision model: `qwen/qwen3.8-27b`; default speech model: `whisper-large-v3-turbo`. Model IDs can be overridden with `GROQ_CHAT_MODEL`, `GROQ_VISION_MODEL` and `GROQ_TRANSCRIPTION_MODEL`.\n- Free-tier quotas are shared across the Groq organization and can change. Add per-user limits and graceful 429 handling before opening the bot to a large public audience.
 - The backend workflow applies migration `005_myday_bot_updates.sql`, deploys `myday-bot`, generates a webhook secret server-side, and registers the Telegram webhook.
 - The webhook secret and bot token remain server-side. Never place either in frontend files.
 - Webhook registration only occurs when the backend deployment workflow runs on the protected deployment branch. A feature-branch PR does not change the live bot.
