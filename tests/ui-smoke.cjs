@@ -93,7 +93,7 @@ const server = http.createServer((req,res) => {
     await themeButtons.nth(2).click();
 
     await page.locator('#nav button').nth(0).click();
-    await page.locator('button[aria-label="Быстрая запись"]').click();
+    await page.locator('button[aria-label="Быстрое добавление"]').click();
     const sheet=page.locator('#ov .sheet');
     await sheet.waitFor();
     await page.waitForTimeout(260);
