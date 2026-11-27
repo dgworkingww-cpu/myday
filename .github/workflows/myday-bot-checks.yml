@@ -2,7 +2,7 @@ name: MYDAY Telegram assistant checks
 
 on:
   pull_request:
-    branches: [main, test/myday-unified-schedule-v1]
+    branches: [main, test/myday-unified-schedule-v1, feature/multi-user-myday]
     paths:
       - 'supabase/functions/myday-bot/**'
       - 'supabase/migrations/**'
