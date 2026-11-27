@@ -111,7 +111,8 @@ function makePdf(lines) {
     await page.locator('#file').setInputFiles({name:'ocr-sample.png',mimeType:'image/png',buffer:Buffer.from(pngBase64,'base64')});
     await page.getByText('Изображение готово к распознаванию.').waitFor();
     await page.locator('#extract').click();
-    await page.locator('#textPanel').waitFor({state:'visible',timeout:120000});
+    await page.waitForFunction(()=>!document.querySelector('#textPanel')?.classList.contains('hidden') || document.querySelector('#status')?.classList.contains('error'),{timeout:120000});
+    if(await page.locator('#status').getAttribute('class')==='status error') throw new Error('Real image OCR failed: '+await page.locator('#status').innerText());
     const ocrText=(await page.locator('#output').inputValue()).toUpperCase();
     if(!ocrText.includes('MYDAY')||!ocrText.includes('OCR')) throw new Error('Real image OCR failed: '+ocrText);
     await page.locator('#back').click();
