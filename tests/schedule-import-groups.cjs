@@ -54,6 +54,14 @@ assert.equal(rows.length,2);
 assert.equal(rows.find(x=>x.group==='ПИ-21').subj,'Математика');
 assert.equal(rows.find(x=>x.group==='АТ-22').subj,'Физика');
 
+const stackedSections = [
+  ['ПИ-21'],['День','Время','Предмет'],['Понедельник','09:00-10:30','Математика'],['Вторник','10:40-12:10','История'],
+  ['АТ-22'],['День','Время','Предмет'],['Понедельник','09:00-10:30','Физика']
+];
+const stacked = parser.parseRows(stackedSections);
+assert.deepEqual(stacked.map(x=>x.group),['ПИ-21','ПИ-21','АТ-22']);
+assert.deepEqual(stacked.map(x=>x.subj),['Математика','История','Физика']);
+
 const sheetRows = [['День','Время','Предмет'],['Понедельник','09:00-10:30','Алгебра']];
 const sheet = parser.parseRows(sheetRows,{defaultGroup:'ПИ-21'});
 assert.equal(sheet.length,1);
