@@ -32,12 +32,42 @@ async function getProfile(telegramId: number) {
   const r = await fetch(url, { headers });
   if (!r.ok) throw new Error("Profile load failed: " + r.status);
   const rows = await r.json();
-  return { data: rows[0]?.data || profileSeed(), revision: Number(rows[0]?.revision || 0), base, key, headers };
+  const data = rows[0]?.data || profileSeed();
+  return { data, baseData: JSON.parse(JSON.stringify(data)), revision: Number(rows[0]?.revision || 0), base, key, headers };
 }
-async function saveProfile(telegramId: number, p: AnyRecord) {
+function mergeBotChanges(latest: AnyRecord, incoming: AnyRecord, base: AnyRecord) {
+  const merged = { ...latest };
+  const latestTasks = Array.isArray(latest.tasks) ? [...latest.tasks] : [];
+  const baseTasks = new Map((Array.isArray(base.tasks) ? base.tasks : []).map((t: AnyRecord) => [String(t.id), t]));
+  const incomingTasks = Array.isArray(incoming.tasks) ? incoming.tasks : [];
+  for (const task of incomingTasks) {
+    const id = String(task.id || "");
+    if (!id) continue;
+    const before = baseTasks.get(id);
+    const index = latestTasks.findIndex((t: AnyRecord) => String(t.id) === id);
+    if (!before) {
+      if (index < 0) latestTasks.push(task);
+    } else if (index >= 0) {
+      const changes: AnyRecord = {};
+      for (const [key, value] of Object.entries(task)) {
+        if (JSON.stringify((before as AnyRecord)[key]) !== JSON.stringify(value)) changes[key] = value;
+      }
+      if (Object.keys(changes).length) latestTasks[index] = { ...latestTasks[index], ...changes };
+    }
+  }
+  merged.tasks = latestTasks;
+  const baseInbox = Array.isArray(base.inbox) ? base.inbox : [];
+  const incomingInbox = Array.isArray(incoming.inbox) ? incoming.inbox : [];
+  const latestInbox = Array.isArray(latest.inbox) ? latest.inbox : [];
+  const additions = incomingInbox.filter((item: AnyRecord) => !baseInbox.some((old: AnyRecord) => JSON.stringify(old) === JSON.stringify(item)) && !latestInbox.some((old: AnyRecord) => JSON.stringify(old) === JSON.stringify(item)));
+  merged.inbox = [...additions, ...latestInbox].slice(0, 300);
+  return merged;
+}
+async function saveProfile(telegramId: number, incoming: AnyRecord, baseData: AnyRecord) {
   for (let attempt = 0; attempt < 4; attempt++) {
     const current = await getProfile(telegramId);
-    const r = await fetch(current.base + "/rest/v1/rpc/myday_sync_profile", { method: "POST", headers: current.headers, body: JSON.stringify({ p_telegram_id: telegramId, p_data: p, p_expected_revision: current.revision }) });
+    const merged = mergeBotChanges(current.data, incoming, baseData || {});
+    const r = await fetch(current.base + "/rest/v1/rpc/myday_sync_profile", { method: "POST", headers: current.headers, body: JSON.stringify({ p_telegram_id: telegramId, p_data: merged, p_expected_revision: current.revision }) });
     if (!r.ok) throw new Error("Profile save failed: " + r.status);
     const rows = await r.json();
     const result = Array.isArray(rows) ? rows[0] : rows;
@@ -128,7 +158,7 @@ async function handleText(chatId: number, userId: number, text: string) {
     const id = cmd.replace(/^\/done\s+/i, "").trim();
     const t = (p.data.tasks || []).find((x: AnyRecord) => String(x.id) === id);
     if (!t) { await send(chatId, "Не нашёл такую задачу."); return; }
-    t.status = 2; await saveProfile(userId, p.data); await send(chatId, "Готово: <b>" + escapeHtml(t.title) + "</b> отмечена выполненной."); return;
+    t.status = 2; await saveProfile(userId, p.data, p.baseData); await send(chatId, "Готово: <b>" + escapeHtml(t.title) + "</b> отмечена выполненной."); return;
   }
   const payload = await aiInterpret(cmd, today) || { intent: "add", tasks: [{ title: cmd, desc: "", space: guessSpace(cmd), cat: guessCategory(guessSpace(cmd)), due: inferDate(cmd, today), prio: 1 }] };
   if (payload.intent === "clarify") { await send(chatId, escapeHtml(payload.reply || "Уточни, пожалуйста, дату или к какому разделу относится задача.")); return; }
