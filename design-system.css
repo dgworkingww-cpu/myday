@@ -36,7 +36,7 @@
   --content: 760px;
   --ease: cubic-bezier(.2, .8, .2, 1);
   --font: "Manrope", "Segoe UI", sans-serif;
-  --display: "Literata", "Iowan Old Style", Palatino, "Times New Roman", serif;
+  --display: var(--font);
 }
 
 :root[data-theme="dark"] {
@@ -780,4 +780,59 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
     animation: none !important;
     transition: none !important;
   }
+}
+
+
+/* MYDAY typography and alignment unification */
+:root {
+  --display: var(--font);
+  --type-xs: 12px;
+  --type-sm: 13px;
+  --type-body: 15px;
+  --type-title: 28px;
+}
+html, body, button, input, select, textarea, #app, #nav, .sheet {
+  font-family: var(--font);
+}
+body { font-size: 15px; line-height: 1.5; letter-spacing: -.012em; }
+h1, h2, h3, p { font-family: var(--font); }
+.page-title {
+  font-family: var(--font);
+  font-size: clamp(28px, 7.4vw, 36px);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -.045em;
+}
+.page-title.plain { font-size: 27px; line-height: 1.12; }
+.section-head h2, .schedule-day-head h2, .sheet h1, h2 {
+  font-family: var(--font);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -.025em;
+}
+.sheet h1 { font-size: 23px; }
+.hero-title, .metric-value, .day-pill small, .empty-state b,
+.task-overview-number, .study-hero-title, .subject-detail-title,
+.study-stat b, .calendar-heading h2, .week-day-date b, #fc {
+  font-family: var(--font);
+}
+.hero-title, .study-hero-title, .subject-detail-title { font-weight: 700; }
+.metric-value, .study-stat b, .week-day-date b { font-weight: 700; }
+.page-top-copy, .page-sub, .section-head > div, .row > *,
+.card, .sheet, .settings-copy, .task-main { min-width: 0; }
+.page-top { align-items: flex-start; }
+.page-actions { flex-shrink: 0; }
+button, .btn, .chip, .pill { font-family: var(--font); letter-spacing: -.01em; }
+input, select, textarea { min-width: 0; line-height: 1.4; }
+.card, .surface-panel, .today-panel, .study-hero, .subject-tile, .week-day-card {
+  overflow-wrap: anywhere;
+}
+.task-title, .timeline-title, .subject-name, .settings-copy b,
+.event-copy b, .page-title { overflow-wrap: anywhere; }
+@media (max-width: 380px) {
+  :root { --page: 14px; }
+  .page-title { font-size: 27px; }
+  .page-actions .icon-btn { width: 40px; height: 40px; }
+  .hero-title { font-size: 20px; }
 }
