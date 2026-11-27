@@ -334,33 +334,38 @@
       }
       if(records.length)return records;
     }
-    const headerIndex=matrix.findIndex(row=>{
+    const headerRows=matrix.map((row,index)=>({row,index})).filter(({row})=>{
       const h=row.map(x=>x.toLowerCase());
       return h.some(x=>/день недели|^день$|^weekday$|^day$/.test(x)) &&
         h.some(x=>/предмет|дисциплина|занятие|subject|class/.test(x)) &&
         h.some(x=>/время|time|начало|start/.test(x));
     });
-    if(headerIndex>=0){
-      const h=matrix[headerIndex].map(x=>x.toLowerCase());
-      const find=rx=>h.findIndex(x=>rx.test(x));
-      const di=find(/день недели|^день$|^weekday$|^day$/),si=find(/предмет|дисциплина|занятие|subject|class/);
-      const ti=find(/время|time/),bi=find(/начало|start/),ei=find(/конец|end|окончание/);
-      const ri=find(/ауд|кабинет|room|место/),pi=find(/препод|teacher/),wi=find(/недел|week/),dti=find(/дата|date/),gi=find(/групп|group/);
-      let currentGroup=options.defaultGroup||'';
-      for(let i=headerIndex+1;i<matrix.length;i++){
-        const row=matrix[i];if(!row.some(Boolean))continue;
-        const groupValue=gi>=0?groupLabel(row[gi])||String(row[gi]||'').trim():'';
-        if(groupValue)currentGroup=groupValue;
-        const day=DAY_NAMES[(row[di]||'').toLowerCase()];
-        const time=(ti>=0?row[ti]:'')||'',m=time.match(timeRegex);
-        const s0=bi>=0?normalizeClock(row[bi]):m?normalizeTime(m[1],m[2]):'';
-        const eTime=ei>=0?normalizeClock(row[ei]):m?normalizeTime(m[3],m[4]):'';
-        let week='',cycleIndex=null;
-        const w=(wi>=0?row[wi]||'':'').toLowerCase();
-        if(/неч[её]тн|нижн/.test(w))week='odd';else if(/ч[её]тн|верхн/.test(w))week='even';else if(/постоян/.test(w))week='fixed';
-        const cm=w.match(/(?:цикл|недел[яи])\s*([1-4])/);if(cm)cycleIndex=Number(cm[1])-1;
-        const date=dti>=0?parseDate(row[dti]):'';
-        if(day!=null&&row[si]&&s0&&eTime&&eTime>s0)add({id:id(),day,date,week,cycleIndex,group:currentGroup,subj:row[si],s:s0,e:eTime,room:ri>=0?row[ri]||'':'',teacher:pi>=0?row[pi]||'':''});
+    if(headerRows.length){
+      for(let hi=0;hi<headerRows.length;hi++){
+        const headerIndex=headerRows[hi].index,nextHeader=headerRows[hi+1]?.index??matrix.length;
+        const h=matrix[headerIndex].map(x=>x.toLowerCase()),find=rx=>h.findIndex(x=>rx.test(x));
+        const di=find(/день недели|^день$|^weekday$|^day$/),si=find(/предмет|дисциплина|занятие|subject|class/);
+        const ti=find(/время|time/),bi=find(/начало|start/),ei=find(/конец|end|окончание/);
+        const ri=find(/ауд|кабинет|room|место/),pi=find(/препод|teacher/),wi=find(/недел|week/),dti=find(/дата|date/),gi=find(/групп|group/);
+        let currentGroup=options.defaultGroup||'';
+        for(let k=0;k<headerIndex;k++){const g=matrix[k].map(groupLabel).find(Boolean);if(g)currentGroup=g}
+        for(let i=headerIndex+1;i<nextHeader;i++){
+          const row=matrix[i];if(!row.some(Boolean))continue;
+          const day=DAY_NAMES[(row[di]||'').toLowerCase()];
+          const titleGroup=row.map(groupLabel).find(Boolean);
+          if(titleGroup&&(day==null||!row[si])){currentGroup=titleGroup;continue}
+          const groupValue=gi>=0?groupLabel(row[gi])||String(row[gi]||'').trim():'';
+          if(groupValue)currentGroup=groupValue;
+          const time=(ti>=0?row[ti]:'')||'',m=time.match(timeRegex);
+          const s0=bi>=0?normalizeClock(row[bi]):m?normalizeTime(m[1],m[2]):'';
+          const eTime=ei>=0?normalizeClock(row[ei]):m?normalizeTime(m[3],m[4]):'';
+          let week='',cycleIndex=null;
+          const w=(wi>=0?row[wi]||'':'').toLowerCase();
+          if(/неч[её]тн|нижн/.test(w))week='odd';else if(/ч[её]тн|верхн/.test(w))week='even';else if(/постоян/.test(w))week='fixed';
+          const cm=w.match(/(?:цикл|недел[яи])\s*([1-4])/);if(cm)cycleIndex=Number(cm[1])-1;
+          const date=dti>=0?parseDate(row[dti]):'';
+          if(day!=null&&row[si]&&s0&&eTime&&eTime>s0)add({id:id(),day,date,week,cycleIndex,group:currentGroup,subj:row[si],s:s0,e:eTime,room:ri>=0?row[ri]||'':'',teacher:pi>=0?row[pi]||'':''});
+        }
       }
       if(records.length)return records;
     }
@@ -370,19 +375,24 @@
       if(cols.length>=2){dayColumns=cols;dayHeaderRow=i;break}
     }
     if(dayColumns){
+      let currentGroup=options.defaultGroup||'';
+      for(let k=0;k<dayHeaderRow;k++){const g=matrix[k].map(groupLabel).find(Boolean);if(g)currentGroup=g}
       for(let i=dayHeaderRow+1;i<matrix.length;i++){
-        const row=matrix[i],timeCell=row.find(x=>timeRegex.test(x||''));if(!timeCell)continue;
+        const row=matrix[i],rowText=row.join(' '),groupTitle=row.map(groupLabel).find(Boolean);
+        if(groupTitle&&!timeRegex.test(rowText)){currentGroup=groupTitle;continue}
+        const timeCell=row.find(x=>timeRegex.test(x||''));if(!timeCell)continue;
         const w=row.join(' ').toLowerCase(),week=/неч[её]тн|нижн/.test(w)?'odd':/ч[её]тн|верхн/.test(w)?'even':'';
-        dayColumns.forEach(({day,col})=>{const cell=row[col];if(cell)parseLine(cell+' '+timeCell,{day,week}).forEach(r=>add({...r,group:options.defaultGroup||''}))});
+        dayColumns.forEach(({day,col})=>{const cell=row[col];if(cell)parseLine(cell+' '+timeCell,{day,week}).forEach(r=>add({...r,group:currentGroup}))});
       }
       if(records.length)return records;
     }
-    let contextDay=null,contextWeek='';
+    let contextDay=null,contextWeek='',currentGroup=options.defaultGroup||'';
     for(const row of matrix){
-      const joined=row.filter(Boolean).join(' | '),lower=joined.toLowerCase();
+      const joined=row.filter(Boolean).join(' | '),lower=joined.toLowerCase(),groupTitle=row.map(groupLabel).find(Boolean);
+      if(groupTitle&&!timeRegex.test(joined)&&!Object.keys(DAY_NAMES).some(name=>new RegExp('(^|[^а-яё])'+name+'(?=$|[^а-яё])','i').test(lower))){currentGroup=groupTitle;continue}
       for(const [name,n] of Object.entries(DAY_NAMES)){if(new RegExp('(^|[^а-яё])'+name+'(?=$|[^а-яё])','i').test(lower)){contextDay=n;break}}
       if(/неч[её]тн|нижн/.test(lower))contextWeek='odd';else if(/ч[её]тн|верхн/.test(lower))contextWeek='even';
-      parseLine(joined,{day:contextDay,week:contextWeek}).forEach(r=>add({...r,group:options.defaultGroup||''}));
+      parseLine(joined,{day:contextDay,week:contextWeek}).forEach(r=>add({...r,group:currentGroup}));
     }
     return records;
   }
