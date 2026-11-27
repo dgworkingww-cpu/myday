@@ -920,7 +920,7 @@ Deno.serve(async (req: Request) => {
         const declaredSize = Number(m.document.file_size || 0);
         const maxFileSize = 20 * 1024 * 1024;
         if (declaredSize > maxFileSize) {
-          await send(chatId, "Файл весит " + (declaredSize / 1024 / 1024).toFixed(1) + " МБ. Telegram не передаёт его боту напрямую, поэтому открой обработчик MYDAY и выбери исходный документ из приложения «Файлы». Он извлечёт текст, проанализирует содержание и предложит записи для импорта. Ничего не сохранится без твоего подтверждения.", [[{ text: "Открыть разбор документов MYDAY", web_app: { url: "https://dgworkingww-cpu.github.io/myday/ocr.html" } }]]);
+          await send(chatId, "Файл весит " + (declaredSize / 1024 / 1024).toFixed(1) + " МБ. Telegram не передаёт его боту напрямую, поэтому открой обработчик MYDAY и выбери исходный документ из приложения «Файлы». Он извлечёт текст, проанализирует содержание и предложит записи для импорта. Ничего не сохранится без твоего подтверждения.", [[{ text: "Открыть разбор документов MYDAY", web_app: { url: "https://dgworkingww-cpu.github.io/myday/ocr.html?v=20261127-3" } }]]);
           return json({ ok: true });
         }
         failureStage = "скачивание документа из Telegram";
@@ -977,7 +977,7 @@ Deno.serve(async (req: Request) => {
       try {
         const errorText = error instanceof Error ? error.message : "неизвестная ошибка";
         if (errorText.includes("MYDAY_LOCAL_OCR_REQUIRED")) {
-          await send(fallbackChatId, "📄 Это скан или изображение. Открой обработчик MYDAY и выбери исходный документ из приложения «Файлы». MYDAY распознает страницы, разберёт содержание с ИИ и покажет, что можно добавить в расписание и задачи. Никаких TXT-файлов вручную отправлять не нужно. Ничего не сохранится без подтверждения.", [[{ text: "Открыть разбор документов MYDAY", web_app: { url: "https://dgworkingww-cpu.github.io/myday/ocr.html" } }]]);
+          await send(fallbackChatId, "📄 Это скан или изображение. Открой обработчик MYDAY и выбери исходный документ из приложения «Файлы». MYDAY распознает страницы, разберёт содержание с ИИ и покажет, что можно добавить в расписание и задачи. Никаких TXT-файлов вручную отправлять не нужно. Ничего не сохранится без подтверждения.", [[{ text: "Открыть разбор документов MYDAY", web_app: { url: "https://dgworkingww-cpu.github.io/myday/ocr.html?v=20261127-3" } }]]);
         } else {
           const message = String(error).includes("MYDAY_AI_DAILY_LIMIT")
             ? "На сегодня исчерпан лимит AI-запросов MYDAY (100). Голосовые и фото временно недоступны; обычные команды и текстовые задачи продолжают работать в базовом режиме."
