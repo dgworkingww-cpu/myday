@@ -188,14 +188,15 @@ async function transcribe(fileId: string, userId: number, today: string) {
   const d = await r.json();
   return String(d.text || "");
 }
-async function vision(fileId: string, userId: number, today: string) {
+async function vision(fileId: string, userId: number, today: string, subjectNames: string[] = []) {
   if (!Deno.env.get("GROQ_API_KEY")) return "";
   if (!await consumeAiQuota(userId, today)) throw new Error("MYDAY_AI_DAILY_LIMIT");
   const { blob } = await telegramFile(fileId);
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let binary = ""; for (const b of bytes) binary += String.fromCharCode(b);
   const dataUrl = "data:" + (blob.type || "image/jpeg") + ";base64," + btoa(binary);
-  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: "POST", headers: { Authorization: "Bearer " + Deno.env.get("GROQ_API_KEY")!, "Content-Type": "application/json" }, body: JSON.stringify({ model: Deno.env.get("GROQ_VISION_MODEL") || "qwen/qwen3.8-27b", response_format: { type: "json_object" }, messages: [{ role: "system", content: "Извлеки с изображения задания, сроки, предметы и события. Верни JSON {intent:'add',tasks:[{title,desc,space,cat,due,prio}]} . Не выдумывай нечитаемый текст и даты." }, { role: "user", content: [{ type: "text", text: "Разбери фото как входящее задание для MYDAY." }, { type: "image_url", image_url: { url: dataUrl } }] }] }) });
+  const visionPrompt = "Сегодня " + today + ". Разбери изображение для планировщика MYDAY. Доступные предметы пользователя: " + (subjectNames.join("; ") || "не указаны") + ". Верни только JSON со структурой {tasks:[{title,desc,space,cat,due,prio}],homework:[{subject,title,desc,due}],events:[{title,date,time,endTime,type}],raw_text}. Извлекай только то, что действительно читается. Домашние задания связывай с предметами из списка, если совпадение уверенное. Сроки и даты записывай в YYYY-MM-DD только если они явно указаны и однозначны; иначе оставляй пусто. Для событий извлекай начало и конец времени отдельно. Не выдумывай нечитаемый текст, предметы или даты.";
+  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: "POST", headers: { Authorization: "Bearer " + Deno.env.get("GROQ_API_KEY")!, "Content-Type": "application/json" }, body: JSON.stringify({ model: Deno.env.get("GROQ_VISION_MODEL") || "qwen/qwen3.8-27b", response_format: { type: "json_object" }, messages: [{ role: "system", content: visionPrompt }, { role: "user", content: [{ type: "text", text: "Разбери фото: выдели домашние задания, обычные задачи и события для MYDAY." }, { type: "image_url", image_url: { url: dataUrl } }] }] }) });
   if (!r.ok) throw new Error("Не удалось разобрать фото: " + r.status);
   const d = await r.json(); try { return JSON.parse(d.choices?.[0]?.message?.content || "{}"); } catch { return ""; }
 }
@@ -515,14 +516,21 @@ Deno.serve(async (req: Request) => {
       if (!chatId || !userId || m.chat?.type !== "private") return json({ ok: true });
       let text = String(m.text || m.caption || "").trim();
       if (m.voice?.file_id || m.audio?.file_id) {
-        const transcript = await transcribe(m.voice?.file_id || m.audio.file_id, userId, isoToday());
+        const voiceProfile = await getProfile(userId);
+        const transcript = await transcribe(m.voice?.file_id || m.audio.file_id, userId, isoToday(voiceProfile.data.settings?.timezone || TZ));
         if (!transcript) { await send(chatId, "Голосовое получил, но распознавание пока не подключено. Для него нужен бесплатный GROQ_API_KEY в секретах проекта."); return json({ ok: true }); }
         await send(chatId, "🎙 Распознал: «" + escapeHtml(transcript) + "»\nСекунду, добавляю…");
         text = transcript;
       } else if (m.photo?.length) {
-        const parsed = await vision(m.photo[m.photo.length - 1].file_id, userId, isoToday());
-        if (!parsed || !Array.isArray(parsed.tasks) || !parsed.tasks.length) { await send(chatId, "Фото получил, но не смог уверенно выделить задачи. Пришли более чёткий снимок или текстом."); return json({ ok: true }); }
-        text = parsed.tasks.map((x: AnyRecord) => x.title + (x.due ? " до " + x.due : "")).join("; ");
+        const photoProfile = await getProfile(userId);
+        const subjectNames = (Array.isArray(photoProfile.data.subjects) ? photoProfile.data.subjects : []).filter((x: AnyRecord) => !x.closed).map((x: AnyRecord) => String(x.name || "")).filter(Boolean);
+        const parsed = await vision(m.photo[m.photo.length - 1].file_id, userId, isoToday(photoProfile.data.settings?.timezone || TZ), subjectNames);
+        const extracted: string[] = [];
+        if (Array.isArray(parsed?.homework)) extracted.push(...parsed.homework.map((x: AnyRecord) => "домашняя работа по " + String(x.subject || "") + ": " + String(x.title || "") + (x.due ? " до " + x.due : "")));
+        if (Array.isArray(parsed?.tasks)) extracted.push(...parsed.tasks.map((x: AnyRecord) => String(x.title || "") + (x.due ? " до " + x.due : "")));
+        if (Array.isArray(parsed?.events)) extracted.push(...parsed.events.map((x: AnyRecord) => "событие " + String(x.title || "") + (x.date ? " " + x.date : "") + (x.time ? " с " + x.time + (x.endTime ? " до " + x.endTime : "") : "")));
+        if (!extracted.length) { await send(chatId, "Фото получил, но не смог уверенно прочитать задание или событие. Пришли снимок чётче или отправь текстом."); return json({ ok: true }); }
+        text = extracted.join("; ");
       } else if (m.document) {
         const mime = String(m.document.mime_type || "");
         if (/text\/(plain|csv)|application\/(json|pdf)/i.test(mime)) {
