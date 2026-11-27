@@ -1,4 +1,7 @@
-import * as pdfjs from "npm:pdfjs-dist@4.10.38/build/pdf.min.mjs";
+import * as pdfjs from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs";
+
+// Load the worker separately instead of pulling the full npm dependency tree into the Edge Function bundle.
+pdfjs.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
 
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
