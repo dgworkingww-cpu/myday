@@ -176,18 +176,22 @@
   }
 
   function renderImportPage() {
-    if (!importDraft) importDraft={records:[],target:'study',mode:'auto',replace:false,filename:'',status:'Выбери файл. Исходное расписание пока не меняется.'};
-    const d=importDraft;
+    if (!importDraft) importDraft={records:[],groups:[],selectedGroup:'',target:'study',mode:'auto',replace:false,filename:'',status:'Выбери файл. Исходное расписание пока не меняется.'};
+    const d=importDraft,records=d.records||[],groups=d.groups||[];
+    const selected=groups.length?records.filter(r=>r.group===d.selectedGroup):records;
+    const groupPicker=groups.length
+      ? '<section class="surface-panel"><div class="section-head"><div><h2>Выбери свою группу</h2><p class="section-caption">В файле найдено групп: '+groups.length+'. В MYDAY попадут только занятия выбранной группы.</p></div></div><label for="import-group">Учебная группа</label><select id="import-group" onchange="MYDAY_LAB.setDraft(\'selectedGroup\',this.value)"><option value="">Выбрать группу…</option>'+groups.map(g=>'<option value="'+esc(g)+'" '+(d.selectedGroup===g?'selected':'')+'>'+esc(g)+'</option>').join('')+'</select></section>'
+      : (records.length?'<div class="empty-state"><b>Похоже, это личное расписание</b><span>Названия нескольких групп не обнаружены. Импортируются только распознанные строки этого файла.</span></div>':'');
     const formats='Excel XLSX/XLS · PDF · Word DOCX · CSV/TXT · JPG/PNG';
-    const records=d.records||[];
-    return '<main class="page">'+mydayHeader('Импорт расписания','Загрузи файл, проверь распознанные пары и только потом сохрани.',false,true)+
-      '<section class="surface-panel"><div class="import-drop"><span class="settings-icon">'+mydayIcon('inbox',22)+'</span><b>Выбрать файл</b><span class="page-sub">'+formats+'</span><input id="schedule-file" type="file" accept=".xlsx,.xls,.pdf,.docx,.csv,.txt,.jpg,.jpeg,.png" onchange="MYDAY_LAB.readFile(this)"><a href="./sample-schedule.csv" download>Скачать пример CSV</a></div>'+
+    return '<main class="page">'+mydayHeader('Импорт расписания','Можно загрузить своё расписание или общее расписание университета и выбрать из него свою группу.',false,true)+
+      '<section class="surface-panel"><div class="import-drop"><span class="settings-icon">'+mydayIcon('inbox',22)+'</span><b>Выбрать файл</b><span class="page-sub">'+formats+'</span><input id="schedule-file" type="file" accept=".xlsx,.xls,.pdf,.docx,.csv,.txt,.jpg,.jpeg,.png" onchange="MYDAY_LAB.readFile(this)"><a href="./sample-university-schedule.csv" download>Скачать пример общего расписания</a></div>'+
       '<p class="page-sub" role="status" aria-live="polite">'+esc(d.status)+'</p><label for="import-target">Куда импортировать</label><select id="import-target" onchange="MYDAY_LAB.setDraft(\'target\',this.value)"><option value="study" '+(d.target==='study'?'selected':'')+'>Учебное расписание</option><option value="work" '+(d.target==='work'?'selected':'')+'>Рабочий график (неделя)</option></select>'+
       '<label for="import-mode">Тип учебного расписания</label><select id="import-mode" onchange="MYDAY_LAB.setDraft(\'mode\',this.value)"><option value="auto" '+(d.mode==='auto'?'selected':'')+'>Определить по файлу</option><option value="alternating" '+(d.mode==='alternating'?'selected':'')+'>Нечётная / чётная</option><option value="fixed" '+(d.mode==='fixed'?'selected':'')+'>Постоянное</option><option value="cycle" '+(d.mode==='cycle'?'selected':'')+'>Цикл 2–4 недели</option><option value="dates" '+(d.mode==='dates'?'selected':'')+'>Конкретные даты</option><option value="hybrid" '+(d.mode==='hybrid'?'selected':'')+'>Смешанное</option></select>'+
       '<label for="import-replace" class="lab-check"><input id="import-replace" type="checkbox" '+(d.replace?'checked':'')+' onchange="MYDAY_LAB.setDraft(\'replace\',this.checked)"> Заменить занятия в выбранных днях (вместо добавления)</label>'+
-      '<div class="page-sub">Для импорта в режиме «по датам» в документе должны быть указаны даты. В остальных режимах дни и недели можно уточнить в предпросмотре.</div></section>'+
-      (records.length?'<section class="section"><div class="section-head"><div><h2>Предпросмотр · '+records.length+'</h2><p class="section-caption">Нажми на строку, чтобы исправить распознавание.</p></div></div><div class="task-list">'+records.map((r,i)=>'<button class="task-item import-row" onclick="MYDAY_LAB.editDraft('+i+')"><span class="settings-icon">'+mydayIcon('calendar',16)+'</span><span class="task-main"><span class="task-title">'+esc(r.subj||'Без названия')+'</span><span class="task-meta">'+esc(r.date||((r.day!=null?DAYS_SHORT[r.day]:'День не распознан')+' · '+(r.week||'неделя не указана'))) +' · '+esc((r.s||'--:--')+'–'+(r.e||'--:--'))+'</span></span><span class="task-chevron">›</span></button>').join('')+'</div><div class="schedule-actions"><button class="btn" onclick="MYDAY_LAB.applyImport()">Сохранить расписание</button><button class="btn g" onclick="MYDAY_LAB.clearDraft()">Очистить</button></div></section>':'<div class="empty-state"><b>Предпросмотр появится здесь</b><span>Ни одна запись не попадёт в календарь, пока ты не нажмёшь «Сохранить расписание».</span></div>')+
-      '<section class="section"><div class="empty-state"><b>Загрузка из переписки с ботом</b><span>В этом тесте файл выбирается прямо внутри Mini App. Автоматический приём документов, отправленных отдельным сообщением боту, потребует подключения webhook. Действующую настройку бота я не меняю без отдельного согласования.</span></div></section>'+
+      '<div class="page-sub">Сначала проверь выбранную группу и предпросмотр. Старое расписание не меняется до подтверждения.</div></section>'+
+      groupPicker+
+      (groups.length&&!d.selectedGroup?'<div class="empty-state"><b>Сначала выбери свою группу</b><span>Пока группа не выбрана, сохранить расписание нельзя.</span></div>':'')+
+      (selected.length?'<section class="section"><div class="section-head"><div><h2>Предпросмотр · '+selected.length+'</h2><p class="section-caption">'+(d.selectedGroup?'Группа '+esc(d.selectedGroup)+' · ':'')+'Нажми на строку, чтобы исправить распознавание.</p></div></div><div class="task-list">'+selected.map(r=>({r,i:records.indexOf(r)})).map(({r,i})=>'<button class="task-item import-row" onclick="MYDAY_LAB.editDraft('+i+')"><span class="settings-icon">'+mydayIcon('calendar',16)+'</span><span class="task-main"><span class="task-title">'+esc(r.subj||'Без названия')+'</span><span class="task-meta">'+esc(r.group?r.group+' · ':'')+esc(r.date||((r.day!=null?DAYS_SHORT[r.day]:'День не распознан')+' · '+(r.week||'неделя не указана'))) +' · '+esc((r.s||'--:--')+'–'+(r.e||'--:--'))+'</span></span><span class="task-chevron">›</span></button>').join('')+'</div><div class="schedule-actions"><button class="btn" onclick="MYDAY_LAB.applyImport()">Сохранить расписание</button><button class="btn g" onclick="MYDAY_LAB.clearDraft()">Очистить</button></div></section>':'<div class="empty-state"><b>Предпросмотр появится здесь</b><span>'+(groups.length?'Выбери группу, чтобы увидеть только её занятия.':'Ни одна запись не попадёт в календарь, пока ты не нажмёшь «Сохранить расписание».')+'</span></div>')+
       '<button class="btn g" style="width:100%" onclick="st=null;render()">Назад</button></main>';
   }
 
@@ -279,14 +283,52 @@
     }
     out.push(value.trim());return out;
   }
-  function parseRows(rows) {
+  function groupLabel(value) {
+    const raw=String(value||'').replace(/\s+/g,' ').trim();
+    if(!raw)return '';
+    const explicit=raw.match(/^(?:группа|гр\.?)\s*[:№#-]?\s*(.+)$/i);
+    if(explicit&&explicit[1])return explicit[1].trim();
+    if(/^[А-ЯЁ]{1,7}\s*[-–]\s*\d{1,3}(?:\s*[-–]\s*\d{1,3})?[А-ЯЁ]?$/i.test(raw))return raw.replace(/\s+/g,'').replace(/–/g,'-');
+    if(/^\d{1,3}\s*[-–]\s*[А-ЯЁ]{1,7}(?:\s*[-–]\s*\d{1,3})?$/i.test(raw))return raw.replace(/\s+/g,'').replace(/–/g,'-');
+    if(/^[А-ЯЁ]{1,5}\d{2,4}[А-ЯЁ]?(?:[-–]\d{1,3})?$/i.test(raw))return raw;
+    return '';
+  }
+  function parseRows(rows,options) {
+    options=options||{};
     const matrix=(rows||[]).map(row=>Array.isArray(row)?row.map(x=>String(x==null?'':x).trim()):[String(row||'').trim()]);
     const records=[],seen=new Set();
     const add=r=>{
       if(!r||!r.subj||!r.s||!r.e)return;
-      const key=[r.date,r.day,r.week,r.cycleIndex,r.subj,r.s,r.e,r.room,r.teacher].join('|');
+      if(!r.group&&options.defaultGroup)r.group=options.defaultGroup;
+      const key=[r.group,r.date,r.day,r.week,r.cycleIndex,r.subj,r.s,r.e,r.room,r.teacher].join('|');
       if(!seen.has(key)){seen.add(key);records.push(r)}
     };
+    const groupHeader=(()=>{
+      for(let i=0;i<Math.min(matrix.length,12);i++){
+        const cols=matrix[i].map((cell,col)=>({group:groupLabel(cell),col})).filter(x=>x.group);
+        const rowText=matrix[i].join(' ').toLowerCase();
+        if(cols.length>=2||(cols.length===1&&(/время|time|день недели|^день\b/.test(rowText)||options.defaultGroup)))return {row:i,cols};
+      }
+      return null;
+    })();
+    if(groupHeader){
+      let contextDay=null,contextWeek='',lastTime='';
+      for(let i=groupHeader.row+1;i<matrix.length;i++){
+        const row=matrix[i],lower=row.join(' ').toLowerCase();
+        for(const [name,n] of Object.entries(DAY_NAMES)){if(new RegExp('(^|[^а-яё])'+name+'(?=$|[^а-яё])','i').test(lower)){contextDay=n;break}}
+        if(/неч[её]тн|нижн/.test(lower))contextWeek='odd';else if(/ч[её]тн|верхн/.test(lower))contextWeek='even';else if(/постоян/.test(lower))contextWeek='fixed';
+        const timeCell=row.find(x=>timeRegex.test(x||''))||'';
+        if(timeCell)lastTime=timeCell;
+        const time=timeCell||lastTime;
+        if(!row.some(Boolean))continue;
+        for(const col of groupHeader.cols){
+          const cell=row[col.col];if(!cell||groupLabel(cell))continue;
+          const parsed=parseLine(time&&!timeRegex.test(cell)?cell+' '+time:cell,{day:contextDay,week:contextWeek});
+          parsed.forEach(r=>add({...r,group:col.group}));
+        }
+      }
+      if(records.length)return records;
+    }
     const headerIndex=matrix.findIndex(row=>{
       const h=row.map(x=>x.toLowerCase());
       return h.some(x=>/день недели|^день$|^weekday$|^day$/.test(x)) &&
@@ -298,9 +340,12 @@
       const find=rx=>h.findIndex(x=>rx.test(x));
       const di=find(/день недели|^день$|^weekday$|^day$/),si=find(/предмет|дисциплина|занятие|subject|class/);
       const ti=find(/время|time/),bi=find(/начало|start/),ei=find(/конец|end|окончание/);
-      const ri=find(/ауд|кабинет|room|место/),pi=find(/препод|teacher/),wi=find(/недел|week/),dti=find(/дата|date/);
+      const ri=find(/ауд|кабинет|room|место/),pi=find(/препод|teacher/),wi=find(/недел|week/),dti=find(/дата|date/),gi=find(/групп|group/);
+      let currentGroup=options.defaultGroup||'';
       for(let i=headerIndex+1;i<matrix.length;i++){
         const row=matrix[i];if(!row.some(Boolean))continue;
+        const groupValue=gi>=0?groupLabel(row[gi])||String(row[gi]||'').trim():'';
+        if(groupValue)currentGroup=groupValue;
         const day=DAY_NAMES[(row[di]||'').toLowerCase()];
         const time=(ti>=0?row[ti]:'')||'',m=time.match(timeRegex);
         const s0=bi>=0?normalizeClock(row[bi]):m?normalizeTime(m[1],m[2]):'';
@@ -310,7 +355,7 @@
         if(/неч[её]тн|нижн/.test(w))week='odd';else if(/ч[её]тн|верхн/.test(w))week='even';else if(/постоян/.test(w))week='fixed';
         const cm=w.match(/(?:цикл|недел[яи])\s*([1-4])/);if(cm)cycleIndex=Number(cm[1])-1;
         const date=dti>=0?parseDate(row[dti]):'';
-        if(day!=null&&row[si]&&s0&&eTime&&eTime>s0)add({id:id(),day,date,week,cycleIndex,subj:row[si],s:s0,e:eTime,room:ri>=0?row[ri]||'':'',teacher:pi>=0?row[pi]||'':''});
+        if(day!=null&&row[si]&&s0&&eTime&&eTime>s0)add({id:id(),day,date,week,cycleIndex,group:currentGroup,subj:row[si],s:s0,e:eTime,room:ri>=0?row[ri]||'':'',teacher:pi>=0?row[pi]||'':''});
       }
       if(records.length)return records;
     }
@@ -322,9 +367,8 @@
     if(dayColumns){
       for(let i=dayHeaderRow+1;i<matrix.length;i++){
         const row=matrix[i],timeCell=row.find(x=>timeRegex.test(x||''));if(!timeCell)continue;
-        const m=timeCell.match(timeRegex);if(!m)continue;
         const w=row.join(' ').toLowerCase(),week=/неч[её]тн|нижн/.test(w)?'odd':/ч[её]тн|верхн/.test(w)?'even':'';
-        dayColumns.forEach(({day,col})=>{const cell=row[col];if(cell)parseLine(cell+' '+timeCell,{day,week}).forEach(add)});
+        dayColumns.forEach(({day,col})=>{const cell=row[col];if(cell)parseLine(cell+' '+timeCell,{day,week}).forEach(r=>add({...r,group:options.defaultGroup||''}))});
       }
       if(records.length)return records;
     }
@@ -333,10 +377,11 @@
       const joined=row.filter(Boolean).join(' | '),lower=joined.toLowerCase();
       for(const [name,n] of Object.entries(DAY_NAMES)){if(new RegExp('(^|[^а-яё])'+name+'(?=$|[^а-яё])','i').test(lower)){contextDay=n;break}}
       if(/неч[её]тн|нижн/.test(lower))contextWeek='odd';else if(/ч[её]тн|верхн/.test(lower))contextWeek='even';
-      parseLine(joined,{day:contextDay,week:contextWeek}).forEach(add);
+      parseLine(joined,{day:contextDay,week:contextWeek}).forEach(r=>add({...r,group:options.defaultGroup||''}));
     }
     return records;
   }
+
   function normalizeClock(value) {
     const m=String(value||'').match(/^([01]?\d|2[0-3])[:.]([0-5]\d)$/);
     return m?normalizeTime(m[1],m[2]):'';
@@ -352,14 +397,22 @@
     const name=file.name||'schedule',ext=(name.split('.').pop()||'').toLowerCase();
     let records=[];
     if(['csv','txt'].includes(ext)){
-      const text=await file.text(),first=text.split(/\r?\n/).find(x=>x.trim())||'',delimiter=first.includes(';')?';':first.includes('\t')?'\t':',';records=parseRows(text.split(/\r?\n/).map(line=>splitCsvLine(line,delimiter)));
+      const text=await file.text(),first=text.split(/\r?\n/).find(x=>x.trim())||'',delimiter=first.includes(';')?';':first.includes('\t')?'\t':',';
+      const rows=text.split(/\r?\n/).map(line=>splitCsvLine(line,delimiter));
+      records=parseRows(rows);
       if(!records.length)records=text.split(/\r?\n/).flatMap(line=>parseLine(line,{day:null,week:''}));
     } else if(['xlsx','xls'].includes(ext)){
       await loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',()=>!!window.XLSX);
-      const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});wb.SheetNames.forEach(n=>records.push(...parseRows(XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:''}))));
+      const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});
+      wb.SheetNames.forEach(sheetName=>{
+        const defaultGroup=groupLabel(sheetName);
+        records.push(...parseRows(XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:''}),{defaultGroup}));
+      });
     } else if(ext==='docx'){
       await loadScript('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js',()=>!!window.mammoth);
-      const res=await mammoth.extractRawText({arrayBuffer:await file.arrayBuffer()});records=parseRows(res.value.split(/\r?\n/).map(x=>[x]));if(!records.length)records=res.value.split(/\r?\n/).flatMap(x=>parseLine(x,{day:null,week:''}));
+      const res=await mammoth.extractRawText({arrayBuffer:await file.arrayBuffer()});
+      records=parseRows(res.value.split(/\r?\n/).map(x=>[x]));
+      if(!records.length)records=res.value.split(/\r?\n/).flatMap(line=>parseLine(line,{day:null,week:''}));
     } else if(ext==='pdf'){
       await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',()=>!!window.pdfjsLib);
       pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -371,7 +424,8 @@
       const result=await Tesseract.recognize(file,'rus+eng',{logger:m=>{if(importDraft)importDraft.status=m.status==='recognizing text'?'Распознаю изображение…':'Подготавливаю распознавание…';}});
       records=parseRows(result.data.text.split(/\r?\n/).map(x=>[x]));
     } else throw new Error('Формат файла не поддерживается.');
-    return records;
+    const groups=[...new Set(records.map(r=>r.group).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
+    return {records,groups};
   }
 
   function renderImportPreview() {
@@ -380,16 +434,23 @@
   async function readFile(input) {
     const file=input&&input.files&&input.files[0];if(!file)return;
     if(file.size>15*1024*1024){importDraft.status='Файл больше 15 МБ. Уменьши его или выбери более лёгкую копию.';render();return}
-    importDraft=importDraft||{records:[],target:'study',mode:'auto',replace:false,filename:'',status:''};
-    importDraft.filename=file.name;importDraft.status='Читаю файл и распознаю пары…';importDraft.records=[];render();
+    importDraft=importDraft||{records:[],groups:[],selectedGroup:'',target:'study',mode:'auto',replace:false,filename:'',status:''};
+    importDraft.filename=file.name;importDraft.status='Читаю файл и ищу расписания групп…';importDraft.records=[];importDraft.groups=[];importDraft.selectedGroup='';render();
     try{
-      const records=await extractFile(file);
-      importDraft.records=records.slice(0,800);importDraft.status=records.length?'Распознано записей: '+records.length+'. Проверь дни, недели и время.':'Не удалось уверенно распознать пары. Проверь текст файла или внеси расписание вручную.';
-      if(records.some(x=>x.week))importDraft.mode='alternating';
+      const result=await extractFile(file);
+      importDraft.records=result.records.slice(0,2000);
+      importDraft.groups=result.groups;
+      importDraft.selectedGroup='';
+      if(result.groups.length)importDraft.status='Найдено групп: '+result.groups.length+'. Выбери свою группу: чужие занятия в импорт не попадут.';
+      else importDraft.status=result.records.length?'Группы не обнаружены. Похоже, файл содержит личное расписание. Проверь предпросмотр.':'Не удалось уверенно распознать расписание. Проверь формат файла или используй Excel/CSV с названиями групп в заголовках.';
+      if(result.records.some(x=>x.week))importDraft.mode='alternating';
     }catch(err){importDraft.status='Ошибка чтения: '+(err&&err.message||'неизвестная ошибка');}
     render();
   }
-  function setDraft(key,value){if(importDraft)importDraft[key]=value}
+
+  function setDraft(key,value){if(importDraft){importDraft[key]=value;if(key==='selectedGroup')render()}}
+
+  
   function editDraft(index) {
     const r=importDraft&&importDraft.records[index];if(!r)return;
     sheet('<h1>Проверить занятие</h1><label for="di-subj">Предмет / название</label><input id="di-subj" value="'+esc(r.subj)+'"><label for="di-day">День недели</label><select id="di-day"><option value="0" '+(r.day==null?'selected':'')+'>Выбрать день</option>'+[1,2,3,4,5,6].map(d=>'<option value="'+d+'" '+(Number(r.day)===d?'selected':'')+'>'+DAYS_SHORT[d]+'</option>').join('')+'</select><label for="di-week">Неделя</label><select id="di-week"><option value="" '+(!r.week?'selected':'')+'>По умолчанию</option><option value="odd" '+(r.week==='odd'?'selected':'')+'>Нижняя / нечётная</option><option value="even" '+(r.week==='even'?'selected':'')+'>Верхняя / чётная</option><option value="fixed" '+(r.week==='fixed'?'selected':'')+'>Постоянная</option></select><label for="di-cycle">Неделя цикла</label><select id="di-cycle">'+[0,1,2,3].map(n=>'<option value="'+n+'" '+(Number(r.cycleIndex||0)===n?'selected':'')+'>Неделя '+(n+1)+'</option>').join('')+'</select><div class="row"><div class="grow"><label for="di-start">Начало</label><input id="di-start" type="time" value="'+esc(r.s)+'"></div><div class="grow"><label for="di-end">Конец</label><input id="di-end" type="time" value="'+esc(r.e)+'"></div></div><label for="di-room">Аудитория / место</label><input id="di-room" value="'+esc(r.room)+'"><label for="di-teacher">Преподаватель / заметка</label><input id="di-teacher" value="'+esc(r.teacher)+'"><label for="di-date">Конкретная дата (если есть)</label><input id="di-date" type="date" value="'+esc(r.date||'')+'"><div class="schedule-actions"><button class="btn" onclick="MYDAY_LAB.saveDraftItem('+index+')">Сохранить</button><button class="btn g" onclick="MYDAY_LAB.removeDraftItem('+index+')">Убрать строку</button></div>');
@@ -404,13 +465,16 @@
   function removeDraftItem(i){importDraft.records.splice(i,1);close_();render()}
   function applyImport() {
     const d=importDraft;if(!d||!d.records.length){alert('Сначала распознай файл.');return}
-    if(d.records.some(x=>!Number.isInteger(Number(x.day))||Number(x.day)<1||Number(x.day)>6)){alert('Укажи день недели для каждой распознанной записи. Нераспознанные строки не будут добавлены наугад.');return}
-    const target=d.target||'study',mode=d.mode==='auto'?(d.records.some(x=>x.week)?'alternating':'fixed'):d.mode;
-    if(target==='study'&&mode==='dates'&&d.records.some(x=>!x.date)){alert('В режиме конкретных дат у каждой записи должна быть дата. Открой строки без даты и укажи её.');return}
+    if(d.groups&&d.groups.length&&!d.selectedGroup){alert('Сначала выбери свою учебную группу.');return}
+    const selectedRecords=d.groups&&d.groups.length?d.records.filter(r=>r.group===d.selectedGroup):d.records;
+    if(!selectedRecords.length){alert('Для выбранной группы не найдено занятий. Выбери другую группу или проверь файл.');return}
+    if(selectedRecords.some(x=>!Number.isInteger(Number(x.day))||Number(x.day)<1||Number(x.day)>6)){alert('Укажи день недели для каждой распознанной записи. Нераспознанные строки не будут добавлены наугад.');return}
+    const target=d.target||'study',mode=d.mode==='auto'?(selectedRecords.some(x=>x.week)?'alternating':'fixed'):d.mode;
+    if(target==='study'&&mode==='dates'&&selectedRecords.some(x=>!x.date)){alert('В режиме конкретных дат у каждой записи должна быть дата. Открой строки без даты и укажи её.');return}
     if(d.replace&&!confirm('Заменить существующие записи в выбранных днях? Это действие нельзя отменить.'))return;
     if(target==='study')cfg().studyMode=mode;
     const changed=new Set(),cleared=new Set();
-    d.records.forEach(r=>{
+    selectedRecords.forEach(r=>{
       if(!r.subj||!r.s||!r.e||r.e<=r.s)return;
       let key='work';
       if(target==='study'){
@@ -426,8 +490,8 @@
       bucket[day].push({id:id(),subj:r.subj,s:r.s,e:r.e,room:r.room||'',teacher:r.teacher||''});
       changed.add(key+'|'+day);
     });
-    if(!changed.size){alert('В файле нет готовых строк с предметом, днём и временем. Проверь предпросмотр.');return}
-    save();importDraft.status='Импортировано записей: '+d.records.length;importDraft=null;st=null;tab='sched';schedSpace=target;render();
+    if(!changed.size){alert('В выбранной группе нет готовых строк с предметом, днём и временем. Проверь предпросмотр.');return}
+    save();importDraft.status='Импортировано записей: '+selectedRecords.length+' · группа: '+(d.selectedGroup||'личное расписание');importDraft=null;st=null;tab='sched';schedSpace=target;render();
   }
 
   function setStudyMode(mode){if(!['alternating','fixed','cycle','dates','hybrid'].includes(mode))return;cfg().studyMode=mode;if(mode==='cycle'&&!cfg().cycleAnchor)cfg().cycleAnchor=mondayOf(today());save();render()}
