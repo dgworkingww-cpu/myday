@@ -1,6 +1,8 @@
 import * as pdfjs from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs";
+// Bundle the matching worker module into this Edge Function so PDF.js fake-worker fallback
+// can resolve the exact same module from the module cache without a runtime CDN import.
+import "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
 
-// Load the worker separately instead of pulling the full npm dependency tree into the Edge Function bundle.
 pdfjs.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
 
 const json = (value: unknown, status = 200) =>
