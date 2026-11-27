@@ -63,8 +63,8 @@ textarea{width:100%;min-height:160px;padding:13px;border:1px solid var(--line);b
 <section class="panel">
 <h2>1. Выбери документ</h2>
 <div class="filebox">
-<input id="file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,application/pdf,image/*">
-<div class="filemeta" id="fileMeta">PDF, JPG, PNG или WEBP · до 100 МБ</div>
+<input id="file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.heic,.heif,application/pdf,image/*">
+<div class="filemeta" id="fileMeta">PDF, JPG, PNG, WEBP, TIFF или HEIC · до 100 МБ</div>
 </div>
 <div class="preview hidden" id="preview">
 <div class="preview-head"><b id="previewLabel">Предпросмотр</b><div class="pager hidden" id="pager"><button id="prev" aria-label="Предыдущая страница">‹</button><input id="pageNo" type="number" min="1" value="1" aria-label="Номер страницы"><span id="pageTotal">/ 1</span><button id="next" aria-label="Следующая страница">›</button></div></div>
@@ -130,7 +130,7 @@ async function showFile(){
  cleanupPreview();recognized="";analysis=null;$("textPanel").classList.add("hidden");$("resultPanel").classList.add("hidden");$("preview").classList.add("hidden");$("pager").classList.add("hidden");$("pdfCanvas").classList.add("hidden");$("imagePreview").classList.add("hidden");$("bar").style.width="0%";
  file=$("file").files&&$("file").files[0]||null;
  if(!file){$("fileMeta").textContent="PDF, JPG, PNG или WEBP · до 100 МБ";$("extract").disabled=true;progress(0,"Выбери документ.");return}
- if(!allowed.test(file.name)){file=null;$("file").value="";$("extract").disabled=true;progress(0,"Этот формат пока не поддерживается. Выбери PDF, JPG, PNG, WEBP или TIFF.","error");return}
+ const isPdf=file.type==="application/pdf"||/\\.pdf$/i.test(file.name);\n const isImage=file.type.startsWith("image/")||/\\.(jpe?g|png|webp|tiff?|heic|heif)$/i.test(file.name);\n if(!isPdf&&!isImage){file=null;$("file").value="";$("extract").disabled=true;progress(0,"Этот формат пока не поддерживается. Выбери PDF или изображение.","error");return}
  if(!file.size){file=null;$("file").value="";$("extract").disabled=true;progress(0,"Файл пустой. Выбери другой документ.","error");return}
  if(file.size>100*1024*1024){file=null;$("file").value="";$("extract").disabled=true;progress(0,"Файл больше 100 МБ. Уменьши его размер или раздели на части.","error");return}
  $("fileMeta").textContent=file.name+" · "+(file.size/1024/1024).toFixed(2)+" МБ";
@@ -149,7 +149,7 @@ async function showFile(){
  }
  $("extract").disabled=false;
 }
-async function extractText(){
+async function imageToCanvas(source){\n const url=URL.createObjectURL(source);\n try{\n  const img=new Image();img.src=url;\n  await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error("Не удалось открыть изображение. Сохрани его как JPG или PNG и повтори попытку."))});\n  const scale=Math.min(1,2800/Math.max(img.naturalWidth,img.naturalHeight));\n  const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));\n  const ctx=canvas.getContext("2d",{willReadFrequently:true});if(!ctx)throw new Error("Браузер не смог подготовить изображение для OCR.");\n  ctx.drawImage(img,0,0,canvas.width,canvas.height);return canvas;\n }finally{URL.revokeObjectURL(url)}\n}\nasync function extractText(){
  if(!file){progress(0,"Сначала выбери PDF или изображение.","error");return}
  if(busy)return;
  setBusy(true);cancelRequested=false;recognized="";$("output").value="";$("textPanel").classList.add("hidden");$("resultPanel").classList.add("hidden");
@@ -187,12 +187,12 @@ async function extractText(){
    if(!window.Tesseract)throw new Error("Не загрузился бесплатный движок OCR. Проверь подключение к интернету и повтори попытку.");
    progress(3,"Загружаю бесплатную языковую модель…");
    worker=await Tesseract.createWorker("rus+eng",1,{logger:m=>{if(m.status==="recognizing text")progress(10+Math.round((m.progress||0)*80),"Распознаю изображение… "+Math.round((m.progress||0)*100)+"%")}});
-   activeWorker=worker;const result=await worker.recognize(file);parts.push(String(result.data.text||"").trim());
+   activeWorker=worker;const canvas=await imageToCanvas(file);const result=await worker.recognize(canvas);parts.push(String(result.data.text||"").trim());canvas.width=1;canvas.height=1;
   }
   if(cancelRequested)throw new Error("Обработка остановлена пользователем.");
   recognized=parts.join("\n\n").trim();
   if(recognized.length<20)throw new Error("Текст не найден. Возможно, PDF пустой, защищён паролем или качество изображения слишком низкое.");
-  $("output").value=recognized;$("textMeta").textContent="Извлечено символов: "+recognized.length+" · "+(worker?"с OCR":"текстовый слой PDF");$("textPanel").classList.remove("hidden");
+  $("output").value=recognized;$("textMeta").textContent="Извлечено символов: "+recognized.length+" · "+(worker?"с OCR":"текстовый слой PDF")+(wasTruncated?" · Для анализа взяты первые 42 000 символов":"");$("textPanel").classList.remove("hidden");
   progress(100,"Текст извлечён. Следующий шаг — анализ ИИ.","success");
  }catch(err){progress(0,err&&err.message||"Не удалось обработать документ.","error")}
  finally{if(worker){try{await worker.terminate()}catch(_){}}activeWorker=null;setBusy(false)}
