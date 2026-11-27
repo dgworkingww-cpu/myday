@@ -8,14 +8,15 @@ const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
 
 async function runOcrSpace(bytes: Uint8Array): Promise<{ text: string; warning?: string }> {
-  // OCR.space free tier supports small PDFs (up to 1 MB / 3 pages).
-  // Users can optionally provide their own free API key as OCR_SPACE_API_KEY.
-  if (bytes.byteLength > 1024 * 1024) {
-    throw new Error("Скан распознан как изображение, но PDF больше лимита бесплатного OCR (1 МБ). Сожми PDF или раздели его на небольшие файлы до 3 страниц.");
+  // The demo key is tightly limited; configured account keys use their own plan.
+  const configuredKey = Deno.env.get("OCR_SPACE_API_KEY") || "";
+  const apiKey = configuredKey || "helloworld";
+  if (!configuredKey && bytes.byteLength > 1024 * 1024) {
+    throw new Error("Скан PDF больше лимита бесплатного OCR (1 МБ). Для автоматической обработки больших сканов нужен OCR_SPACE_API_KEY с подходящим тарифом. Без него отправь сжатый PDF до 1 МБ и максимум 3 страницы.");
   }
-  const apiKey = Deno.env.get("OCR_SPACE_API_KEY") || "helloworld";
   const form = new FormData();
-  form.append("file", new Blob([bytes], { type: "application/pdf" }), "myday-schedule.pdf");
+  const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+  form.append("file", new Blob([bytes], { type: isPdf ? "application/pdf" : "image/jpeg" }), isPdf ? "myday-document.pdf" : "myday-image.jpg");
   form.append("language", "rus");
   form.append("OCREngine", "2");
   form.append("isOverlayRequired", "false");
@@ -56,9 +57,15 @@ Deno.serve(async (req: Request) => {
     if (!bytes.byteLength) return json({ error: "PDF пустой." }, 400);
     if (bytes.byteLength > 20 * 1024 * 1024) return json({ error: "PDF больше 20 МБ." }, 413);
 
+    const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+    const warnings: string[] = [];
+    if (!isPdf) {
+      const ocr = await runOcrSpace(bytes);
+      warnings.push(ocr.warning || "Текст распознан с помощью OCR.");
+      return json({ text: ocr.text.slice(0, 45000), warnings });
+    }
     const pdf = await pdfjs.getDocument({ data: bytes, useSystemFonts: true, isEvalSupported: false }).promise;
     const pages = Math.min(pdf.numPages, 40);
-    const warnings: string[] = [];
     if (pdf.numPages > pages) warnings.push("Обработаны первые 40 страниц PDF.");
     const chunks: string[] = [];
     for (let pageNumber = 1; pageNumber <= pages; pageNumber++) {
@@ -73,8 +80,8 @@ Deno.serve(async (req: Request) => {
 
     // A missing PDF text layer means the pages are scans. Fall back to OCR rather than
     // asking the student to export every page as a separate photo.
-    if (pdf.numPages > 3) {
-      throw new Error("В бесплатном OCR можно распознать до 3 страниц за раз. Раздели PDF на части по 3 страницы и отправь их по очереди.");
+    if (!Deno.env.get("OCR_SPACE_API_KEY") && pdf.numPages > 3) {
+      throw new Error("Это скан без текстового слоя. Бесплатный OCR ограничен 3 страницами за запрос. Для автоматической обработки многостраничных сканов нужен OCR_SPACE_API_KEY с подходящим тарифом; иначе раздели PDF на части по 3 страницы.");
     }
     const ocr = await runOcrSpace(bytes);
     warnings.push(ocr.warning || "Текст распознан с помощью OCR.");
