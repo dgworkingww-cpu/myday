@@ -35,6 +35,16 @@ async function getProfile(telegramId: number) {
   const data = rows[0]?.data || profileSeed();
   return { data, baseData: JSON.parse(JSON.stringify(data)), revision: Number(rows[0]?.revision || 0), base, key, headers };
 }
+async function consumeAiQuota(telegramId: number, usageDate: string, limit = 100): Promise<boolean> {
+  const profile = await getProfile(telegramId);
+  const response = await fetch(profile.base + "/rest/v1/rpc/myday_consume_bot_ai", {
+    method: "POST",
+    headers: profile.headers,
+    body: JSON.stringify({ p_telegram_id: telegramId, p_usage_date: usageDate, p_limit: limit })
+  });
+  if (!response.ok) throw new Error("AI quota check failed: " + response.status);
+  return response.json();
+}
 function mergeBotChanges(latest: AnyRecord, incoming: AnyRecord, base: AnyRecord) {
   const merged = { ...latest };
   const latestTasks = Array.isArray(latest.tasks) ? [...latest.tasks] : [];
@@ -113,9 +123,10 @@ function guessSpace(text: string) {
   return "personal";
 }
 function guessCategory(space: string) { return space === "study" ? "Учёба" : space === "work" ? "Работа и проекты" : "Другое"; }
-async function aiInterpret(text: string, today: string, mode = "text"): Promise<AnyRecord | null> {
+async function aiInterpret(text: string, today: string, userId: number, mode = "text"): Promise<AnyRecord | null> {
   const apiKey = Deno.env.get("GROQ_API_KEY");
   if (!apiKey) return null;
+  if (!await consumeAiQuota(userId, today)) throw new Error("MYDAY_AI_DAILY_LIMIT");
   const prompt = `Ты — персональный помощник-планировщик MYDAY. Сегодня ${today}. Понимай русскую разговорную речь, в том числе голосовую расшифровку. Верни только JSON: {"intent":"add|add_event|list_today|list_week|list_tasks|complete|delete|reschedule|note|help|clarify","tasks":[{"title":"...","desc":"","space":"study|work|personal","cat":"Учёба|Работа и проекты|Другое","due":"YYYY-MM-DD или пусто","prio":0}],"events":[{"title":"...","type":"Экзамен|Зачёт|Консультация|Сдача работы|Событие","date":"YYYY-MM-DD","time":"HH:MM или пусто"}],"task_query":"","due":"YYYY-MM-DD или пусто","note":"","reply":""}. При создании события обязательно укажи дату только если она явно названа или однозначно следует из слов сегодня/завтра/послезавтра/день недели. Не придумывай дату и время. При нескольких делах создай несколько tasks. Для завершения, удаления или переноса существующей задачи используй task_query с её названием; для переноса также заполни due. Если задачу нельзя однозначно определить, выбери clarify и задай один короткий вопрос. prio: 0 высокий, 1 обычный, 2 низкий. ${mode === "voice" ? "Текст получен из голосового сообщения." : ""}`;
   try {
     const controller = new AbortController();
@@ -139,16 +150,18 @@ async function telegramFile(fileId: string) {
   if (!r.ok) throw new Error("Не удалось скачать файл из Telegram");
   return { blob: await r.blob(), name: meta.result.file_path.split("/").pop() || "voice.ogg" };
 }
-async function transcribe(fileId: string) {
+async function transcribe(fileId: string, userId: number, today: string) {
   if (!Deno.env.get("GROQ_API_KEY")) return "";
+  if (!await consumeAiQuota(userId, today)) throw new Error("MYDAY_AI_DAILY_LIMIT");
   const { blob, name } = await telegramFile(fileId);
   const form = new FormData(); form.append("file", new File([blob], name, { type: blob.type || "audio/ogg" })); form.append("model", Deno.env.get("GROQ_TRANSCRIPTION_MODEL") || "whisper-large-v3-turbo"); form.append("language", "ru");
   const r = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", { method: "POST", headers: { Authorization: "Bearer " + Deno.env.get("GROQ_API_KEY")! }, body: form });
   if (!r.ok) throw new Error("Не удалось распознать голос: " + r.status);
   const d = await r.json(); return String(d.text || "");
 }
-async function vision(fileId: string) {
+async function vision(fileId: string, userId: number, today: string) {
   if (!Deno.env.get("GROQ_API_KEY")) return "";
+  if (!await consumeAiQuota(userId, today)) throw new Error("MYDAY_AI_DAILY_LIMIT");
   const { blob } = await telegramFile(fileId);
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let binary = ""; for (const b of bytes) binary += String.fromCharCode(b);
@@ -188,7 +201,7 @@ async function handleText(chatId: number, userId: number, text: string) {
   }
   const eventLike = /тренировк|встреч|при[её]м|врач|экзамен|зач[её]т|консультац|день рождения|собеседован|мероприят/i.test(cmd);
   const fallbackSpace = guessSpace(cmd);
-  const payload = await aiInterpret(cmd, today) || (eventLike
+  const payload = await aiInterpret(cmd, today, userId) || (eventLike
     ? { intent: "add_event", tasks: [], events: [{ title: cmd, type: /экзамен/i.test(cmd) ? "Экзамен" : /зач[её]т/i.test(cmd) ? "Зачёт" : "Событие", date: inferDate(cmd, today) }] }
     : { intent: "add", tasks: [{ title: cmd, desc: "", space: fallbackSpace, cat: guessCategory(fallbackSpace), due: inferDate(cmd, today), prio: 1 }] });
   if (payload.intent === "clarify") { await send(chatId, escapeHtml(payload.reply || "Уточни, пожалуйста, дату или к какому разделу относится задача.")); return; }
@@ -285,12 +298,12 @@ Deno.serve(async (req: Request) => {
       if (!chatId || !userId || m.chat?.type !== "private") return json({ ok: true });
       let text = String(m.text || m.caption || "").trim();
       if (m.voice?.file_id || m.audio?.file_id) {
-        const transcript = await transcribe(m.voice?.file_id || m.audio.file_id);
+        const transcript = await transcribe(m.voice?.file_id || m.audio.file_id, userId, isoToday());
         if (!transcript) { await send(chatId, "Голосовое получил, но распознавание пока не подключено. Для него нужен бесплатный GROQ_API_KEY в секретах проекта."); return json({ ok: true }); }
         await send(chatId, "🎙 Распознал: «" + escapeHtml(transcript) + "»\nСекунду, добавляю…");
         text = transcript;
       } else if (m.photo?.length) {
-        const parsed = await vision(m.photo[m.photo.length - 1].file_id);
+        const parsed = await vision(m.photo[m.photo.length - 1].file_id, userId, isoToday());
         if (!parsed || !Array.isArray(parsed.tasks) || !parsed.tasks.length) { await send(chatId, "Фото получил, но не смог уверенно выделить задачи. Пришли более чёткий снимок или текстом."); return json({ ok: true }); }
         text = parsed.tasks.map((x: AnyRecord) => x.title + (x.due ? " до " + x.due : "")).join("; ");
       } else if (m.document) {
@@ -309,7 +322,7 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("MYDAY bot webhook error:", error);
     if (fallbackChatId) {
-      try { await send(fallbackChatId, "Не получилось обработать сообщение. Проверь /tasks: если задача уже появилась, повторно отправлять её не нужно."); } catch { /* Telegram may be temporarily unavailable */ }
+      try { await send(fallbackChatId, String(error).includes("MYDAY_AI_DAILY_LIMIT") ? "На сегодня исчерпан лимит AI-запросов MYDAY (100). Обычные команды и текстовое добавление задач остаются доступны." : "Не получилось обработать сообщение. Проверь /tasks: если задача уже появилась, повторно отправлять её не нужно."); } catch { /* Telegram may be temporarily unavailable */ }
     }
     return json({ ok: true });
   }
