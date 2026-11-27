@@ -623,20 +623,33 @@ async function handleText(chatId: number, userId: number, text: string) {
     const incomingEvents = Array.isArray(payload.events) ? payload.events : [];
     if (!incomingEvents.length) { await send(chatId, "Не смог выделить событие. Напиши, например: «Тренировка завтра в 18:00»."); return; }
     p.data.events = Array.isArray(p.data.events) ? p.data.events : [];
+    p.data.exc = Array.isArray(p.data.exc) ? p.data.exc : [];
     const createdEvents: AnyRecord[] = [];
+    const createdLessons: AnyRecord[] = [];
     for (const x of incomingEvents.slice(0, 10)) {
       const date = validDate(x.date) ? x.date : inferDate(cmd, today);
       if (!date) continue;
       const time = validTime(x.time) ? x.time : (timeRange?.start || inferTime(cmd));
       const endTime = validTime(x.endTime) ? x.endTime : (timeRange?.end || "");
       const title = String(x.title || (/работ|смен/i.test(cmd) ? "Работа" : cmd)).trim().slice(0, 240);
-      const duplicate = p.data.events.some((old: AnyRecord) => String(old.title || "").toLocaleLowerCase("ru") === title.toLocaleLowerCase("ru") && old.date === date && String(old.time || "") === time && String(old.endTime || "") === endTime);
-      if (!duplicate) createdEvents.push({ id: uid(), title, type: String(x.type || "Событие"), date, time, endTime });
+      const isLesson = /пар|заняти|лекци|семинар/i.test(cmd) || /^(?:пара|занятие|лекция|семинар)$/i.test(String(x.type || ""));
+      if (isLesson && validTime(time) && validTime(endTime)) {
+        const duplicate = p.data.exc.some((old: AnyRecord) => old.date === date && old.type === "add" && String(old.o?.subj || "").toLocaleLowerCase("ru") === title.toLocaleLowerCase("ru") && String(old.o?.s || "") === time && String(old.o?.e || "") === endTime);
+        if (!duplicate) createdLessons.push({ date, id: uid(), type: "add", o: { s: time, e: endTime, room: "", subj: title } });
+      } else {
+        const duplicate = p.data.events.some((old: AnyRecord) => String(old.title || "").toLocaleLowerCase("ru") === title.toLocaleLowerCase("ru") && old.date === date && String(old.time || "") === time && String(old.endTime || "") === endTime);
+        if (!duplicate) createdEvents.push({ id: uid(), title, type: String(x.type || "Событие"), date, time, endTime });
+      }
     }
-    if (!createdEvents.length) { await send(chatId, "Такая запись уже есть в календаре. Дубликат не создавал."); return; }
+    if (!createdEvents.length && !createdLessons.length) { await send(chatId, "Такая запись уже есть в MYDAY. Дубликат не создавал."); return; }
     p.data.events.push(...createdEvents);
+    p.data.exc.push(...createdLessons);
     await saveProfile(userId, p.data, p.baseData);
-    await send(chatId, "Добавил в календарь MYDAY:\n" + createdEvents.map((x: AnyRecord) => "📌 <b>" + escapeHtml(x.title) + "</b> · " + x.date + (x.time ? " · " + x.time + (x.endTime ? "–" + x.endTime : "") : "")).join("\n"));
+    const lines = [
+      ...createdLessons.map((x: AnyRecord) => "🎓 <b>" + escapeHtml(x.o.subj) + "</b> · " + x.date + " · " + x.o.s + "–" + x.o.e + " · расписание"),
+      ...createdEvents.map((x: AnyRecord) => "📌 <b>" + escapeHtml(x.title) + "</b> · " + x.date + (x.time ? " · " + x.time + (x.endTime ? "–" + x.endTime : "") : "") + " · календарь")
+    ];
+    await send(chatId, "Сохранил в MYDAY и синхронизировал с приложением:\n" + lines.join("\n"));
     return;
   }
   if (payload.intent === "help") { await send(chatId, "Можешь свободно писать задачи, события, домашнюю работу, заметки и команды на изменение записей. Примеры: «завтра работа с 19 до 23:30», «запиши лабораторную по теплотехнике до пятницы», «перенеси тренировку на субботу», «что у меня на неделе?». Команды: /today, /tomorrow, /day дата, /week, /tasks, /events, /homework, /app."); return; }
