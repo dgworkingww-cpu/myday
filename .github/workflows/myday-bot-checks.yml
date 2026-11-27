@@ -8,6 +8,13 @@ on:
       - 'supabase/migrations/**'
       - 'supabase/config.toml'
       - '.github/workflows/myday-bot-checks.yml'
+  push:
+    branches: [feature/myday-telegram-assistant]
+    paths:
+      - 'supabase/functions/myday-bot/**'
+      - 'supabase/migrations/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/myday-bot-checks.yml'
   workflow_dispatch:
 
 permissions:
