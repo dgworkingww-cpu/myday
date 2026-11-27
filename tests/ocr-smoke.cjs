@@ -47,7 +47,7 @@ function makePdf(lines) {
   page.on('requestfailed',r=>failed.push(r.url()+': '+(r.failure()?.errorText||'failed')));
   await page.route('https://telegram.org/**',route=>route.fulfill({
     status:200,contentType:'application/javascript',
-    body:'window.Telegram={WebApp:{initData:"test-init-data",initDataUnsafe:{user:{id:12345}},ready(){},expand(){},showAlert(){},close(){}}};'
+    body:'window.Telegram={WebApp:{initData:"test-init-data",initDataUnsafe:{user:{id:12345}},ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},setBottomBarColor(){},onEvent(){},showAlert(){},close(){}}};'
   }));
   await page.route('https://rzgsctbvgzerqizfjhuq.supabase.co/functions/v1/myday-document-analyze',async route=>{
     const body=route.request().postDataJSON();
@@ -113,7 +113,12 @@ function makePdf(lines) {
     await page.locator('#textPanel').waitFor({state:'visible',timeout:120000});
     const ocrText=(await page.locator('#output').inputValue()).toUpperCase();
     if(!ocrText.includes('MYDAY')||!ocrText.includes('OCR')) throw new Error('Real image OCR failed: '+ocrText);
+    await page.locator('#back').click();
+    await page.locator('#app .page-title').waitFor({timeout:15000});
+    await page.locator('#nav button').nth(4).click();
+    await page.getByRole('button',{name:/Разбор документов/}).click();
+    await page.locator('#file').waitFor({timeout:15000});
     if(errors.length) throw new Error('Browser runtime errors: '+errors.join(' | '));
-    console.log(JSON.stringify({result:'passed',tests:['file selection','empty/unsupported file validation','PDF preview','next/previous page controls','two-page text extraction','AI analysis UI','selective import','cloud profile save','schedule conflict prevention','AI failure recovery','real image OCR'],savedTasks:savedProfile.tasks.length,savedEvents:savedProfile.events.length,errors,failedRequests:failed},null,2));
+    console.log(JSON.stringify({result:'passed',tests:['file selection','empty/unsupported file validation','PDF preview','next/previous page controls','two-page text extraction','AI analysis UI','selective import','cloud profile save','schedule conflict prevention','AI failure recovery','real image OCR','return navigation','open analyzer from MYDAY menu'],savedTasks:savedProfile.tasks.length,savedEvents:savedProfile.events.length,errors,failedRequests:failed},null,2));
   } finally { await context.close();await browser.close();await new Promise(resolve=>server.close(resolve)); }
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});
