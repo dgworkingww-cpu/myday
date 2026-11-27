@@ -380,10 +380,18 @@ async function handleText(chatId: number, userId: number, text: string) {
     return scheduleItemsForDate(p.data, date).map((x: AnyRecord) => date + " " + x.kind + ": " + x.title + " " + x.start + (x.end ? "–" + x.end : ""));
   }).flat().slice(0, 60);
   const profileContext = "Предметы: " + (subjects.join("; ") || "не указаны") + "\nОткрытые задачи: " + (openTaskNames.join("; ") || "нет") + "\nДомашняя работа: " + (openHomeworkNames.join("; ") || "нет") + "\nПредстоящие события: " + (upcomingEvents.join("; ") || "нет") + "\nРасписание учёбы и работы на 7 дней: " + (upcomingSchedule.join("; ") || "не заполнено");
+  const fallbackSubject = subjects.find(name => {
+    const normalized = name.toLocaleLowerCase("ru");
+    const textLower = cmd.toLocaleLowerCase("ru");
+    return textLower.includes(normalized) || normalized.split(/\s+/).some((word: string) => word.length > 5 && textLower.includes(word.slice(0, 7)));
+  });
+  const fallbackHomework = !!fallbackSubject && /домашн|лаборатор|курсов|реферат|задан/i.test(cmd);
   failureStage = "распознавание текста";
-  const payload = await aiInterpret(cmd, today, userId, "text", profileContext) || ((eventLike || hasSpokenTimeRange)
-    ? { intent: "add_event", tasks: [], events: [{ title: /работ|смен/i.test(cmd) ? "Работа" : cmd, type: /экзамен/i.test(cmd) ? "Экзамен" : /зач[её]т/i.test(cmd) ? "Зачёт" : "Событие", date: inferDate(cmd, today), time: timeRange?.start || inferTime(cmd), endTime: timeRange?.end || "" }] }
-    : { intent: "add", tasks: [{ title: cmd, desc: "", space: fallbackSpace, cat: guessCategory(fallbackSpace), due: inferDate(cmd, today), prio: 1 }] });
+  const payload = await aiInterpret(cmd, today, userId, "text", profileContext) || (fallbackHomework
+    ? { intent: "add_homework", homework: [{ subject: fallbackSubject, title: cmd, desc: "", due: inferDate(cmd, today) }] }
+    : ((eventLike || hasSpokenTimeRange)
+      ? { intent: "add_event", tasks: [], events: [{ title: /работ|смен/i.test(cmd) ? "Работа" : cmd, type: /экзамен/i.test(cmd) ? "Экзамен" : /зач[её]т/i.test(cmd) ? "Зачёт" : "Событие", date: inferDate(cmd, today), time: timeRange?.start || inferTime(cmd), endTime: timeRange?.end || "" }] }
+      : { intent: "add", tasks: [{ title: cmd, desc: "", space: fallbackSpace, cat: guessCategory(fallbackSpace), due: inferDate(cmd, today), prio: 1 }] }));
 
   // Strong deterministic guard: a clearly spoken work/shift interval is always a calendar event.
   if (hasSpokenTimeRange && eventLike && !["complete", "delete", "reschedule", "update_task", "delete_event", "reschedule_event", "list_today", "list_week", "list_tasks", "list_events", "list_homework", "note", "help"].includes(String(payload.intent))) {
