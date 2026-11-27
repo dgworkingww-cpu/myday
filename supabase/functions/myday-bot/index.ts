@@ -269,11 +269,16 @@ function scheduleItemsForDate(data: AnyRecord, date: string) {
       const pattern = Array.isArray(workConfig.pattern) && workConfig.pattern.length ? workConfig.pattern : ["work", "work", "off", "off"];
       const anchor = workConfig.anchorDate || isoToday(data.settings?.timezone || TZ);
       const days = Math.round((Date.parse(date + "T12:00:00Z") - Date.parse(anchor + "T12:00:00Z")) / 86400000);
-      const item = pattern[((days % pattern.length) + pattern.length) % pattern.length];
-      const isWork = item === "work" || item === 1 || item === "1" || (item && typeof item === "object" && item.type === "work");
-      if (isWork) {
-        const obj = item && typeof item === "object" ? item : {};
-        work = [{ subj: obj.title || workConfig.title || "Рабочая смена", s: obj.start || workConfig.start || "09:00", e: obj.end || workConfig.end || "18:00" }];
+      if (!workConfig.endDate || date <= workConfig.endDate) {
+        const item = pattern[((days % pattern.length) + pattern.length) % pattern.length];
+        const obj = item && typeof item === "object" ? item : { type: item };
+        const kind = String(obj.type || "").toLowerCase();
+        if (kind === "day" || kind === "night" || kind === "work" || item === 1 || item === "1") {
+          const day = kind === "day", night = kind === "night";
+          work = [{ subj: obj.title || (day ? "Дневная смена" : night ? "Ночная смена" : workConfig.title || "Рабочая смена"), s: obj.start || (day ? workConfig.dayStart || "08:00" : night ? workConfig.nightStart || "20:00" : workConfig.start || "09:00"), e: obj.end || (day ? workConfig.dayEnd || "20:00" : night ? workConfig.nightEnd || "08:00" : workConfig.end || "18:00") }];
+        } else if (kind === "recovery") {
+          work = [{ subj: obj.title || "Отсыпной", s: "", e: "" }];
+        }
       }
     }
   } else work = [...((sched.work || {})[day] || [])];
