@@ -107,7 +107,7 @@ const server = http.createServer((req,res) => {
     await page.locator('.ov').waitFor({state:'detached'});
 
     // Arbitrary text is captured as an inbox note by default, without forcing a task category.
-    await page.locator('#app .app-header button[onclick="capture()"]).click();
+    await page.locator('#app .app-header button[onclick="capture()"]').click();
     await page.locator('#ov #cq').waitFor();
     await page.locator('#ov #cq').fill('MYDAY freeform note with a link https://example.com');
     const captureDefault=await page.locator('#ov #capture-kind').inputValue();
