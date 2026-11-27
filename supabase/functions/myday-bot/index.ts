@@ -126,9 +126,9 @@ function guessCategory(space: string) { return space === "study" ? "Учёба" 
 async function aiInterpret(text: string, today: string, userId: number, mode = "text"): Promise<AnyRecord | null> {
   const apiKey = Deno.env.get("GROQ_API_KEY");
   if (!apiKey) return null;
-  if (!await consumeAiQuota(userId, today)) throw new Error("MYDAY_AI_DAILY_LIMIT");
   const prompt = `Ты — персональный помощник-планировщик MYDAY. Сегодня ${today}. Понимай русскую разговорную речь, в том числе голосовую расшифровку. Верни только JSON: {"intent":"add|add_event|list_today|list_week|list_tasks|complete|delete|reschedule|note|help|clarify","tasks":[{"title":"...","desc":"","space":"study|work|personal","cat":"Учёба|Работа и проекты|Другое","due":"YYYY-MM-DD или пусто","prio":0}],"events":[{"title":"...","type":"Экзамен|Зачёт|Консультация|Сдача работы|Событие","date":"YYYY-MM-DD","time":"HH:MM или пусто"}],"task_query":"","due":"YYYY-MM-DD или пусто","note":"","reply":""}. При создании события обязательно укажи дату только если она явно названа или однозначно следует из слов сегодня/завтра/послезавтра/день недели. Не придумывай дату и время. При нескольких делах создай несколько tasks. Для завершения, удаления или переноса существующей задачи используй task_query с её названием; для переноса также заполни due. Если задачу нельзя однозначно определить, выбери clarify и задай один короткий вопрос. prio: 0 высокий, 1 обычный, 2 низкий. ${mode === "voice" ? "Текст получен из голосового сообщения." : ""}`;
   try {
+    if (!await consumeAiQuota(userId, today)) throw new Error("MYDAY_AI_DAILY_LIMIT");
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
     const r = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: "POST", signal: controller.signal, headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ model: Deno.env.get("GROQ_CHAT_MODEL") || "openai/gpt-oss-120b", temperature: 0.1, response_format: { type: "json_object" }, messages: [{ role: "system", content: prompt }, { role: "user", content: text.slice(0, 8000) }] }) });
@@ -138,6 +138,7 @@ async function aiInterpret(text: string, today: string, userId: number, mode = "
     const parsed = JSON.parse(d.choices?.[0]?.message?.content || "{}");
     return parsed && typeof parsed === "object" ? parsed : null;
   } catch (error) {
+    if (String(error).includes("MYDAY_AI_DAILY_LIMIT")) throw error;
     console.error("MYDAY AI unavailable; using safe text fallback:", error);
     return null;
   }
