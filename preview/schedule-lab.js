@@ -289,13 +289,13 @@
     out.push(value.trim());return out;
   }
   function groupLabel(value) {
-    const raw=String(value||'').replace(/\s+/g,' ').trim();
+    const raw=String(value||'').replace(/\s*\([^)]*\)\s*$/,'').replace(/\s+/g,' ').trim();
     if(!raw)return '';
     const explicit=raw.match(/^(?:группа|гр\.?)\s*[:№#-]?\s*(.+)$/i);
     if(explicit&&explicit[1])return explicit[1].trim();
-    if(/^[А-ЯЁ]{1,7}\s*[-–]\s*\d{1,3}(?:\s*[-–]\s*\d{1,3})?[А-ЯЁ]?$/i.test(raw))return raw.replace(/\s+/g,'').replace(/–/g,'-');
-    if(/^\d{1,3}\s*[-–]\s*[А-ЯЁ]{1,7}(?:\s*[-–]\s*\d{1,3})?$/i.test(raw))return raw.replace(/\s+/g,'').replace(/–/g,'-');
-    if(/^[А-ЯЁ]{1,5}\d{2,4}[А-ЯЁ]?(?:[-–]\d{1,3})?$/i.test(raw))return raw;
+    if(/^[A-ZА-ЯЁ]{1,7}\s*[-– ]\s*\d{1,3}(?:\s*[-– ]\s*\d{1,3})?[A-ZА-ЯЁ]?$/i.test(raw))return raw.replace(/\s+/g,'').replace(/–/g,'-').replace(/([A-ZА-ЯЁ]+)(\d)/i,'$1-$2');
+    if(/^\d{1,3}\s*[-– ]\s*[A-ZА-ЯЁ]{1,7}(?:\s*[-– ]\s*\d{1,3})?$/i.test(raw))return raw.replace(/\s+/g,'').replace(/–/g,'-');
+    if(/^[A-ZА-ЯЁ]{1,5}\d{2,4}[A-ZА-ЯЁ]?(?:[-–]\d{1,3})?$/i.test(raw))return raw.replace(/([A-ZА-ЯЁ]+)(\d)/i,'$1-$2');
     return '';
   }
   function parseRows(rows,options) {
