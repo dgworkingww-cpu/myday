@@ -34,6 +34,7 @@ jobs:
           const bot = fs.readFileSync('supabase/functions/myday-bot/index.ts', 'utf8');
           const migration = fs.readFileSync('supabase/migrations/005_myday_bot_updates.sql', 'utf8');
           const quotaMigration = fs.readFileSync('supabase/migrations/006_myday_bot_ai_quota.sql', 'utf8');
+          const retryMigration = fs.readFileSync('supabase/migrations/008_myday_bot_update_retry.sql', 'utf8');
           for (const token of ['[functions.myday-bot]', 'verify_jwt = false']) {
             if (!config.includes(token)) throw new Error('Missing function config: ' + token);
           }
@@ -45,6 +46,10 @@ jobs:
           }
           if (!migration.includes('update_id bigint primary key')) throw new Error('Missing Telegram update idempotency key');
           if (!quotaMigration.includes('myday_consume_bot_ai')) throw new Error('Missing per-user AI quota migration');
+          if (!retryMigration.includes('grant delete on table public.myday_bot_updates to service_role')) throw new Error('Failed Telegram update retry permission is missing');
+          for (const token of ['releaseFailedUpdate', 'retry: true']) {
+            if (!bot.includes(token)) throw new Error('Missing failed Telegram update recovery: ' + token);
+          }
           if (workflow.includes('OPENAI_API_KEY')) throw new Error('Deployment workflow still references the old OpenAI secret');
           if (!bot.includes('https://api.groq.com/openai/v1/chat/completions') || !bot.includes('GROQ_API_KEY')) throw new Error('Groq chat API is not configured in the bot');
           console.log('Telegram webhook config, deployment, profile sync and idempotency checks passed.');
