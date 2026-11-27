@@ -84,6 +84,25 @@ body {
 }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
+:where(button,a,input,select,textarea,[tabindex]):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  outline-offset: 3px;
+}
+input,select,textarea { font-size: 16px; }
+.search-result {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 8px 0;
+  padding: 14px;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+.search-result b { overflow-wrap: anywhere; }
+.search-result .tag { white-space: normal; }
 button:disabled { opacity: .45; cursor: not-allowed; }
 a { color: var(--accent); }
 img, svg { max-width: 100%; }

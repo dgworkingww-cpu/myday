@@ -398,8 +398,10 @@ window.close_ = function () {
 window.capture = function () {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const voiceButton = SR ? '<button class="btn g" type="button" onclick="voice()">' + mydayIcon('mic', 16) + ' Голос</button>' : '';
-  sheet('<h1>Быстрая запись</h1><p class="page-sub">Задача или мысль. Разобрать можно позже.</p><textarea id="cq" oninput="capHint()" placeholder="Например: сдать лабораторную завтра"></textarea><div id="chint" style="min-height:22px;margin:6px 0"></div><div id="tpl" style="margin-bottom:8px">' + tplHtml() + '</div><label for="cd">Срок</label><input type="date" id="cd">' + dch('cd') + '<label for="ck">Куда сохранить</label><select id="ck"><option value="t">Задача</option><option value="i">Идея / заметка</option></select><div class="row">' + voiceButton + '<button class="btn g" type="button" onclick="tplAdd()">В шаблоны</button><button class="btn grow" type="button" onclick="capSave()">Сохранить</button></div><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="cs" style="width:auto" onchange="capHint()"> Разбить на отдельные задачи</label>');
-};
+  sheet('<h1>Быстрая запись</h1><p class="page-sub">Любой текст можно сохранить во входящие и разобрать позже.</p><textarea id="cq" oninput="capHint()" placeholder="Напиши что угодно: мысль, просьбу, идею, ссылку, черновик…"></textarea><div id="chint" style="min-height:22px;margin:6px 0"></div><div id="tpl" style="margin-bottom:8px">' + tplHtml() + '</div><label for="cd">Срок (необязательно)</label><input type="date" id="cd">' + dch('cd') + '<label for="capture-kind">Сохранить как</label><select id="capture-kind"><option value="i" selected>Входящие · любой текст</option><option value="t">Задача</option></select><div class="row">' + voiceButton + '<button class="btn g" type="button" onclick="tplAdd()">В шаблоны</button><button class="btn grow" type="button" onclick="capSave()">Сохранить</button></div><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="cs" style="width:auto" onchange="capHint()"> Разбить на отдельные задачи</label>');
+  const kind = document.querySelector('#capture-kind');
+  if (kind) kind.value = 'i';
+}
 
 window.MYDAY_APPLE_UI_PENDING = false;
 window.render();
