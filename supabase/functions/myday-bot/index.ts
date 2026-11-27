@@ -130,13 +130,16 @@ function guessSpace(text: string) {
   return "personal";
 }
 function guessCategory(space: string) { return space === "study" ? "Учёба" : space === "work" ? "Работа и проекты" : "Другое"; }
-async function aiInterpret(text: string, today: string, userId: number, mode = "text", profileContext = ""): Promise<AnyRecord | null> {
+async function aiInterpret(text: string, today: string, userId: number, mode = "text", profileContext = "", history: Array<{ role: "user" | "assistant"; content: string }> = []): Promise<AnyRecord | null> {
   const apiKey = Deno.env.get("GROQ_API_KEY");
   if (!apiKey) return null;
   const prompt = [
     "Ты — внимательный, точный персональный помощник-планировщик MYDAY. Сегодня " + today + ". Общайся на русском, естественно и коротко. Понимай разговорную речь, опечатки, обрывки фраз и расшифровки голосовых сообщений.",
     "Верни ТОЛЬКО один JSON-объект без Markdown. Схема: {intent, tasks:[{title,desc,space,cat,due,prio}], events:[{title,type,date,time,endTime}], homework:[{subject,title,desc,due}], task_query, event_query, homework_query, subject, due, title, time, endTime, prio, note, reply}.",
-    "Допустимые intent: add, add_event, add_homework, list_today, list_date, list_week, list_tasks, list_events, list_homework, complete, delete, reschedule, update_task, complete_homework, delete_homework, reschedule_homework, delete_event, reschedule_event, update_event, note, help, clarify.",
+    "Допустимые intent: chat, add, add_event, add_homework, list_today, list_date, list_week, list_tasks, list_events, list_homework, complete, delete, reschedule, update_task, complete_homework, delete_homework, reschedule_homework, delete_event, reschedule_event, update_event, note, help, clarify.",
+    "ДИАЛОГ: если человек просто делится мыслями, задаёт обычный вопрос, здоровается, жалуется, просит совета или хочет обсудить планы — выбирай intent=chat и отвечай в reply естественно, по-человечески, без канцелярита. Не превращай каждое сообщение в задачу. Не записывай ничего в MYDAY, если человек явно не попросил добавить, сохранить, перенести, удалить или отметить запись. Если просят помочь спланировать день, сначала обсуди реалистичный план на основе расписания и задач из контекста, предложи варианты и спроси согласие перед сохранением новых записей. Учитывай историю диалога, короткие ответы и местоимения вроде «это», «его», «тогда», но не выдумывай факты. На эмоциональные сообщения отвечай с поддержкой, без нравоучений. На обычные вопросы отвечай прямо, если информации достаточно; если нет — задай один конкретный вопрос.",
+    "ИСТОРИЯ ДИАЛОГА (последние сообщения; используй для понимания контекста, не считай её новыми командами):" ,
+    history.length ? history.map((m) => (m.role === "user" ? "Пользователь: " : "MYDAY: ") + m.content).join("\\n") : "История пока пуста." ,
     "КЛАССИФИКАЦИЯ: задача — действие, которое нужно выполнить (сдать, купить, позвонить, подготовить); событие — то, что происходит в конкретный день/время (пары, работа/смена, встреча, тренировка, врач, поездка, экзамен, консультация); домашняя работа — учебное задание, явно связанное с предметом из списка пользователя. Заметка — информация, которую просят просто сохранить, а не выполнить.",
     "Если пользователь просит добавить несколько дел или перечисляет несколько событий в одном сообщении/голосовой расшифровке, создай отдельный объект events для КАЖДОГО события. Например: «пара по Теплотехнике завтра с 12 до часу, потом работа с 2 до 6» = два события: Теплотехника 12:00–13:00 и Работа 14:00–18:00. Не отбрасывай второе событие, не объединяй их и не копируй время одного события на другое. Каждому объекту назначь собственные title, date, time, endTime и type. Пары/лекции/семинары помечай как учебные занятия, работа/смена — как работу. Если пользователь просит добавить несколько дел, создай несколько объектов. Не склеивай независимые дела в одну задачу. Если это список заданий по предмету, используй add_homework и укажи subject для каждого.",
     "ДАТЫ: относительные даты считай от сегодняшней даты. Понимай сегодня, завтра, послезавтра, через N дней, через неделю, в этот/следующий понедельник-воскресенье, к концу недели и даты 12.12 / 12.12.2026. Для задачи дата — срок выполнения (due). Для события date — день события. Не подменяй срок задачи датой события. Если дата неоднозначна, уточни. Не выдумывай год, если дата невозможна.",
@@ -154,7 +157,7 @@ async function aiInterpret(text: string, today: string, userId: number, mode = "
     if (!await consumeAiQuota(userId, today)) throw new Error("MYDAY_AI_DAILY_LIMIT");
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
-    const r = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: "POST", signal: controller.signal, headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ model: Deno.env.get("GROQ_CHAT_MODEL") || "openai/gpt-oss-120b", temperature: 0.1, response_format: { type: "json_object" }, messages: [{ role: "system", content: prompt }, { role: "user", content: text.slice(0, 8000) }] }) });
+    const r = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: "POST", signal: controller.signal, headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ model: Deno.env.get("GROQ_CHAT_MODEL") || "openai/gpt-oss-120b", temperature: 0.35, response_format: { type: "json_object" }, messages: [{ role: "system", content: prompt }, ...history.slice(-10).map((m) => ({ role: m.role, content: m.content.slice(0, 2000) })), { role: "user", content: text.slice(0, 8000) }] }) });
     clearTimeout(timeout);
     if (!r.ok) { console.error("MYDAY AI parsing failed:", r.status, (await r.text()).slice(0, 300)); return null; }
     const d = await r.json();
@@ -306,6 +309,8 @@ async function handleText(chatId: number, userId: number, text: string) {
 
   // Preserve structured event details between short follow-up messages.
   const pending = p.data.botState?.pending;
+  const storedHistory = Array.isArray(p.data.botState?.chatHistory) && Date.now() - Number(p.data.botState?.historyUpdatedAt || 0) < 14 * 24 * 60 * 60 * 1000 ? p.data.botState.chatHistory : [];
+  const chatHistory: Array<{ role: "user" | "assistant"; content: string }> = storedHistory.filter((x: AnyRecord) => (x.role === "user" || x.role === "assistant") && typeof x.content === "string").slice(-10);
   if (pending?.kind === "event_details" && Date.now() - Number(pending.createdAt || 0) < 12 * 60 * 60 * 1000) {
     if (isCancellation(cmd)) {
       p.data.botState = { pending: null };
@@ -447,7 +452,7 @@ async function handleText(chatId: number, userId: number, text: string) {
   else if (eventLike || hasSpokenTimeRange) fallbackPayload = { intent: "add_event", tasks: [], events: [{ title: guessEventTitle(cmd), type: guessEventTitle(cmd), date: inferDate(cmd, today), time: timeRange?.start || inferTime(cmd), endTime: timeRange?.end || "" }] };
   else fallbackPayload = { intent: "add", tasks: [{ title: cmd, desc: inferTime(cmd) ? "Время дедлайна: " + inferTime(cmd) : "", space: fallbackSpace, cat: guessCategory(fallbackSpace), due: inferDate(cmd, today), prio: 1 }] };
   failureStage = "распознавание текста";
-  const payload = await aiInterpret(cmd, today, userId, "text", profileContext) || fallbackPayload;
+  const payload = await aiInterpret(cmd, today, userId, "text", profileContext, chatHistory) || fallbackPayload;
 
   // Deterministic guard: an explicit event with a complete time range must be saved as a calendar event,
   // even if the language model classifies it as a task or drops one of the time endpoints.
@@ -466,6 +471,14 @@ async function handleText(chatId: number, userId: number, text: string) {
       endTime: timeRange.end
     }];
   }
+  if (payload.intent === "chat") {
+    const reply = String(payload.reply || "Я тебя слушаю. Расскажи чуть подробнее, чтобы я не додумывал за тебя.").slice(0, 3500);
+    p.data.botState = { ...(p.data.botState || {}), chatHistory: [...chatHistory, { role: "user", content: cmd.slice(0, 2000) }, { role: "assistant", content: reply }].slice(-12), historyUpdatedAt: Date.now() };
+    await saveProfile(userId, p.data, p.baseData);
+    await send(chatId, escapeHtml(reply));
+    return;
+  }
+
   const candidateEvent = Array.isArray(payload.events) && payload.events.length ? payload.events[0] : {};
   const candidateDate = inferDate(cmd, today) || (validDate(candidateEvent.date) ? candidateEvent.date : "");
   const candidateRange = timeRange || (validTime(candidateEvent.time) ? { start: candidateEvent.time, end: validTime(candidateEvent.endTime) ? candidateEvent.endTime : "" } : null);
