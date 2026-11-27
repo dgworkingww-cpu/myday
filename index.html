@@ -44,8 +44,55 @@ function excReset(l,k){S.exc=(S.exc||[]).filter(z=>!(z.date==k&&z.lid==l));save(
 function addExtra(k){const i0='x'+id();S.exc=S.exc||[];S.exc.push({date:k,id:i0,type:'add',o:{s:'09:00',e:'10:30',room:'',subj:'Пара'}});save();lessonDay(i0,k)}
 function lessonDay(lid,k){const l=lessons(new Date(k+'T12:00')).find(x=>x.id==lid);if(!l)return;sheet(`<h1>${e(l.subj)}</h1><div class="sub">${fmt(k)} · только этот день, сетка не меняется</div><div class="row" style="margin:10px 0"><div class="grow"><label>Начало</label><input id="x1" type="time" value="${l.s}"></div><div class="grow"><label>Конец</label><input id="x2" type="time" value="${l.e}"></div></div><label>Аудитория</label><input id="x3" value="${e(l.room)}"><label>Предмет</label><input id="x4" value="${e(l.subj)}"><button class="btn" style="width:100%;margin-bottom:8px" onclick="excSave('${lid}','${k}')">Сохранить</button><div class="row"><button class="btn r grow" onclick="excCancel('${lid}','${k}')">Отменить пару</button>${l.chg&&!String(lid).startsWith('x')?`<button class="btn g grow" onclick="excReset('${lid}','${k}')">Как в сетке</button>`:''}</div>`)}
 function excRows(k){const n=new Date(k+'T12:00'),base=(scheduleBucket('study',wk(n))[n.getDay()]||[]);return (S.exc||[]).filter(z=>z.date==k&&z.type=='cancel').map(z=>{const l=base.find(b=>b.id==z.lid)||{subj:'Пара'};return `<div class="card row" style="padding:9px 14px;opacity:.6"><div class="grow tag" style="text-decoration:line-through">${e(l.subj)}</div><button class="btn g" style="padding:4px 12px" onclick="excReset('${z.lid}','${k}')">Вернуть</button></div>`}).join('')+`<button class="btn g" style="width:100%;margin-top:4px" onclick="addExtra('${k}')">+ Пара только на сегодня</button>`}
-function search(){sheet(`<input id="sq" aria-label="Поиск по задачам и заданиям" placeholder="Поиск по задачам и заданиям" oninput="doSearch()"><div id="sr" aria-live="polite"></div>`);setTimeout(()=>$('#sq').focus(),60)}
-function doSearch(){const q=$('#sq').value.trim().toLowerCase();if(!q){$('#sr').innerHTML='';return}const R=[...S.tasks.map(t=>({...t,k:'t'})),...S.hw.map(h=>({...h,k:'h',title:subj(h.subj)+': '+h.title}))].filter(x=>(x.title+' '+(x.desc||'')).toLowerCase().includes(q)).slice(0,30);$('#sr').innerHTML=R.length?R.map(x=>`<div class="card" onclick="detail('${x.k}','${x.id}')"><div class="${x.status==2?'t done':''}">${e(x.title)}</div><div class="tag">${x.due?fmt(x.due)+' · ':''}${ST[x.status]}</div></div>`).join(''):'<div class="sub">Ничего не найдено</div>'}
+function search(){
+ window._mydaySearchResults=[];
+ sheet(`<h1>Поиск</h1><label for="sq">Найти в MYDAY</label><input id="sq" type="search" autocomplete="off" enterkeyhint="search" aria-label="Поиск по всему MYDAY" placeholder="Задачи, пары, события, предметы…" oninput="doSearch()"><div class="tag" style="margin:8px 0 12px">Ищет по задачам, домашним заданиям, расписанию, событиям, предметам и заметкам.</div><div id="sr" aria-live="polite" aria-relevant="additions text"></div>`);
+ setTimeout(()=>$('#sq')?.focus(),60);
+}
+function searchOpenResult(index){
+ const x=window._mydaySearchResults?.[index];if(!x)return;
+ if(x.kind==='task'||x.kind==='homework'){detail(x.kind==='task'?'t':'h',x.id);return}
+ if(x.kind==='event'){
+  const d=new Date(x.date+'T12:00:00'),n=new Date();
+  cm=(d.getFullYear()-n.getFullYear())*12+d.getMonth()-n.getMonth();cdsel=x.date;
+  go('more');st='cal';render();return;
+ }
+ if(x.kind==='subject'){go('study');openSubj=x.id;render();return}
+ if(x.kind==='note'){go('more');st='inbox';render();return}
+ if(x.kind==='lesson'){
+  schedSpace=x.space;go('sched');sd=x.day;st=x.week;render();return;
+ }
+}
+function doSearch(){
+ const input=$('#sq'),target=$('#sr');if(!input||!target)return;
+ const q=input.value.trim().toLocaleLowerCase('ru').replace(/\\s+/g,' ');
+ if(q.length<2){window._mydaySearchResults=[];target.innerHTML=q?'<div class="sub">Введите ещё хотя бы одну букву</div>':'<div class="sub">Начните вводить название или часть описания.</div>';return}
+ const results=[],add=(kind,id,title,meta,haystack,extra={})=>{
+  if(results.length>=60||!haystack.toLocaleLowerCase('ru').includes(q))return;
+  results.push({kind,id,title,meta,...extra});
+ };
+ (S.tasks||[]).forEach(x=>add('task',x.id,x.title,`Задача · ${x.due?fmt(x.due)+' · ':''}${ST[x.status]||'Не начато'}`,[x.title,x.desc,x.cat,x.space].join(' ')));
+ (S.hw||[]).forEach(x=>add('homework',x.id,x.title,`Домашнее задание · ${subj(x.subj)} · ${x.due?fmt(x.due)+' · ':''}${ST[x.status]||'Не начато'}`,[x.title,x.desc,subj(x.subj)].join(' ')));
+ (S.events||[]).forEach(x=>add('event',x.id,x.title,`Событие · ${fmt(x.date)}${x.time?' · '+x.time+(x.endTime?'–'+x.endTime:''):''}`,[x.title,x.type,x.date].join(' '),{date:x.date}));
+ (S.subjects||[]).forEach(x=>add('subject',x.id,x.name,`Предмет · ${x.closed?'зачёт получен':'учебный предмет'}`,x.name));
+ (S.inbox||[]).forEach((x,i)=>add('note',String(i),x.text,`Заметка · ${x.d?fmt(x.d):'без даты'}`,x.text));
+ for(const space of ['study','work']){
+  const weeks=space==='study'?['odd','even']:['work'];
+  for(const week of weeks)for(let day=1;day<=6;day++){
+   const list=scheduleBucket(space,week)[day]||[];
+   list.forEach(x=>add('lesson',x.id,x.subj,`Расписание · ${space==='work'?'Работа':week==='odd'?'Нижняя неделя':'Верхняя неделя'} · ${DAYS[day]}${x.s?' · '+x.s+'–'+x.e:''}`,[x.subj,x.room,x.teacher,week,DAYS[day],space].join(' '),{space,week,day}));
+  }
+ }
+ window._mydaySearchResults=results;
+ if(!results.length){target.innerHTML='<div class="empty-state"><b>Ничего не найдено</b><span>Попробуйте другое слово или часть названия.</span></div>';return}
+ const groups=[['task','Задачи'],['homework','Домашние задания'],['lesson','Расписание'],['event','События'],['subject','Предметы'],['note','Заметки']];
+ target.innerHTML=groups.map(([kind,label])=>{
+  const items=results.map((x,i)=>({...x,index:i})).filter(x=>x.kind===kind);
+  if(!items.length)return '';
+  return `<section class="search-group" style="margin:12px 0"><h2 style="font-size:12px;color:var(--muted);margin:0 0 6px">${label} · ${items.length}</h2><div class="search-results">${items.map(x=>`<button type="button" class="card search-result" data-search-index="${x.index}" style="display:block;width:100%;padding:12px 14px;margin:6px 0;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:14px"><b style="display:block;font-size:14px">${e(x.title)}</b><span class="tag">${e(x.meta)}</span></button>`).join('')}</div></section>`;
+ }).join('');
+ target.querySelectorAll('[data-search-index]').forEach(button=>button.addEventListener('click',()=>searchOpenResult(Number(button.dataset.searchIndex))));
+}
 function calView(){const b=new Date();b.setDate(1);b.setMonth(b.getMonth()+cm);const y=b.getFullYear(),m=b.getMonth(),off=(b.getDay()+6)%7,dim=new Date(y,m+1,0).getDate(),all=[...S.tasks,...S.hw].filter(x=>x.due&&x.status!=2),cnt={};all.forEach(x=>cnt[x.due]=(cnt[x.due]||0)+1);(S.events||[]).forEach(z=>cnt[z.date]=(cnt[z.date]||0)+1);let c='';for(let i=0;i<off;i++)c+='<div></div>';for(let d=1;d<=dim;d++){const k=y+'-'+pad(m+1)+'-'+pad(d),n=cnt[k]||0,s=k==cdsel;c+=`<div onclick="cdsel='${k}';render()" style="text-align:center;padding:8px 0;border-radius:12px;${k==today()?'border:1px solid var(--ac);':''}${s?'background:var(--ac);color:#fff;':''}">${d}<div style="height:8px;font-size:8px;color:${s?'#fff':'var(--ac)'}">${'●'.repeat(Math.min(n,3))}</div></div>`}const sel=cdsel?all.filter(x=>x.due==cdsel):[];
  return `<header><button class="btn g" onclick="st=null;render()">‹ Назад</button></header><div class="row" style="justify-content:space-between"><button class="btn g" onclick="cm--;render()">‹</button><b>${b.toLocaleDateString('ru-RU',{month:'long',year:'numeric'})}</b><button class="btn g" onclick="cm++;render()">›</button></div><div class="card" style="margin-top:10px"><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(x=>`<div class="tag" style="text-align:center">${x}</div>`).join('')}${c}</div></div>`+(cdsel?`<h2>${fmt(cdsel)}</h2>`+(sel.length?sel.map(x=>row(x.subj?{...x,k:'h',title:subj(x.subj)+': '+x.title}:x)).join(''):'<div class="sub">Дедлайнов нет</div>')+evRows(cdsel):'')+`<button class="btn g" style="width:100%;margin-top:8px" onclick="evForm()">+ Зачёт / экзамен</button>`}
 function weekView(){const all=allOpen();return `<header><button class="btn g" onclick="st=null;render()">‹ Назад</button></header><h1>План недели</h1>`+[...Array(7)].map((_,i)=>addDays(today(),i)).map(k=>{const d=new Date(k+'T12:00'),L=lessons(d),T=all.filter(x=>x.due==k),ld=Math.min(100,L.length*14+T.length*18);return `<div class="card"><div class="row"><b class="grow">${DAYS[d.getDay()]}, ${fmt(k)}</b><span class="tag">${L.length} пар · ${T.length} дел</span></div><div class="bar" style="margin:8px 0"><i style="width:${ld}%;${ld>80?'background:var(--er)':''}"></i></div>${T.slice(0,3).map(x=>`<div class="tag">• ${e(x.title)}</div>`).join('')}</div>`}).join('')}
