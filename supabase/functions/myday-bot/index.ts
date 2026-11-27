@@ -329,6 +329,29 @@ function normalizeScheduleEntries(raw: AnyRecord): { entries: AnyRecord[]; warni
   if (source.length > 80) warnings.push("Для предварительного просмотра взяты первые 80 занятий.");
   return { entries, warnings };
 }
+async function analyzeGeneralDocumentWithAI(documentText: string, today: string, userId: number): Promise<string> {
+  const apiKey = Deno.env.get("GROQ_API_KEY");
+  if (!apiKey) throw new Error("Для анализа файлов не настроен GROQ_API_KEY.");
+  if (!await consumeAiQuota(userId, today)) throw new Error("MYDAY_AI_DAILY_LIMIT");
+  const prompt = [
+    "Ты — универсальный анализатор документов MYDAY. Сегодня " + today + ". Прочитай содержимое и определи тип документа: учебный материал, список задач, домашняя работа, расписание, инструкция, договор, таблица, заметка или другое.",
+    "Верни короткий и полезный ответ на русском: что это за документ, краткое содержание, важные даты/сроки/суммы/имена/действия (только если они явно есть), какие задачи или домашние задания можно извлечь. Не выдумывай факты и не делай юридических/медицинских выводов.",
+    "Если документ содержит задания, перечисли их отдельными пунктами с предметом и сроком, если они указаны. В конце напиши, что именно MYDAY может сохранить после подтверждения пользователя. Не сохраняй ничего автоматически.",
+    "ТЕКСТ ДОКУМЕНТА:\n" + documentText.slice(0, 42000)
+  ].join("\n");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 35000);
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST", signal: controller.signal,
+      headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: Deno.env.get("GROQ_CHAT_MODEL") || "openai/gpt-oss-120b", temperature: 0.2, messages: [{ role: "user", content: prompt }] })
+    });
+    if (!response.ok) throw new Error("AI-анализ документа завершился с HTTP " + response.status);
+    const data = await response.json();
+    return String(data.choices?.[0]?.message?.content || "Не удалось получить анализ документа.").slice(0, 6000);
+  } finally { clearTimeout(timeout); }
+}
 async function parseScheduleDocumentWithAI(documentText: string, today: string, userId: number): Promise<AnyRecord> {
   const apiKey = Deno.env.get("GROQ_API_KEY");
   if (!apiKey) throw new Error("Для разбора расписания из документов не настроен GROQ_API_KEY.");
@@ -916,8 +939,10 @@ Deno.serve(async (req: Request) => {
         const entries = normalized.entries;
         const warnings = [...extracted.warnings, ...normalized.warnings];
         if (!entries.length) {
-          const details = warnings.length ? "\n" + warnings.map((x: string) => "• " + escapeHtml(x)).join("\n") : "";
-          await send(chatId, "Не нашёл в документе достаточно надёжных строк расписания. Проверь, что в файле есть дни недели, названия предметов и время начала/окончания." + details);
+          failureStage = "универсальный анализ содержимого документа";
+          const general = await analyzeGeneralDocumentWithAI(extracted.text, documentToday, userId);
+          const details = warnings.length ? "\n\nЗамечания при извлечении:\n" + warnings.map((x: string) => "• " + escapeHtml(x)).join("\n") : "";
+          await send(chatId, "📄 <b>Разобрал документ: " + escapeHtml(filename.slice(0, 100)) + "</b>\n\n" + escapeHtml(general) + details + "\n\nНичего не добавлял в расписание или задачи. Напиши, что именно сохранить, и я подготовлю записи на подтверждение.");
           return json({ ok: true });
         }
         const unknownWeeks = entries.some((x: AnyRecord) => x.weekType === "unknown");
