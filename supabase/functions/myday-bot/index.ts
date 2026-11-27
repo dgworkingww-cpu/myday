@@ -424,7 +424,7 @@ async function handleText(chatId: number, userId: number, text: string) {
       await send(chatId, "Сохранил смысл запроса. По какому предмету записать? Твои дисциплины: " + escapeHtml(names) + ". Можно ответить одним названием.");
       return;
     }
-    if (eventLike && (hasSpokenTimeRange || payload.intent === "clarify")) {
+    if (eventLike && !inferDate(cmd, today) && (hasSpokenTimeRange || payload.intent === "clarify")) {
       p.data.botState = { pending: { kind: "event_date", raw: cmd, createdAt: Date.now() } };
       await saveProfile(userId, p.data, p.baseData);
       await send(chatId, "Запомнил интервал " + escapeHtml(timeRange!.start + "–" + timeRange!.end) + ". На какой день поставить запись? Ответь просто датой или днём недели.");
