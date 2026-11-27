@@ -118,7 +118,10 @@ function makePdf(lines) {
     await page.locator('#back').click();
     await page.locator('#app .page-title').waitFor({timeout:15000});
     await page.locator('#nav button').nth(4).click();
-    await page.getByRole('button',{name:/Разбор документов/}).click();
+    await page.locator('.more-tools-grid').waitFor({timeout:15000});
+    const documentTool=page.locator('.more-tool-card[aria-label="Разбор документов"]');
+    if(await documentTool.count()!==1) throw new Error('Document analyzer shortcut is missing from the More menu');
+    await documentTool.click();
     await page.locator('#file').waitFor({timeout:15000});
     if(errors.length) throw new Error('Browser runtime errors: '+errors.join(' | '));
     console.log(JSON.stringify({result:'passed',tests:['file selection','empty/unsupported file validation','PDF preview','next/previous page controls','two-page text extraction','AI analysis UI','selective import','cloud profile save','homework subject mapping','schedule conflict prevention','AI failure recovery','real image OCR','return navigation','open analyzer from MYDAY menu'],savedTasks:savedProfile.tasks.length,savedEvents:savedProfile.events.length,errors,failedRequests:failed},null,2));
