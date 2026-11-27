@@ -29,12 +29,12 @@ const HALF_HOURS: Record<string, number> = {
   одиннадцатого: 10, двенадцатого: 11,
 };
 export function validDate(value: unknown): value is string {
-  if (typeof value !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const d = new Date(value + "T12:00:00Z");
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
 }
 export function validTime(value: unknown): value is string {
-  return typeof value === "string" && /^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(value);
+  return typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
 export function shiftIsoDate(date: string, days: number): string {
   const d = new Date(date + "T12:00:00Z");
@@ -43,20 +43,20 @@ export function shiftIsoDate(date: string, days: number): string {
 }
 export function inferDate(text: string, today: string): string {
   const t = text.toLocaleLowerCase("ru").replace(/ё/g, "е");
-  if (/\\bпослезавтра\\b/.test(t)) return shiftIsoDate(today, 2);
-  if (/\\bзавтра\\b/.test(t)) return shiftIsoDate(today, 1);
-  if (/\\bсегодня\\b/.test(t)) return today;
-  const numeric = t.match(/(?:до|к|на|в|от)\\s*(\\d{1,2})[./](\\d{1,2})(?:[./](\\d{2,4}))?/);
+  if (/\bпослезавтра\b/.test(t)) return shiftIsoDate(today, 2);
+  if (/\bзавтра\b/.test(t)) return shiftIsoDate(today, 1);
+  if (/\bсегодня\b/.test(t)) return today;
+  const numeric = t.match(/(?:до|к|на|в|от)\s*(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/);
   if (numeric) {
     let year = numeric[3] ? Number(numeric[3].length === 2 ? "20" + numeric[3] : numeric[3]) : Number(today.slice(0, 4));
     let candidate = year + "-" + numeric[2].padStart(2, "0") + "-" + numeric[1].padStart(2, "0");
     if (!numeric[3] && candidate < today) candidate = (year + 1) + candidate.slice(4);
     return validDate(candidate) ? candidate : "";
   }
-  const inDays = t.match(/через\\s+(\\d+)\\s+д(?:ень|ня|ней)/);
+  const inDays = t.match(/через\s+(\d+)\s+д(?:ень|ня|ней)/);
   if (inDays) return shiftIsoDate(today, Math.min(365, Number(inDays[1])));
-  if (/через\\s+недел/.test(t)) return shiftIsoDate(today, 7);
-  const dayWord = t.match(/\\b(в|на|к|до)\\s+(следующ(?:ий|ую|ем|его)\\s+)?(понедельник|вторник|среду?|четверг|пятниц(?:у|а)|субботу?|воскресенье|пн|вт|ср|чт|пт|сб|вс)\\b/);
+  if (/через\s+недел/.test(t)) return shiftIsoDate(today, 7);
+  const dayWord = t.match(/\b(в|на|к|до)\s+(следующ(?:ий|ую|ем|его)\s+)?(понедельник|вторник|среду?|четверг|пятниц(?:у|а)|субботу?|воскресенье|пн|вт|ср|чт|пт|сб|вс)\b/);
   if (dayWord) {
     const key = dayWord[3] === "среду" ? "среда" : dayWord[3] === "пятницу" ? "пятница" : dayWord[3] === "субботу" ? "суббота" : dayWord[3];
     const target = WEEKDAYS[key];
@@ -75,13 +75,13 @@ export function inferDate(text: string, today: string): string {
 }
 export function parseClock(text: string): string {
   const t = text.toLocaleLowerCase("ru").replace(/ё/g, "е").trim();
-  const half = t.match(/пол(?:овина)?\\s*(первого|второго|третьего|четвертого|четвёртого|пятого|шестого|седьмого|восьмого|девятого|десятого|одиннадцатого|двенадцатого)/);
+  const half = t.match(/пол(?:овина)?\s*(первого|второго|третьего|четвертого|четвёртого|пятого|шестого|седьмого|восьмого|девятого|десятого|одиннадцатого|двенадцатого)/);
   if (half) {
     let hour = HALF_HOURS[half[1]];
     if ((/вечера|ночи/.test(t)) && hour < 12) hour += 12;
     return String(hour).padStart(2, "0") + ":30";
   }
-  const numeric = t.match(/(\\d{1,2})(?:[:.](\\d{2}))?\\s*(утра|дня|вечера|ночи)?/);
+  const numeric = t.match(/(\d{1,2})(?:[:.](\d{2}))?\s*(утра|дня|вечера|ночи)?/);
   if (numeric) {
     let hour = Number(numeric[1]);
     const minute = Number(numeric[2] || 0);
@@ -94,7 +94,7 @@ export function parseClock(text: string): string {
     if (hour === 24) hour = 0;
     return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
   }
-  const word = t.match(/\\b(одиннадцать|двенадцать|десять|девять|восемь|семь|шесть|пять|четыре|три|два|час|один|одного|двух|трех|трёх|четырех|четырёх|пяти|шести|семи|восьми|девяти|десяти|одиннадцати|двенадцати)\\b/);
+  const word = t.match(/\b(одиннадцать|двенадцать|десять|девять|восемь|семь|шесть|пять|четыре|три|два|час|один|одного|двух|трех|трёх|четырех|четырёх|пяти|шести|семи|восьми|девяти|десяти|одиннадцати|двенадцати)\b/);
   if (word) {
     const map: Record<string, number> = { одиннадцать: 11, двенадцать: 12, десять: 10, девять: 9, восемь: 8, семь: 7, шесть: 6, пять: 5, четыре: 4, три: 3, два: 2, час: 1, один: 1, одного: 1, двух: 2, трех: 3, трёх: 3, четырех: 4, четвёртых: 4, пяти: 5, шести: 6, семи: 7, восьми: 8, девяти: 9, десяти: 10, одиннадцати: 11, двенадцати: 12 };
     let hour = map[word[1]];
@@ -106,11 +106,11 @@ export function parseClock(text: string): string {
   return "";
 }
 export function inferTime(text: string): string {
-  const m = text.toLocaleLowerCase("ru").match(/(?:в|к|на|с)\\s*((?:\\d{1,2}(?:[:.]\\d{2})?\\s*(?:утра|дня|вечера|ночи)?)|(?:пол(?:овина)?\\s*[а-яе]+)|(?:[а-яе]+\\s*(?:утра|дня|вечера|ночи)))/i);
+  const m = text.toLocaleLowerCase("ru").match(/(?:в|к|на|с)\s*((?:\d{1,2}(?:[:.]\d{2})?\s*(?:утра|дня|вечера|ночи)?)|(?:пол(?:овина)?\s*[а-яе]+)|(?:[а-яе]+\s*(?:утра|дня|вечера|ночи)))/i);
   return m ? parseClock(m[1]) : "";
 }
 export function inferTimeRange(text: string): { start: string; end: string } | null {
-  const m = text.toLocaleLowerCase("ru").match(/\\bс\\s+(.+?)\\s+до\\s+(.+?)(?=$|[,;.])/i);
+  const m = text.toLocaleLowerCase("ru").match(/\bс\s+(.+?)\s+до\s+(.+?)(?=$|[,;.])/i);
   if (!m) return null;
   const start = parseClock(m[1]);
   let end = parseClock(m[2]);
@@ -126,7 +126,7 @@ export function inferTimeRange(text: string): { start: string; end: string } | n
 }
 export function isDateOnlyReply(text: string): boolean {
   const t = text.toLocaleLowerCase("ru").trim().replace(/[.!?]+$/, "");
-  return /^(?:сегодня|завтра|послезавтра|через\\s+неделю|через\\s+\\d+\\s+д(?:ень|ня|ней)|(?:в|на|к|до)\\s+(?:следующ(?:ий|ую|ем|его)\\s+)?(?:понедельник|вторник|среду?|четверг|пятниц(?:у|а)|субботу?|воскресенье|пн|вт|ср|чт|пт|сб|вс)|(?:на\\s+)?\\d{1,2}[./]\\d{1,2}(?:[./]\\d{2,4})?)$/i.test(t);
+  return /^(?:сегодня|завтра|послезавтра|через\s+неделю|через\s+\d+\s+д(?:ень|ня|ней)|(?:в|на|к|до)\s+(?:следующ(?:ий|ую|ем|его)\s+)?(?:понедельник|вторник|среду?|четверг|пятниц(?:у|а)|субботу?|воскресенье|пн|вт|ср|чт|пт|сб|вс)|(?:на\s+)?\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?)$/i.test(t);
 }
 export function isCancellation(text: string): boolean {
   return /^(?:отмена|отмени|не надо|забудь|стоп|нет|не добавляй)[.! ]*$/i.test(text.trim());
