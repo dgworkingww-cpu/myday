@@ -325,12 +325,26 @@ async function handleText(chatId: number, userId: number, text: string) {
       return;
     }
     const list = mode === "today" ? openTasks.filter((x: AnyRecord) => !x.due || x.due <= today) : mode === "week" ? openTasks.filter((x: AnyRecord) => !x.due || x.due <= end) : openTasks;
+    const homeworkDue = mode === "today" ? openHw.filter((x: AnyRecord) => x.due && x.due <= today) : mode === "week" ? openHw.filter((x: AnyRecord) => x.due && x.due <= end) : [];
     const events = mode === "tasks" ? [] : (Array.isArray(p.data.events) ? p.data.events : []).filter((x: AnyRecord) => x.date >= today && x.date <= end).sort((a: AnyRecord, b: AnyRecord) => a.date.localeCompare(b.date) || String(a.time || "").localeCompare(String(b.time || "")));
+    const scheduleLines: string[] = [];
+    if (mode === "today" || mode === "week") {
+      const days = mode === "today" ? 1 : 7;
+      const weekdayFmt = new Intl.DateTimeFormat("ru-RU", { weekday: "short", timeZone: "UTC" });
+      for (let offset = 0; offset < days; offset++) {
+        const date = shiftDate(today, offset);
+        for (const item of scheduleItemsForDate(p.data, date)) {
+          scheduleLines.push("🕘 " + date + " · " + weekdayFmt.format(new Date(date + "T12:00:00Z")) + " · " + item.kind + ": " + escapeHtml(item.title) + (item.start ? " · " + item.start + (item.end ? "–" + item.end : "") : "") + (item.room ? " · " + escapeHtml(item.room) : ""));
+        }
+      }
+    }
     const label = mode === "today" ? "План на сегодня" : mode === "week" ? "План на ближайшие 7 дней" : "Все открытые задачи";
-    if (!list.length && !events.length) { await send(chatId, label + ": пока пусто."); return; }
-    const taskLines = list.slice(0, 20).map((x: AnyRecord, i: number) => (i + 1) + ". " + escapeHtml(x.title) + (x.due ? " · " + x.due : ""));
+    if (!list.length && !homeworkDue.length && !events.length && !scheduleLines.length) { await send(chatId, label + ": пока пусто."); return; }
+    const taskLines = list.slice(0, 20).map((x: AnyRecord, i: number) => (i + 1) + ". " + escapeHtml(x.title) + (x.due ? " · срок " + x.due : ""));
+    const homeworkLines = homeworkDue.slice(0, 15).map((x: AnyRecord) => "📚 " + escapeHtml(x.title) + (x.due ? " · срок " + x.due : ""));
     const eventLines = events.slice(0, 15).map((x: AnyRecord) => "📌 " + escapeHtml(x.title) + " · " + x.date + (x.time ? " · " + x.time + (x.endTime ? "–" + x.endTime : "") : ""));
-    await send(chatId, "<b>" + label + "</b>\n" + [...taskLines, ...eventLines].join("\n"), taskKeyboard(list.slice(0, 8).map((x: AnyRecord): [string, string] => [String(x.id), String(x.title)])));
+    const sections = [...scheduleLines, ...taskLines, ...homeworkLines, ...eventLines];
+    await send(chatId, "<b>" + label + "</b>\n" + sections.join("\n"), taskKeyboard(list.slice(0, 8).map((x: AnyRecord): [string, string] => [String(x.id), String(x.title)])));
     return;
   }
   if (/^\/done\s+/i.test(cmd)) {
