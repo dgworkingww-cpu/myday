@@ -151,7 +151,7 @@ async function aiInterpret(text: string, today: string, userId: number, mode = "
     const parsed = JSON.parse(d.choices?.[0]?.message?.content || "{}");
     return parsed && typeof parsed === "object" ? parsed : null;
   } catch (error) {
-    if (String(error).includes("MYDAY_AI_DAILY_LIMIT")) throw error;
+    if (String(error).includes("MYDAY_AI_DAILY_LIMIT")) { console.warn("MYDAY AI quota exhausted; using deterministic text fallback."); return null; }
     console.error("MYDAY AI unavailable; using safe text fallback:", error);
     return null;
   }
@@ -549,7 +549,7 @@ Deno.serve(async (req: Request) => {
     if (fallbackChatId) {
       try {
         const message = String(error).includes("MYDAY_AI_DAILY_LIMIT")
-          ? "На сегодня исчерпан лимит AI-запросов MYDAY (100). Обычные команды и текстовое добавление задач остаются доступны."
+          ? "На сегодня исчерпан лимит AI-запросов MYDAY (100). Голосовые и фото временно недоступны; обычные команды и текстовые задачи продолжают работать в базовом режиме."
           : "Не получилось обработать сообщение.\nЭтап: " + failureStage + ".\nПричина: " + (error instanceof Error ? error.message : "неизвестная ошибка") + ".\nПроверь /tasks, чтобы не создать дубликат.";
         await send(fallbackChatId, message);
       } catch { /* Telegram may be temporarily unavailable */ }
