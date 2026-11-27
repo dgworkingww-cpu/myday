@@ -89,7 +89,9 @@ export function inferDate(text: string, today: string): string {
 }
 export function parseClock(text: string): string {
   const t = text.toLocaleLowerCase("ru").replace(/ё/g, "е").trim();
-  if (/полночь|полуночи/.test(t)) return "00:00";\n  if (/полдень|полудня/.test(t)) return "12:00";\n  const half = t.match(/пол(?:овин[аы])?\s*(первого|второго|третьего|четвертого|четвёртого|пятого|шестого|седьмого|восьмого|девятого|десятого|одиннадцатого|двенадцатого)/);
+  if (/полночь|полуночи/.test(t)) return "00:00";
+  if (/полдень|полудня/.test(t)) return "12:00";
+  const half = t.match(/пол(?:овин[аы])?\s*(первого|второго|третьего|четвертого|четвёртого|пятого|шестого|седьмого|восьмого|девятого|десятого|одиннадцатого|двенадцатого)/);
   if (half) {
     let hour = HALF_HOURS[half[1]];
     if ((/вечера|ночи/.test(t)) && hour < 12) hour += 12;
