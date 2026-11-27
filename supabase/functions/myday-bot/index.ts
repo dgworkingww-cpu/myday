@@ -60,6 +60,11 @@ async function consumeAiQuota(telegramId: number, usageDate: string, limit = 100
 }
 function mergeBotChanges(latest: AnyRecord, incoming: AnyRecord, base: AnyRecord) {
   const merged = { ...latest };
+  // Merge the rotating work configuration only when this request changed it.
+  // This preserves unrelated settings changed concurrently in the Mini App.
+  if (JSON.stringify(base.workConfig ?? null) !== JSON.stringify(incoming.workConfig ?? null)) {
+    merged.workConfig = { ...(latest.workConfig || {}), ...(incoming.workConfig || {}) };
+  }
   // Merge keyed collections by id so bot edits/deletions survive revision retries
   // without overwriting unrelated changes made in the Mini App.
   for (const key of ["tasks", "events", "hw"]) {
