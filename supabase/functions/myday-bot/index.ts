@@ -108,12 +108,12 @@ function taskKeyboard(tasks: Array<[string, string]>) { return tasks.map(([id, t
 async function handleText(chatId: number, userId: number, text: string) {
   const cmd = text.trim();
   if (/^\/(start|help)(\s|$)/i.test(cmd)) {
-    await send(chatId, "Привет! Я <b>MYDAY Assistant</b> — твой планировщик прямо в Telegram.\n\nНапиши задачу обычными словами или отправь голосовое. Например: «Сдать лабораторную по теплотехнике до пятницы» или «Завтра в 18:00 тренировка».\n\nКоманды: /today, /week, /tasks, /app, /help", [[{ text: "Сегодня", callback_data: "view:today" }, { text: "Мои задачи", callback_data: "view:tasks" }], [{ text: "Открыть MYDAY", url: "https://dgworkingww-cpu.github.io/myday/" }]]);
+    await send(chatId, "Привет! Я <b>MYDAY Assistant</b> — твой планировщик прямо в Telegram.\n\nНапиши задачу обычными словами или отправь голосовое. Например: «Сдать лабораторную по теплотехнике до пятницы» или «Завтра в 18:00 тренировка».\n\nКоманды: /today, /week, /tasks, /app, /help", [[{ text: "Сегодня", callback_data: "view:today" }, { text: "Мои задачи", callback_data: "view:tasks" }], [{ text: "Открыть MYDAY", web_app: { url: "https://dgworkingww-cpu.github.io/myday/" } }]]);
     return;
   }
   const p = await getProfile(userId);
   const today = isoToday(p.data.settings?.timezone || TZ);
-  if (/^\/app\b/i.test(cmd)) { await send(chatId, "Открыть приложение:", [[{ text: "Запустить MYDAY", url: "https://dgworkingww-cpu.github.io/myday/" }]]); return; }
+  if (/^\/app\b/i.test(cmd)) { await send(chatId, "Открыть приложение:", [[{ text: "Запустить MYDAY", web_app: { url: "https://dgworkingww-cpu.github.io/myday/" } }]]); return; }
   if (/^\/(today|week|tasks)\b/i.test(cmd)) {
     const mode = cmd.match(/^\/(\w+)/)![1];
     const tasks = (Array.isArray(p.data.tasks) ? p.data.tasks : []).filter((x: AnyRecord) => Number(x.status || 0) !== 2);
