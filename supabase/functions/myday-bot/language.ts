@@ -126,16 +126,20 @@ export function inferTime(text: string): string {
   return m ? parseClock(m[1]) : "";
 }
 export function inferTimeRange(text: string): { start: string; end: string } | null {
-  const m = text.toLocaleLowerCase("ru").match(/(?:^|[^а-яё])с\s+(.+?)\s+(?:до|по)\s+(.+?)(?=$|[,;.])/i);
-  if (!m) return null;
-  const start = parseClock(m[1]);
-  let end = parseClock(m[2]);
+  const normalized = text.toLocaleLowerCase("ru");
+  const spoken = normalized.match(/(?:^|[^а-яё])с\s+(.+?)\s+(?:до|по)\s+(.+?)(?=$|[,;.])/i);
+  const numeric = normalized.match(/(?:^|[^\d])(\d{1,2}[:.]\d{2})\s*[-–—]\s*(\d{1,2}[:.]\d{2})(?=$|[^\d])/);
+  const startRaw = spoken ? spoken[1] : numeric?.[1];
+  const endRaw = spoken ? spoken[2] : numeric?.[2];
+  if (!startRaw || !endRaw) return null;
+  const start = parseClock(startRaw);
+  let end = parseClock(endRaw);
   if (!start || !end) return null;
   const startHour = Number(start.slice(0, 2));
   const endHour = Number(end.slice(0, 2));
   // In an evening shift, an unqualified spoken half-hour such as "полдвенадцатого"
   // normally means 23:30, not 11:30. Explicit "утра/ночи" remains authoritative.
-  if (startHour >= 18 && endHour > 0 && endHour < 12 && !/утра|ночи/.test(m[2])) {
+  if (startHour >= 18 && endHour > 0 && endHour < 12 && !/утра|ночи/.test(endRaw)) {
     end = String(endHour + 12).padStart(2, "0") + end.slice(2);
   }
   return { start, end };
