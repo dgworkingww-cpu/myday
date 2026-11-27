@@ -185,8 +185,16 @@ Deno.serve(async (req: Request) => {
     } finally { clearTimeout(timeout); }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Внутренняя ошибка анализа.";
-    const status = /Telegram|подпись|авторизац|сессия/i.test(message) ? 401 : 400;
+    const isAuth = /Telegram|подпись|авторизац|сессия/i.test(message);
+    const isTimeout = error instanceof DOMException && error.name === "AbortError";
+    const isNetwork = error instanceof TypeError;
+    const status = isAuth ? 401 : isTimeout ? 504 : isNetwork ? 502 : 500;
+    const userMessage = isAuth ? message : isTimeout
+      ? "ИИ не ответил вовремя. Распознанный текст остался на экране, повтори анализ."
+      : isNetwork ? "Не удалось связаться с ИИ. Проверь интернет и повтори анализ."
+      : "Внутренняя ошибка анализа. Распознанный текст остался на экране, можно повторить попытку.";
+    const code = isAuth ? "AUTH_REQUIRED" : isTimeout ? "AI_TIMEOUT" : isNetwork ? "AI_NETWORK_ERROR" : "ANALYSIS_FAILED";
     console.error("MYDAY document analysis error:", message);
-    return json({ error: message, code: status === 401 ? "AUTH_REQUIRED" : "ANALYSIS_FAILED" }, status);
+    return json({ error: userMessage, code }, status);
   }
 });
