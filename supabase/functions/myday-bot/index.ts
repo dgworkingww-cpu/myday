@@ -225,7 +225,7 @@ function scheduleItemsForDate(data: AnyRecord, date: string) {
   const mode = cfg.studyMode || "alternating";
   let study: AnyRecord[] = [];
   if (mode === "fixed") study = [...((sched.fixed || {})[day] || [])];
-  else if (mode === "dates") study = [...((sched.dates || {})[date] || {})[day] || []];
+  else if (mode === "dates") { const specific = (sched.dates || {})[date] || {}; study = [...(specific[day] || [])]; }
   else if (mode === "cycle") {
     const n = Math.max(2, Math.min(4, Number(cfg.cycleWeeks) || 2));
     const anchor = dateWeekStart(cfg.cycleAnchor || data.settings?.weekAnchor || isoToday(data.settings?.timezone || TZ));
