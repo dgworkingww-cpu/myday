@@ -121,7 +121,12 @@ jobs:
             -H 'Content-Type: application/json' \
             --data "$(jq -n --arg url "https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/myday-bot" --arg secret "$webhook_secret" '{url:$url,secret_token:$secret,allowed_updates:["message","callback_query"],drop_pending_updates:false}')")"
           echo "$response" | jq -e '.ok == true' >/dev/null
-          echo "MYDAY webhook registered successfully."
+          menu_response="$(curl --fail --silent --show-error \
+            -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setChatMenuButton" \
+            -H 'Content-Type: application/json' \
+            --data '{"menu_button":{"type":"web_app","text":"Открыть MYDAY","web_app":{"url":"https://dgworkingww-cpu.github.io/myday/"}}}')"
+          echo "$menu_response" | jq -e '.ok == true' >/dev/null
+          echo "MYDAY webhook and Mini App menu button registered successfully."
 
       - name: Check frontend JavaScript syntax
         shell: bash
