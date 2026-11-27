@@ -57,7 +57,7 @@ function makePdf(lines) {
       documentType:'Учебный документ',title:'Тестовый документ',summary:'Проверка сквозного сценария MYDAY.',
       keyPoints:['В документе две страницы.'],warnings:[],
       proposals:{tasks:[{title:'Проверочная задача',description:'Из PDF',dueDate:null,priority:'medium',category:'Учёба'}],
-        homework:[],events:[{title:'Проверочное событие',date:'2026-12-01',time:'12:00',endTime:'13:00',type:'Учёба'}],schedule:[{weekday:1,start:'09:00',end:'10:00',subject:'Конфликтующая пара',room:'',teacher:'',weekType:'odd',confidence:0.99}]}
+        homework:[{subject:'Теплотехника',title:'Лабораторная работа № 1',description:'Из PDF',dueDate:null}],events:[{title:'Проверочное событие',date:'2026-12-01',time:'12:00',endTime:'13:00',type:'Учёба'}],schedule:[{weekday:1,start:'09:00',end:'10:00',subject:'Конфликтующая пара',room:'',teacher:'',weekType:'odd',confidence:0.99}]}
     }})});
   });
   let savedProfile=null,failAnalyze=false;
@@ -97,7 +97,8 @@ function makePdf(lines) {
     await page.locator('input[data-kind="events"]').uncheck();
     await page.locator('#save').click();
     await page.getByText(/Сохранено в MYDAY: 1/).waitFor({timeout:15000});
-    if(!savedProfile || savedProfile.tasks.length!==1 || savedProfile.events.length!==0) throw new Error('Selected-item import did not save the expected profile');
+    if(!savedProfile || savedProfile.tasks.length!==1 || savedProfile.events.length!==0 || savedProfile.hw.length!==1) throw new Error('Selected-item import did not save the expected profile');
+    if(!savedProfile.subjects.length || savedProfile.hw[0].subj!==savedProfile.subjects[0].id) throw new Error('Homework was not linked to its MYDAY subject ID');
     if(savedProfile.sched.odd['1'].length!==1) throw new Error('Conflicting timetable entry was not skipped');
     await page.getByText(/Пропущено из-за пересечений: 1/).waitFor();
     failAnalyze=true;await page.locator('#analyze').click();
@@ -119,6 +120,6 @@ function makePdf(lines) {
     await page.getByRole('button',{name:/Разбор документов/}).click();
     await page.locator('#file').waitFor({timeout:15000});
     if(errors.length) throw new Error('Browser runtime errors: '+errors.join(' | '));
-    console.log(JSON.stringify({result:'passed',tests:['file selection','empty/unsupported file validation','PDF preview','next/previous page controls','two-page text extraction','AI analysis UI','selective import','cloud profile save','schedule conflict prevention','AI failure recovery','real image OCR','return navigation','open analyzer from MYDAY menu'],savedTasks:savedProfile.tasks.length,savedEvents:savedProfile.events.length,errors,failedRequests:failed},null,2));
+    console.log(JSON.stringify({result:'passed',tests:['file selection','empty/unsupported file validation','PDF preview','next/previous page controls','two-page text extraction','AI analysis UI','selective import','cloud profile save','homework subject mapping','schedule conflict prevention','AI failure recovery','real image OCR','return navigation','open analyzer from MYDAY menu'],savedTasks:savedProfile.tasks.length,savedEvents:savedProfile.events.length,errors,failedRequests:failed},null,2));
   } finally { await context.close();await browser.close();await new Promise(resolve=>server.close(resolve)); }
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});
