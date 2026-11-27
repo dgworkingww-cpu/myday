@@ -129,10 +129,12 @@ export async function extractScheduleDocument(
     const base = (Deno.env.get("SUPABASE_URL") || "").replace(/\/+$/, "");
     const secret = Deno.env.get("MYDAY_WEBHOOK_SECRET") || "";
     if (!base || !secret) throw new Error("Не настроен внутренний сервис обработки PDF.");
+    const pdfBody = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(pdfBody).set(bytes);
     const response = await fetch(base + "/functions/v1/myday-pdf-parser", {
       method: "POST",
       headers: { "Content-Type": "application/pdf", "x-myday-internal-secret": secret, "x-myday-filename": encodeURIComponent(filename) },
-      body: bytes,
+      body: pdfBody,
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result?.text) throw new Error(String(result?.error || "Не удалось извлечь текст из PDF."));
