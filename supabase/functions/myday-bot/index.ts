@@ -116,11 +116,20 @@ function guessCategory(space: string) { return space === "study" ? "Учёба" 
 async function aiInterpret(text: string, today: string, mode = "text"): Promise<AnyRecord | null> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) return null;
-  const prompt = `Ты — парсер личного планировщика MYDAY. Сегодня ${today}. Извлеки намерение из сообщения на русском языке. Верни только JSON: {"intent":"add|add_event|list_today|list_week|list_tasks|complete|delete|reschedule|note|help|clarify","tasks":[{"title":"...","desc":"","space":"study|work|personal","cat":"Учёба|Работа и проекты|Другое","due":"YYYY-MM-DD или пусто","prio":0}],"events":[{"title":"...","type":"Экзамен|Зачёт|Консультация|Сдача работы|Событие","date":"YYYY-MM-DD","time":"HH:MM или пусто"}],"task_query":"","note":"","reply":""}. Не выдумывай сроки: ставь дату только если она явно следует из текста. При нескольких делах создай несколько tasks. При неоднозначном намерении выбери clarify и задай один короткий вопрос. prio: 0 высокий, 1 обычный, 2 низкий. ${mode === "voice" ? "Текст получен из голосового сообщения." : ""}`;
-  const r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ model: "gpt-4o-mini", temperature: 0.1, response_format: { type: "json_object" }, messages: [{ role: "system", content: prompt }, { role: "user", content: text.slice(0, 8000) }] }) });
-  if (!r.ok) throw new Error("AI parsing failed: " + r.status);
-  const d = await r.json();
-  try { return JSON.parse(d.choices?.[0]?.message?.content || "{}"); } catch { return null; }
+  const prompt = `Ты — персональный помощник-планировщик MYDAY. Сегодня ${today}. Понимай русскую разговорную речь, в том числе голосовую расшифровку. Верни только JSON: {"intent":"add|add_event|list_today|list_week|list_tasks|complete|delete|reschedule|note|help|clarify","tasks":[{"title":"...","desc":"","space":"study|work|personal","cat":"Учёба|Работа и проекты|Другое","due":"YYYY-MM-DD или пусто","prio":0}],"events":[{"title":"...","type":"Экзамен|Зачёт|Консультация|Сдача работы|Событие","date":"YYYY-MM-DD","time":"HH:MM или пусто"}],"task_query":"","due":"YYYY-MM-DD или пусто","note":"","reply":""}. При создании события обязательно укажи дату только если она явно названа или однозначно следует из слов сегодня/завтра/послезавтра/день недели. Не придумывай дату и время. При нескольких делах создай несколько tasks. Для завершения, удаления или переноса существующей задачи используй task_query с её названием; для переноса также заполни due. Если задачу нельзя однозначно определить, выбери clarify и задай один короткий вопрос. prio: 0 высокий, 1 обычный, 2 низкий. ${mode === "voice" ? "Текст получен из голосового сообщения." : ""}`;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    const r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", signal: controller.signal, headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ model: Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini", temperature: 0.1, response_format: { type: "json_object" }, messages: [{ role: "system", content: prompt }, { role: "user", content: text.slice(0, 8000) }] }) });
+    clearTimeout(timeout);
+    if (!r.ok) { console.error("MYDAY AI parsing failed:", r.status, (await r.text()).slice(0, 300)); return null; }
+    const d = await r.json();
+    const parsed = JSON.parse(d.choices?.[0]?.message?.content || "{}");
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch (error) {
+    console.error("MYDAY AI unavailable; using safe text fallback:", error);
+    return null;
+  }
 }
 async function telegramFile(fileId: string) {
   const token = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
@@ -133,7 +142,7 @@ async function telegramFile(fileId: string) {
 async function transcribe(fileId: string) {
   if (!Deno.env.get("OPENAI_API_KEY")) return "";
   const { blob, name } = await telegramFile(fileId);
-  const form = new FormData(); form.append("file", new File([blob], name, { type: blob.type || "audio/ogg" })); form.append("model", "whisper-1"); form.append("language", "ru");
+  const form = new FormData(); form.append("file", new File([blob], name, { type: blob.type || "audio/ogg" })); form.append("model", Deno.env.get("OPENAI_TRANSCRIPTION_MODEL") || "whisper-1"); form.append("language", "ru");
   const r = await fetch("https://api.openai.com/v1/audio/transcriptions", { method: "POST", headers: { Authorization: "Bearer " + Deno.env.get("OPENAI_API_KEY")! }, body: form });
   if (!r.ok) throw new Error("Не удалось распознать голос: " + r.status);
   const d = await r.json(); return String(d.text || "");
@@ -144,7 +153,7 @@ async function vision(fileId: string) {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let binary = ""; for (const b of bytes) binary += String.fromCharCode(b);
   const dataUrl = "data:" + (blob.type || "image/jpeg") + ";base64," + btoa(binary);
-  const r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { Authorization: "Bearer " + Deno.env.get("OPENAI_API_KEY")!, "Content-Type": "application/json" }, body: JSON.stringify({ model: "gpt-4o-mini", response_format: { type: "json_object" }, messages: [{ role: "system", content: "Извлеки с изображения задания, сроки, предметы и события. Верни JSON {intent:'add',tasks:[{title,desc,space,cat,due,prio}]} . Не выдумывай нечитаемый текст и даты." }, { role: "user", content: [{ type: "text", text: "Разбери фото как входящее задание для MYDAY." }, { type: "image_url", image_url: { url: dataUrl } }] }] }) });
+  const r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { Authorization: "Bearer " + Deno.env.get("OPENAI_API_KEY")!, "Content-Type": "application/json" }, body: JSON.stringify({ model: Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini", response_format: { type: "json_object" }, messages: [{ role: "system", content: "Извлеки с изображения задания, сроки, предметы и события. Верни JSON {intent:'add',tasks:[{title,desc,space,cat,due,prio}]} . Не выдумывай нечитаемый текст и даты." }, { role: "user", content: [{ type: "text", text: "Разбери фото как входящее задание для MYDAY." }, { type: "image_url", image_url: { url: dataUrl } }] }] }) });
   if (!r.ok) throw new Error("Не удалось разобрать фото: " + r.status);
   const d = await r.json(); try { return JSON.parse(d.choices?.[0]?.message?.content || "{}"); } catch { return ""; }
 }
