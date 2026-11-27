@@ -295,7 +295,7 @@ async function handleText(chatId: number, userId: number, text: string) {
     const subjectNamesForReply = (Array.isArray(p.data.subjects) ? p.data.subjects : []).filter((x: AnyRecord) => !x.closed).map((x: AnyRecord) => String(x.name || "").toLocaleLowerCase("ru"));
     const replyLower = cmd.toLocaleLowerCase("ru");
     const subjectReply = subjectNamesForReply.length
-      ? subjectNamesForReply.some(name => name.includes(replyLower) || replyLower.includes(name) || name.split(/\s+/).some(word => word.length > 4 && replyLower.includes(word)))
+      ? subjectNamesForReply.some((name: string) => name.includes(replyLower) || replyLower.includes(name) || name.split(/\s+/).some((word: string) => word.length > 4 && replyLower.includes(word)))
       : (!/^\//.test(cmd) && cmd.length <= 80);
     const isFollowUp = pending.kind === "event_date" ? isDateOnlyReply(cmd) : subjectReply;
     if (age < 12 * 60 * 60 * 1000 && isFollowUp) {
