@@ -65,7 +65,7 @@ function searchOpenResult(index){
 }
 function doSearch(){
  const input=$('#sq'),target=$('#sr');if(!input||!target)return;
- const q=input.value.trim().toLocaleLowerCase('ru').replace(/\\s+/g,' ');
+ const q=input.value.trim().toLocaleLowerCase('ru').replace(/\s+/g,' ');
  if(q.length<2){window._mydaySearchResults=[];target.innerHTML=q?'<div class="sub">Введите ещё хотя бы одну букву</div>':'<div class="sub">Начните вводить название или часть описания.</div>';return}
  const results=[],add=(kind,id,title,meta,haystack,extra={})=>{
   if(results.length>=60||!haystack.toLocaleLowerCase('ru').includes(q))return;
