@@ -113,6 +113,16 @@ async function markUpdate(updateId: number) {
   const rows = await r.json();
   return Array.isArray(rows) && rows.length > 0;
 }
+
+async function releaseFailedUpdate(updateId: number) {
+  const base = Deno.env.get("SUPABASE_URL")!.replace(/\\/+$/, "");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || (() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}").default || ""; } catch { return ""; } })();
+  const response = await fetch(base + "/rest/v1/myday_bot_updates?update_id=eq." + updateId, {
+    method: "DELETE",
+    headers: { apikey: key, Prefer: "return=minimal" }
+  });
+  if (!response.ok) throw new Error("Failed to release Telegram update for retry: HTTP " + response.status);
+}
 function guessSpace(text: string) {
   const t = text.toLowerCase();
   if (/пара|лекци|лаборатор|курсов|преподав|зач[её]т|экзамен|универ|предмет|домашн/.test(t)) return "study";
@@ -657,13 +667,15 @@ Deno.serve(async (req: Request) => {
   const secret = Deno.env.get("MYDAY_WEBHOOK_SECRET") || "";
   if (!secret || req.headers.get("x-telegram-bot-api-secret-token") !== secret) return json({ error: "Unauthorized" }, 401);
   let fallbackChatId = 0;
+  let currentUpdateId: number | null = null;
   try {
     failureStage = "чтение входящего обновления Telegram";
     const update = await req.json();
     fallbackChatId = Number(update.message?.chat?.id || update.callback_query?.message?.chat?.id || 0);
     failureStage = "проверка повторного обновления";
     if (Number.isSafeInteger(update.update_id)) {
-      const fresh = await markUpdate(Number(update.update_id));
+      currentUpdateId = Number(update.update_id);
+      const fresh = await markUpdate(currentUpdateId);
       if (!fresh) return json({ ok: true, duplicate: true });
     }
     if (update.callback_query) { failureStage = "обработка нажатия кнопки"; await handleCallback(update.callback_query); }
@@ -702,6 +714,10 @@ Deno.serve(async (req: Request) => {
     return json({ ok: true });
   } catch (error) {
     console.error("MYDAY bot webhook error:", error);
+    if (currentUpdateId !== null) {
+      try { await releaseFailedUpdate(currentUpdateId); }
+      catch (releaseError) { console.error("Could not release failed Telegram update:", releaseError); }
+    }
     if (fallbackChatId) {
       try {
         const message = String(error).includes("MYDAY_AI_DAILY_LIMIT")
@@ -710,6 +726,6 @@ Deno.serve(async (req: Request) => {
         await send(fallbackChatId, message);
       } catch { /* Telegram may be temporarily unavailable */ }
     }
-    return json({ ok: true });
+    return json({ ok: false, retry: true }, 500);
   }
 });
