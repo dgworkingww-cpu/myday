@@ -102,7 +102,7 @@ function guessCategory(space: string) { return space === "study" ? "Учёба" 
 async function aiInterpret(text: string, today: string, mode = "text"): Promise<AnyRecord | null> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) return null;
-  const prompt = `Ты — парсер личного планировщика MYDAY. Сегодня ${today}. Извлеки намерение из сообщения на русском языке. Верни только JSON: {"intent":"add|list_today|list_week|list_tasks|complete|delete|reschedule|note|help|clarify","tasks":[{"title":"...","desc":"","space":"study|work|personal","cat":"Учёба|Работа и проекты|Другое","due":"YYYY-MM-DD или пусто","prio":0,"time":"HH:MM или пусто"}],"task_query":"","note":"","reply":""}. Не выдумывай сроки: ставь дату только если она явно следует из текста. При нескольких делах создай несколько tasks. При неоднозначном намерении выбери clarify и задай один короткий вопрос. prio: 0 высокий, 1 обычный, 2 низкий. ${mode === "voice" ? "Текст получен из голосового сообщения." : ""}`;
+  const prompt = `Ты — парсер личного планировщика MYDAY. Сегодня ${today}. Извлеки намерение из сообщения на русском языке. Верни только JSON: {"intent":"add|add_event|list_today|list_week|list_tasks|complete|delete|reschedule|note|help|clarify","tasks":[{"title":"...","desc":"","space":"study|work|personal","cat":"Учёба|Работа и проекты|Другое","due":"YYYY-MM-DD или пусто","prio":0}],"events":[{"title":"...","type":"Экзамен|Зачёт|Консультация|Сдача работы|Событие","date":"YYYY-MM-DD"}],"task_query":"","note":"","reply":""}. Не выдумывай сроки: ставь дату только если она явно следует из текста. При нескольких делах создай несколько tasks. При неоднозначном намерении выбери clarify и задай один короткий вопрос. prio: 0 высокий, 1 обычный, 2 низкий. ${mode === "voice" ? "Текст получен из голосового сообщения." : ""}`;
   const r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ model: "gpt-4o-mini", temperature: 0.1, response_format: { type: "json_object" }, messages: [{ role: "system", content: prompt }, { role: "user", content: text.slice(0, 8000) }] }) });
   if (!r.ok) throw new Error("AI parsing failed: " + r.status);
   const d = await r.json();
@@ -160,10 +160,24 @@ async function handleText(chatId: number, userId: number, text: string) {
     if (!t) { await send(chatId, "Не нашёл такую задачу."); return; }
     t.status = 2; await saveProfile(userId, p.data, p.baseData); await send(chatId, "Готово: <b>" + escapeHtml(t.title) + "</b> отмечена выполненной."); return;
   }
-  const payload = await aiInterpret(cmd, today) || { intent: "add", tasks: [{ title: cmd, desc: "", space: guessSpace(cmd), cat: guessCategory(guessSpace(cmd)), due: inferDate(cmd, today), prio: 1 }] };
+  const eventLike = /тренировк|встреч|при[её]м|врач|экзамен|зач[её]т|консультац|день рождения|собеседован|мероприят/i.test(cmd);
+  const fallbackSpace = guessSpace(cmd);
+  const payload = await aiInterpret(cmd, today) || (eventLike
+    ? { intent: "add_event", tasks: [], events: [{ title: cmd, type: /экзамен/i.test(cmd) ? "Экзамен" : /зач[её]т/i.test(cmd) ? "Зачёт" : "Событие", date: inferDate(cmd, today) || today }] }
+    : { intent: "add", tasks: [{ title: cmd, desc: "", space: fallbackSpace, cat: guessCategory(fallbackSpace), due: inferDate(cmd, today), prio: 1 }] });
   if (payload.intent === "clarify") { await send(chatId, escapeHtml(payload.reply || "Уточни, пожалуйста, дату или к какому разделу относится задача.")); return; }
   if (payload.intent === "list_today" || payload.intent === "list_tasks" || payload.intent === "list_week") { await send(chatId, "Напиши /today, /week или /tasks."); return; }
   if (payload.intent === "note") { p.data.inbox = Array.isArray(p.data.inbox) ? p.data.inbox : []; p.data.inbox.unshift({ text: String(payload.note || cmd), d: today }); await saveProfile(userId, p.data, p.baseData); await send(chatId, "Сохранил в заметки."); return; }
+  if (payload.intent === "add_event") {
+    const incomingEvents = Array.isArray(payload.events) ? payload.events : [];
+    if (!incomingEvents.length) { await send(chatId, "Не смог определить событие и дату. Напиши, например: «Экзамен по теплотехнике 12.12»."); return; }
+    p.data.events = Array.isArray(p.data.events) ? p.data.events : [];
+    const createdEvents = incomingEvents.slice(0, 10).map((x: AnyRecord) => ({ id: uid(), title: String(x.title || cmd).slice(0, 240), type: String(x.type || "Событие"), date: /^\\d{4}-\\d{2}-\\d{2}$/.test(String(x.date || "")) ? x.date : inferDate(cmd, today) || today }));
+    p.data.events.push(...createdEvents);
+    await saveProfile(userId, p.data, p.baseData);
+    await send(chatId, "Добавил событие в календарь MYDAY:\\n" + createdEvents.map((x: AnyRecord) => "📌 <b>" + escapeHtml(x.title) + "</b> · " + x.date).join("\\n"));
+    return;
+  }
   if (payload.intent === "help") { await send(chatId, "Напиши задачу обычным текстом, отправь голосовое или используй /today, /week, /tasks."); return; }
   const incoming = Array.isArray(payload.tasks) ? payload.tasks : [];
   if (!incoming.length) { await send(chatId, "Не понял, что сохранить. Попробуй сформулировать как задачу."); return; }
