@@ -127,6 +127,13 @@ const server = http.createServer((req,res) => {
     await page.locator('#nav button').nth(4).click();
     await page.getByRole('button',{name:/Идеи и заметки/}).click();
     await page.locator('#app .page-title').waitFor();
+    const typography = await page.evaluate(() => {
+      const selectors = ['body', '#app .page-title', '#app h2', '#nav button', '#app button'];
+      return selectors.map(selector => { const node = document.querySelector(selector); return node ? [selector, getComputedStyle(node).fontFamily] : null; }).filter(Boolean);
+    });
+    if (new Set(typography.map(([, family]) => family)).size !== 1) {
+      throw new Error('MYDAY typography is inconsistent: ' + JSON.stringify(typography));
+    }
     await page.locator('#nav button').nth(4).click();
 
     const themeButtons=page.locator('.theme-options button');

@@ -9,6 +9,7 @@ on:
       - 'supabase/migrations/**'
       - 'supabase/config.toml'
       - '.github/workflows/deploy-myday-backend.yml'
+      - '.github/workflows/deploy-myday-bot.yml'
       - '.github/workflows/myday-bot-checks.yml'
   push:
     branches: [feature/myday-telegram-assistant]
@@ -35,7 +36,7 @@ jobs:
       - name: Type-check document analyzer
         run: deno check supabase/functions/myday-document-analyze/index.ts
       - name: Test Russian assistant date and time parsing
-        run: deno test tests/myday-bot-language.test.ts
+        run: deno test tests/myday-bot-language.test.ts tests/myday-profile-merge.test.ts
       - name: Validate bot deployment configuration
         run: |
           node <<'NODE'
@@ -47,8 +48,12 @@ jobs:
           const migration = fs.readFileSync('supabase/migrations/005_myday_bot_updates.sql', 'utf8');
           const quotaMigration = fs.readFileSync('supabase/migrations/006_myday_bot_ai_quota.sql', 'utf8');
           const retryMigration = fs.readFileSync('supabase/migrations/008_myday_bot_update_retry.sql', 'utf8');
+          const botDeploy = fs.readFileSync('.github/workflows/deploy-myday-bot.yml', 'utf8');
           for (const token of ['[functions.myday-bot]', '[functions.myday-document-analyze]', 'verify_jwt = false']) {
             if (!config.includes(token)) throw new Error('Missing function config: ' + token);
+          }
+          for (const token of ['branches: [main]', 'supabase functions deploy myday-bot', 'SUPABASE_ACCESS_TOKEN', 'SUPABASE_DB_PASSWORD']) {
+            if (!botDeploy.includes(token)) throw new Error('Missing automatic bot deployment setting: ' + token);
           }
           for (const token of ['supabase functions deploy myday-bot', 'supabase functions deploy myday-document-analyze', 'setWebhook', 'MYDAY_WEBHOOK_SECRET', 'GROQ_API_KEY']) {
             if (!workflow.includes(token)) throw new Error('Missing webhook deployment step: ' + token);
