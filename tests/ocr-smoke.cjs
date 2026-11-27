@@ -40,6 +40,7 @@ function makePdf(lines) {
   const browser=await chromium.launch({headless:true});
   const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
   const page=await context.newPage();
+  page.setDefaultTimeout(120000);
   const errors=[],failed=[];
   page.on('pageerror',e=>errors.push(e.message));
   page.on('requestfailed',r=>failed.push(r.url()+': '+(r.failure()?.errorText||'failed')));
@@ -67,6 +68,7 @@ function makePdf(lines) {
   try {
     await page.goto('http://127.0.0.1:4174/ocr.html',{waitUntil:'domcontentloaded'});
     await page.locator('#file').waitFor();
+    await page.waitForFunction(()=>window.Tesseract&&typeof window.Tesseract.createWorker==='function',{timeout:30000});
     if(await page.locator('#extract').isDisabled()!==true) throw new Error('Extract must be disabled until a file is selected');
     await page.locator('#file').setInputFiles({name:'two-pages.pdf',mimeType:'application/pdf',buffer:makePdf(['MYDAY PDF PAGE ONE','MYDAY PDF PAGE TWO'])});
     await page.getByText(/PDF открыт\. Страниц: 2/).waitFor({timeout:15000});
@@ -86,7 +88,14 @@ function makePdf(lines) {
     await page.locator('#save').click();
     await page.getByText(/Сохранено в MYDAY: 1/).waitFor({timeout:15000});
     if(!savedProfile || savedProfile.tasks.length!==1 || savedProfile.events.length!==0) throw new Error('Selected-item import did not save the expected profile');
+    const pngBase64=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=1800;c.height=500;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.fillStyle='#000';x.font='bold 130px Arial';x.fillText('MYDAY OCR TEST 123',90,300);return c.toDataURL('image/png').split(',')[1]});
+    await page.locator('#file').setInputFiles({name:'ocr-sample.png',mimeType:'image/png',buffer:Buffer.from(pngBase64,'base64')});
+    await page.getByText('Изображение готово к распознаванию.').waitFor();
+    await page.locator('#extract').click();
+    await page.locator('#textPanel').waitFor({state:'visible',timeout:120000});
+    const ocrText=(await page.locator('#output').inputValue()).toUpperCase();
+    if(!ocrText.includes('MYDAY')||!ocrText.includes('OCR')) throw new Error('Real image OCR failed: '+ocrText);
     if(errors.length) throw new Error('Browser runtime errors: '+errors.join(' | '));
-    console.log(JSON.stringify({result:'passed',tests:['file selection','PDF preview','next/previous page controls','two-page text extraction','AI analysis UI','selective import','cloud profile save'],savedTasks:savedProfile.tasks.length,savedEvents:savedProfile.events.length,errors,failedRequests:failed},null,2));
+    console.log(JSON.stringify({result:'passed',tests:['file selection','PDF preview','next/previous page controls','two-page text extraction','AI analysis UI','selective import','cloud profile save','real image OCR'],savedTasks:savedProfile.tasks.length,savedEvents:savedProfile.events.length,errors,failedRequests:failed},null,2));
   } finally { await context.close();await browser.close();await new Promise(resolve=>server.close(resolve)); }
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});
