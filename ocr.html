@@ -180,7 +180,7 @@ async function extractText(){
     progress(2+Math.round((n-1)/limit*88),"Читаю страницу "+n+" из "+limit+"…");
     const p=await pdf.getPage(n),tc=await p.getTextContent();
     const digital=tc.items.map(x=>String(x.str||"")+(x.hasEOL?"\n":" ")).join("").trim();
-    if(digital.replace(/\s/g,"").length>=60){parts.push("СТРАНИЦА "+n+"\n"+digital)}
+    if(digital.replace(/\s/g,"").length>=60){parts.push("СТРАНИЦА "+n+"\n"+digital);p.cleanup()}
     else{
      usedOcr=true;
      if(!window.Tesseract)throw new Error("Не загрузился бесплатный движок OCR. Проверь подключение к интернету и повтори попытку.");
@@ -189,6 +189,7 @@ async function extractText(){
       worker=await Tesseract.createWorker("rus+eng",1,{logger:m=>{if(m.status==="recognizing text")progress(5+Math.round((m.progress||0)*80),"Распознаю страницу "+n+"… "+Math.round((m.progress||0)*100)+"%")}});
       activeWorker=worker;
      }
+     if(cancelRequested)throw new Error("Обработка остановлена пользователем.");
      const vp=p.getViewport({scale:1.65}),canvas=document.createElement("canvas"),ctx=canvas.getContext("2d",{willReadFrequently:true});
      canvas.width=Math.ceil(vp.width);canvas.height=Math.ceil(vp.height);
      progress(5+Math.round((n-1)/limit*88),"Обрабатываю страницу "+n+" из "+limit+"…");
@@ -204,7 +205,7 @@ async function extractText(){
    if(!window.Tesseract)throw new Error("Не загрузился бесплатный движок OCR. Проверь подключение к интернету и повтори попытку.");
    progress(3,"Загружаю бесплатную языковую модель…");
    worker=await Tesseract.createWorker("rus+eng",1,{logger:m=>{if(m.status==="recognizing text")progress(10+Math.round((m.progress||0)*80),"Распознаю изображение… "+Math.round((m.progress||0)*100)+"%")}});
-   activeWorker=worker;const canvas=await imageToCanvas(file);const result=await worker.recognize(canvas);parts.push(String(result.data.text||"").trim());canvas.width=1;canvas.height=1;
+   activeWorker=worker;if(cancelRequested)throw new Error("Обработка остановлена пользователем.");const canvas=await imageToCanvas(file);if(cancelRequested)throw new Error("Обработка остановлена пользователем.");const result=await worker.recognize(canvas);parts.push(String(result.data.text||"").trim());canvas.width=1;canvas.height=1;
   }
   if(cancelRequested)throw new Error("Обработка остановлена пользователем.");
   const rawText=parts.join("\n\n").trim();
