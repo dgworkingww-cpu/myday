@@ -482,7 +482,7 @@
   window.MYDAY_LAB={
     readFile, setDraft, editDraft, saveDraftItem, removeDraftItem, applyImport, clearDraft(){importDraft=null;render()},
     setStudyMode,setCycleWeeks,setCycleAnchor,setLayer,selectDate,selectWorkDate,setWorkMode,setWorkPreset,saveWorkSettings,toggleWorkException,
-    toggleWidget,moveWidget,addHabit,toggleHabit,deleteHabit,workShiftForDate,workShiftList
+    toggleWidget,moveWidget,addHabit,toggleHabit,deleteHabit,workShiftForDate,workShiftList,parseRows,parseLine
   };
   window.MYDAY_LAB_VERSION=LAB_VERSION;
   window.render();
