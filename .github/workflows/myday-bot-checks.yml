@@ -59,9 +59,9 @@ jobs:
           if (!migration.includes('update_id bigint primary key')) throw new Error('Missing Telegram update idempotency key');
           if (!quotaMigration.includes('myday_consume_bot_ai')) throw new Error('Missing per-user AI quota migration');
           if (!retryMigration.includes('grant delete on table public.myday_bot_updates to service_role')) throw new Error('Failed Telegram update retry permission is missing');
-          for (const token of ['releaseFailedUpdate', 'retry: true']) {
-            if (!bot.includes(token)) throw new Error('Missing failed Telegram update recovery: ' + token);
-          }
+          if (bot.includes('await releaseFailedUpdate(currentUpdateId)')) throw new Error('Webhook error handler must retain deduplication rows to prevent Telegram retry spam');
+          if (bot.includes('return json({ ok: false, retry: true }, 500)')) throw new Error('Webhook error handler must acknowledge failed updates after reporting the error');
+          if (!bot.includes('handled_error: true')) throw new Error('Webhook error handler must acknowledge a reported processing failure');
           if (workflow.includes('OPENAI_API_KEY')) throw new Error('Deployment workflow still references the old OpenAI secret');
           if (!bot.includes('https://api.groq.com/openai/v1/chat/completions') || !bot.includes('GROQ_API_KEY')) throw new Error('Groq chat API is not configured in the bot');
           for (const token of ['validateTelegramInitData', 'myday_consume_bot_ai', 'response_format', 'MYDAY document analysis error']) {
