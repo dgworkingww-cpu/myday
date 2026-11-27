@@ -226,7 +226,7 @@ function renderAnalysis(a){
   ["События",a.proposals.events,"events",x=>x.title],
   ["Занятия расписания",a.proposals.schedule,"schedule",x=>x.weekday+" · "+x.start+"–"+x.end+" · "+x.subject]
  ];
- let count=0;groups.forEach(([title,items,kind,format])=>{count+=items.length;p.appendChild(listItems(title,items,kind,format))});
+ let count=0;groups.forEach(([title,items,kind,format])=>{count+=items.length;const section=listItems(title,items,kind,format);if(section)p.appendChild(section)});
  if(!count){const msg=document.createElement("p");msg.className="muted";msg.textContent="Подходящих записей для импорта не найдено. Сам анализ документа доступен выше.";p.appendChild(msg);$("save").disabled=true}else $("save").disabled=false;
  analysisStatus("Проверь предложения и сними отметки с того, что не нужно сохранять.");
 }
