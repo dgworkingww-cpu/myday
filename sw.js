@@ -1,5 +1,5 @@
-const CACHE = 'myday-shell-v16';
-const SHELL = ['./', './index.html', './design-system.css', './apple-ui.js', './backend-config.js', './manifest.webmanifest', './icon.svg', './icon-180.png'];
+const CACHE = 'myday-shell-v17';
+const SHELL = ['./', './index.html', './design-system.css', './apple-ui.js', './schedule-lab.js', './backend-config.js', './manifest.webmanifest', './icon.svg', './icon-180.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
   self.skipWaiting();
