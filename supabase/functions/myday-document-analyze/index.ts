@@ -132,7 +132,12 @@ Deno.serve(async (req: Request) => {
     if (!profileResponse.ok) throw new Error("Не удалось загрузить настройки пользователя.");
     const profileRows = await profileResponse.json();
     const timezone = cleanString(profileRows[0]?.data?.settings?.timezone, 80) || "Europe/Moscow";
-    let today = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    let today: string;
+    try {
+      today = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    } catch {
+      today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    }
     const quotaResponse = await fetch(supabaseUrl + "/rest/v1/rpc/myday_consume_bot_ai", {
       method: "POST", headers, body: JSON.stringify({ p_telegram_id: user.id, p_usage_date: today, p_limit: 100 })
     });
