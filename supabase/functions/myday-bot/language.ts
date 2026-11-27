@@ -43,9 +43,9 @@ export function shiftIsoDate(date: string, days: number): string {
 }
 export function inferDate(text: string, today: string): string {
   const t = text.toLocaleLowerCase("ru").replace(/ё/g, "е");
-  if (/\bпослезавтра\b/.test(t)) return shiftIsoDate(today, 2);
-  if (/\bзавтра\b/.test(t)) return shiftIsoDate(today, 1);
-  if (/\bсегодня\b/.test(t)) return today;
+  if (/(?:^|[^а-яё])послезавтра(?=$|[^а-яё])/.test(t)) return shiftIsoDate(today, 2);
+  if (/(?:^|[^а-яё])завтра(?=$|[^а-яё])/.test(t)) return shiftIsoDate(today, 1);
+  if (/(?:^|[^а-яё])сегодня(?=$|[^а-яё])/.test(t)) return today;
   const numeric = t.match(/(?:до|к|на|в|от)\s*(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/);
   if (numeric) {
     let year = numeric[3] ? Number(numeric[3].length === 2 ? "20" + numeric[3] : numeric[3]) : Number(today.slice(0, 4));
@@ -56,7 +56,7 @@ export function inferDate(text: string, today: string): string {
   const inDays = t.match(/через\s+(\d+)\s+д(?:ень|ня|ней)/);
   if (inDays) return shiftIsoDate(today, Math.min(365, Number(inDays[1])));
   if (/через\s+недел/.test(t)) return shiftIsoDate(today, 7);
-  const dayWord = t.match(/\b(в|на|к|до)\s+(следующ(?:ий|ую|ем|его)\s+)?(понедельник|вторник|среду?|четверг|пятниц(?:у|а)|субботу?|воскресенье|пн|вт|ср|чт|пт|сб|вс)\b/);
+  const dayWord = t.match(/(?:^|[^а-яё])(в|на|к|до)\s+(следующ(?:ий|ую|ем|его)\s+)?(понедельник|вторник|среду?|четверг|пятниц(?:у|а)|субботу?|воскресенье|пн|вт|ср|чт|пт|сб|вс)(?=$|[^а-яё])/);
   if (dayWord) {
     const key = dayWord[3] === "среду" ? "среда" : dayWord[3] === "пятницу" ? "пятница" : dayWord[3] === "субботу" ? "суббота" : dayWord[3];
     const target = WEEKDAYS[key];
@@ -94,7 +94,7 @@ export function parseClock(text: string): string {
     if (hour === 24) hour = 0;
     return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
   }
-  const word = t.match(/\b(одиннадцать|двенадцать|десять|девять|восемь|семь|шесть|пять|четыре|три|два|час|один|одного|двух|трех|трёх|четырех|четырёх|пяти|шести|семи|восьми|девяти|десяти|одиннадцати|двенадцати)\b/);
+  const word = t.match(/(?:^|[^а-яё])(одиннадцать|двенадцать|десять|девять|восемь|семь|шесть|пять|четыре|три|два|час|один|одного|двух|трех|трёх|четырех|четырёх|пяти|шести|семи|восьми|девяти|десяти|одиннадцати|двенадцати)(?=$|[^а-яё])/);
   if (word) {
     const map: Record<string, number> = { одиннадцать: 11, двенадцать: 12, десять: 10, девять: 9, восемь: 8, семь: 7, шесть: 6, пять: 5, четыре: 4, три: 3, два: 2, час: 1, один: 1, одного: 1, двух: 2, трех: 3, трёх: 3, четырех: 4, четвёртых: 4, пяти: 5, шести: 6, семи: 7, восьми: 8, девяти: 9, десяти: 10, одиннадцати: 11, двенадцати: 12 };
     let hour = map[word[1]];
@@ -110,7 +110,7 @@ export function inferTime(text: string): string {
   return m ? parseClock(m[1]) : "";
 }
 export function inferTimeRange(text: string): { start: string; end: string } | null {
-  const m = text.toLocaleLowerCase("ru").match(/\bс\s+(.+?)\s+до\s+(.+?)(?=$|[,;.])/i);
+  const m = text.toLocaleLowerCase("ru").match(/(?:^|[^а-яё])с\s+(.+?)\s+до\s+(.+?)(?=$|[,;.])/i);
   if (!m) return null;
   const start = parseClock(m[1]);
   let end = parseClock(m[2]);
